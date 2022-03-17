@@ -21,8 +21,18 @@ echo "$kurs # Transaction date: $1. Rate from: $prev_day"
 # A day before given date
 # Try to get exchange rate
 # If good then ok if not then earlier day
-for transaction_date in "$@" 
+for brokarage_statement in "$@" 
 do
-	GetRate $transaction_date
+	#GetRate $transaction_date
+  echo "# Processing: $brokarage_statement"
+  extraction=/tmp/`cat /dev/urandom | tr -cd 'a-f0-9' | head -c 8`
+  touch $extraction
+  pdftotext "$brokarage_statement" $extraction
+  transaction_date=`cat $extraction | grep -v Dividends | grep -e Dividend | cut -f 1 -d ' '`
+  #if empty skip if non-empty then convert data to format YYYY-MM-DD and get exchange rate
+  if [ -n "$transaction_date" ]; then
+    converted_transaction_date=`date -d"$transaction_date" +'%F'`
+    GetRate $converted_transaction_date
+  fi
 done
 

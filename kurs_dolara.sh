@@ -33,6 +33,12 @@ do
   if [ -n "$transaction_date" ]; then
     converted_transaction_date=`date -d"$transaction_date" +'%F'`
     GetRate $converted_transaction_date
+
+    tax_and_gross=`cat $extraction | grep CREDITED -A 4 | grep -Eo '[0-9]+([.][0-9]+)?'`
+    readarray -t y <<< "$tax_and_gross"
+    echo "tax: ${y[0]}"
+    echo "gross: ${y[1]}"
   fi
 done
+
 

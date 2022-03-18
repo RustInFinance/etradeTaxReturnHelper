@@ -1,7 +1,7 @@
 # e-trade-tax-return-pl-helper
 Scripts helpful in computing data for tax return form related to financial instruments
 
-### Data for Tax return forM (PIT-38)
+### Data for Tax return form (PIT-38)
 
 ./tax_dividends.sh <your PDF documents that MAY contains dividends transaction e.g. "*.pdf"> | octave
 

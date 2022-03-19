@@ -45,5 +45,5 @@ echo "]"
 echo "div_pl= div_trans(:,1) .* div_trans(:,3)" 
 echo "tax_us_pl= div_trans(:,2) .* div_trans(:,3)"
 echo "tax_pl = div_pl * 19/100"
-echo "tax_diffrence_to_pay=sum(tax_pl - tax_us_pl)"
+echo "tax_difference_to_pay=sum(tax_pl - tax_us_pl)"
 

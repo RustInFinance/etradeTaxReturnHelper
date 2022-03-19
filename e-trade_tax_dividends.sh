@@ -42,8 +42,8 @@ do
 done
 echo "]"
 
-echo "div_pl= div_trans(:,1) .* div_trans(:,3)" 
-echo "tax_us_pl= div_trans(:,2) .* div_trans(:,3)"
-echo "tax_pl = div_pl * 19/100"
-echo "tax_difference_to_pay=sum(tax_pl - tax_us_pl)"
+echo "PRZYCHOD=sum(div_trans(:,1) .* div_trans(:,3))" 
+echo "PODATEK_ZAPLACONY_ZA_GRANICA=sum(div_trans(:,2) .* div_trans(:,3))"
+echo "PODATEK_NALEZNY_W_POLSCE = sum((div_trans(:,1) .* div_trans(:,3)) * 19/100)"
+echo "ROZNICA_DO_ZAPLACENIA_W_POLSCE=(PODATEK_NALEZNY_W_POLSCE - PODATEK_ZAPLACONY_ZA_GRANICA)"
 

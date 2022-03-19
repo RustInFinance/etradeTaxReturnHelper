@@ -2,8 +2,9 @@
 Scripts helpful in computing data for tax return form related to financial instruments
 
 ### Data for Tax return form (PIT-38)
-
-./tax_dividends.sh <your PDF documents that MAY contains dividends transaction e.g. "*.pdf"> | octave
+1) Download PDF documents from a year you are filling your tax return form for example: Brokerage Statement <xxx>.pdf
+2) Run program
+e-trade_tax_dividends.sh <your PDF documents that MAY contains dividends transaction e.g. "*.pdf"> | octave
 
 ### Dependencies
 - octave

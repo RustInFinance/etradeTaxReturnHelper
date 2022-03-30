@@ -14,6 +14,14 @@ e-trade_tax_dividends.sh <your PDF documents that MAY contains dividends transac
 ### Tested on:
 - Fedora 29
 
+### FAQ
+1) How to remove first page from e-trade brokarage statement
+Fedora: pdfseparate -f 2 -l 8 <mybrokerage.pdf>  <somename name>%d.pdf
+        pdfunite  <some name>%d.pdf <destination file name>.pdf
+Ubuntu: pdftk <mybrokerage.pdf> cat 2-8 output   <mystrippedbrokerage.pdf>
+2) It does not work for my PDF with error : "panicked at index out of bound"
+ It could be that your PDF stripped (removed some pages) and PDF meta data does not correspond to actual number of pages.
+
 ### License
 BSD 3-Clause License
 

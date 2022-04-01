@@ -17,7 +17,7 @@ type ReqwestClient = reqwest::blocking::Client;
 //                    "code":"USD",
 //                    "rates":[{"no":"039/A/NBP/2021",
 //                              "effectiveDate":"2021-02-26",
-//                              "mid":3.7247}]}    
+//                              "mid":3.7247}]}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct NBPResponse<T> {
@@ -34,10 +34,7 @@ struct ExchangeRate {
     mid: f32,
 }
 
-
-// TODO(jczaja) : Parse JSON response
-
-fn GetExchangeRate(transaction_date: &str) {
+fn get_exchange_rate(transaction_date: &str) -> Result<(String, f32), String> {
     // TODO: proxies
     let http_proxy: Option<&str> = Some("http://proxy-chain.intel.com:911");
     // If there is proxy then pick first URL
@@ -54,25 +51,39 @@ fn GetExchangeRate(transaction_date: &str) {
 
     let base_exchange_rate_url = "http://api.nbp.pl/api/exchangerates/rates/a/usd/";
     let converted_date = chrono::NaiveDate::parse_from_str(transaction_date, "%m/%d/%y").unwrap();
-    let exchange_rate_url: String = base_exchange_rate_url.to_string()
-        + &format!("{}", converted_date.format("%Y-%m-%d"))
-        + "/?format=json";
 
-    // checked_sub_signed(self, rhs: OldDuration) -> Option<NaiveDate>
+    // Try to get exchange rate going backwards with dates till success
+    let mut is_success = false;
+    let mut exchange_rate = 0.0;
+    let mut exchange_rate_date: String = "N/A".to_string();
+    while is_success == false {
+        let converted_date = converted_date
+            .checked_sub_signed(chrono::Duration::days(1))
+            .expect("Error traversing date");
 
-    let body = client
-        .get(&(exchange_rate_url))
-        .send();
-    let mut actual_body = body.expect(&format!("Getting Exchange Rate from NBP ({}) failed", exchange_rate_url));
-    if actual_body.status().is_success() == false {
-        panic!();
-    } else {
-        println!("RESPONSE {:#?}", actual_body);
+        let exchange_rate_url: String = base_exchange_rate_url.to_string()
+            + &format!("{}", converted_date.format("%Y-%m-%d"))
+            + "/?format=json";
 
-        let exchange_rate_data = actual_body.json::<NBPResponse<ExchangeRate>>().expect("Error converting response to JSON");
-        println!("body of exchange_rate = {:#?}", exchange_rate_data);
+        let body = client.get(&(exchange_rate_url)).send();
+        let actual_body = body.expect(&format!(
+            "Getting Exchange Rate from NBP ({}) failed",
+            exchange_rate_url
+        ));
+        is_success = actual_body.status().is_success();
+        if is_success == true {
+            println!("RESPONSE {:#?}", actual_body);
 
+            let nbp_response = actual_body
+                .json::<NBPResponse<ExchangeRate>>()
+                .expect("Error converting response to JSON");
+            println!("body of exchange_rate = {:#?}", nbp_response);
+            exchange_rate = nbp_response.rates[0].mid;
+            exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
+        }
     }
+
+    Ok((exchange_rate_date, exchange_rate))
 }
 
 fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), String> {
@@ -82,7 +93,6 @@ fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), Str
     let mut state = ParserState::SearchingDividendEntry;
     let mut transaction_date: String = "N/A".to_string();
     let mut tax_us = 0.0;
-    let mut gross_us = 0.0;
 
     for page in mypdffile.pages() {
         let page = page.unwrap();
@@ -125,7 +135,7 @@ fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), Str
                                             state = ParserState::SearchingGrossEntry
                                         }
                                         ParserState::SearchingGrossEntry => {
-                                            gross_us = actual_string
+                                            let gross_us = actual_string
                                                 .clone()
                                                 .into_string()
                                                 .unwrap()
@@ -159,8 +169,29 @@ fn main() {
         "TRANSACTION date: {}, gross: {}, tax_us: {}",
         transaction_date, gross_us, tax_us
     );
-    GetExchangeRate(&transaction_date);
+    get_exchange_rate(&transaction_date);
 }
 
-//TODO(jczaja): UT
-//TODO(jczaja): UT get exchange rate with fixed date
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exchange_rate() -> Result<(), String> {
+        assert_eq!(
+            get_exchange_rate("03/01/21"),
+            Ok(("03/01/21".to_string(), 3.7572))
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_parse_brokerage_statement() -> Result<(), String> {
+        assert_eq!(
+            parse_brokerage_statement("data/example.pdf"),
+            Ok(("03/01/21", 574.42, 86.16))
+        );
+        Ok(())
+    }
+}

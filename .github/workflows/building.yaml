@@ -1,0 +1,44 @@
+on: [pull_request]
+
+name: Continuous integration
+
+jobs:
+
+  fmt:
+     name: Rustfmt
+     runs-on: ubuntu-18.04
+     steps:
+       - uses: actions/checkout@v2
+       - uses: actions-rs/toolchain@v1
+         with:
+           profile: minimal
+           toolchain: stable
+           override: true
+       - run: rustup component add rustfmt
+       - uses: actions-rs/cargo@v1
+         with:
+           command: fmt
+           args: --all -- --check
+
+  build_and_test:
+      name: e-trade-tax-return-pl-helper building
+      runs-on: ubuntu-latest
+      steps:
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+        - uses: actions/checkout@v2
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+        - name: Cargo build
+          env:
+            LIBRARY_PATH: ./
+          run: |
+            cargo build --release
+        - name: Cargo test
+          env:
+            LIBRARY_PATH: ./
+          run: |
+            cargo test
+

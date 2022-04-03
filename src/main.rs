@@ -53,19 +53,24 @@ fn init_logging_infrastructure() {
 }
 
 fn get_exchange_rate(transaction_date: &str) -> Result<(String, f32), String> {
-    // TODO: proxies
-    let http_proxy: Option<&str> = Some("http://proxy-chain.intel.com:911");
+    // proxies are taken from env vars: http_proxy and https_proxy
+    //let http_proxy: Option<&str> = Some("http://proxy-chain.intel.com:911");
+    let http_proxy = std::env::var("http_proxy");
+    let https_proxy = std::env::var("https_proxy");
+
     // If there is proxy then pick first URL
-    let client = match http_proxy {
-        Some(proxy) => ReqwestClient::builder()
-            .proxy(reqwest::Proxy::http(proxy).expect("Error setting HTTP proxy"))
-            .proxy(reqwest::Proxy::https(proxy).expect("Error setting HTTPS proxy"))
-            .build()
-            .expect("Could not create REST API client"),
-        None => ReqwestClient::builder()
-            .build()
-            .expect("Could not create REST API client"),
+    let base_client = ReqwestClient::builder();
+    let client = match &http_proxy {
+        Ok(proxy) => {
+            base_client.proxy(reqwest::Proxy::http(proxy).expect("Error setting HTTP proxy"))
+        }
+        Err(_) => base_client,
     };
+    let client = match &https_proxy {
+        Ok(proxy) => client.proxy(reqwest::Proxy::https(proxy).expect("Error setting HTTP proxy")),
+        Err(_) => client,
+    };
+    let client = client.build().expect("Could not create REST API client");
 
     let base_exchange_rate_url = "http://api.nbp.pl/api/exchangerates/rates/a/usd/";
     let mut converted_date =

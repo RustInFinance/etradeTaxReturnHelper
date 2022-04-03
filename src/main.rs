@@ -47,7 +47,7 @@ fn init_logging_infrastructure() {
     syslog::init(
         syslog::Facility::LOG_USER,
         log::LevelFilter::Debug,
-        Some("corporate-assistant"),
+        Some("e-trade-tax-helper"),
     )
     .expect("Error initializing syslog");
 }
@@ -178,7 +178,7 @@ fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), Str
     Err(format!("Error parsing pdf: {}", pdftoparse))
 }
 
-fn compute_tax(transactions: Vec<Transaction>) {
+fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
     // Gross income from dividends in PLN
     let gross_us_pl: f32 = transactions
         .iter()
@@ -189,12 +189,7 @@ fn compute_tax(transactions: Vec<Transaction>) {
         .iter()
         .map(|x| x.exchange_rate * x.tax_us)
         .sum();
-    // Expected full TAX in Poland
-    let full_tax_pl = gross_us_pl * 19.0 / 100.0;
-    let tax_diff_to_pay_pl = full_tax_pl - tax_us_pl;
-    println!("===> PRZYCHOD Z ZAGRANICY: {}", gross_us_pl);
-    println!("===> PODATEK ZAPLACONY ZAGRANICA: {}", tax_us_pl);
-    println!("DOPLATA: {}", tax_diff_to_pay_pl);
+    (gross_us_pl, tax_us_pl)
 }
 
 fn main() {
@@ -213,15 +208,15 @@ fn main() {
         let p = parse_brokerage_statement(&pdfname);
 
         if let Ok((transaction_date, gross_us, tax_us)) = p {
+            let (exchange_rate_date, exchange_rate) =
+                get_exchange_rate(&transaction_date).expect("Error getting exchange rate");
             let msg = format!(
-                "TRANSACTION date: {}, gross: {}, tax_us: {}",
-                transaction_date, gross_us, tax_us
+                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} pln, exchange_rate_date: {}",
+                &transaction_date, &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
             )
             .to_owned();
             println!("{}", msg);
             log::info!("{}", msg);
-            let (exchange_rate_date, exchange_rate) =
-                get_exchange_rate(&transaction_date).expect("Error getting exchange rate");
             transactions.push(Transaction {
                 transaction_date,
                 gross_us,
@@ -231,7 +226,13 @@ fn main() {
             });
         }
     }
-    compute_tax(transactions);
+    let (gross_us_pl, tax_us_pl) = compute_tax(transactions);
+    println!("===> PRZYCHOD Z ZAGRANICY: {} PLN", gross_us_pl);
+    println!("===> PODATEK ZAPLACONY ZAGRANICA: {} PLN", tax_us_pl);
+    // Expected full TAX in Poland
+    let full_tax_pl = gross_us_pl * 19.0 / 100.0;
+    let tax_diff_to_pay_pl = full_tax_pl - tax_us_pl;
+    println!("DOPLATA: {} PLN", tax_diff_to_pay_pl);
 }
 
 #[cfg(test)]
@@ -242,7 +243,7 @@ mod tests {
     fn test_exchange_rate() -> Result<(), String> {
         assert_eq!(
             get_exchange_rate("03/01/21"),
-            Ok(("03/01/21".to_string(), 3.7572))
+            Ok(("2021-02-26".to_owned(), 3.7247))
         );
         Ok(())
     }
@@ -261,7 +262,47 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_simple_computation() -> Result<(), String> {
+        // Init Transactions
+        let transactions: Vec<Transaction> = vec![Transaction {
+            transaction_date: "N/A".to_string(),
+            gross_us: 100.0,
+            tax_us: 25.0,
+            exchange_rate_date: "N/A".to_string(),
+            exchange_rate: 4.0,
+        }];
+        assert_eq!(compute_tax(transactions), (400.0, 100.0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_computation() -> Result<(), String> {
+        // Init Transactions
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross_us: 100.0,
+                tax_us: 25.0,
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 4.0,
+            },
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross_us: 126.0,
+                tax_us: 10.0,
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 3.5,
+            },
+        ];
+        assert_eq!(
+            compute_tax(transactions),
+            (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+        );
+        Ok(())
+    }
 }
 
 // TODO: proxy
-// TODO: uts even more
+// TODO: cutting out personal info

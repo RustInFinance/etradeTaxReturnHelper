@@ -54,7 +54,6 @@ fn init_logging_infrastructure() {
 
 fn get_exchange_rate(transaction_date: &str) -> Result<(String, f32), String> {
     // proxies are taken from env vars: http_proxy and https_proxy
-    //let http_proxy: Option<&str> = Some("http://proxy-chain.intel.com:911");
     let http_proxy = std::env::var("http_proxy");
     let https_proxy = std::env::var("https_proxy");
 
@@ -309,5 +308,4 @@ mod tests {
     }
 }
 
-// TODO: proxy
 // TODO: cutting out personal info

@@ -2,6 +2,7 @@ use chrono;
 use pdf::file::File;
 use pdf::primitive::Primitive;
 use serde::{Deserialize, Serialize};
+use clap::{App, Arg};
 
 enum ParserState {
     SearchingDividendEntry,
@@ -199,16 +200,34 @@ fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
 fn main() {
     init_logging_infrastructure();
 
+    let matches = App::new("E-trade tax helper")
+    .arg(
+        Arg::with_name("residence")
+            .long("residence")
+            .help("Country of residence e.g. Poland")
+            .value_name("FILE")
+            .takes_value(true)
+            .default_value("pl"),
+    )
+    .arg(
+        Arg::with_name("pdf documents")
+            .help("Brokerage statement PDF files")
+            .multiple(true)
+    )
+    .get_matches();
+
+
+    let residence = matches.value_of("residence").expect("error getting residence value");
+    let pdfnames =  matches.values_of("pdf documents").expect("error getting brokarage statements pdfs names");
+
     let mut transactions: Vec<Transaction> = Vec::new();
     let args: Vec<String> = std::env::args().collect();
-    // First arg is binary name so advance to actual pdf file names
-    let pdfnames = &args[1..];
 
-    log::info!("{:?}", pdfnames);
     log::info!("Started e-trade-tax-helper");
     // Start from second one
     for pdfname in pdfnames {
         // 1. Get PDF parsed and attach exchange rate
+        log::info!("Processing: {}", pdfname);
         let p = parse_brokerage_statement(&pdfname);
 
         if let Ok((transaction_date, gross_us, tax_us)) = p {

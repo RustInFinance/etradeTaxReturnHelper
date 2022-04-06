@@ -1,7 +1,9 @@
-use chrono;
+use clap::{App, Arg};
 use pdf::file::File;
 use pdf::primitive::Primitive;
-use serde::{Deserialize, Serialize};
+
+mod pl;
+mod us;
 
 enum ParserState {
     SearchingDividendEntry,
@@ -18,30 +20,6 @@ struct Transaction {
     exchange_rate: f32,
 }
 
-type ReqwestClient = reqwest::blocking::Client;
-
-// Example response: {"table":"A",
-//                    "currency":"dolar amerykański",
-//                    "code":"USD",
-//                    "rates":[{"no":"039/A/NBP/2021",
-//                              "effectiveDate":"2021-02-26",
-//                              "mid":3.7247}]}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct NBPResponse<T> {
-    table: String,
-    currency: String,
-    code: String,
-    rates: Vec<T>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ExchangeRate {
-    no: String,
-    effectiveDate: String,
-    mid: f32,
-}
-
 fn init_logging_infrastructure() {
     // TODO(jczaja): test on windows/macos
     syslog::init(
@@ -50,63 +28,6 @@ fn init_logging_infrastructure() {
         Some("e-trade-tax-helper"),
     )
     .expect("Error initializing syslog");
-}
-
-fn get_exchange_rate(transaction_date: &str) -> Result<(String, f32), String> {
-    // proxies are taken from env vars: http_proxy and https_proxy
-    let http_proxy = std::env::var("http_proxy");
-    let https_proxy = std::env::var("https_proxy");
-
-    // If there is proxy then pick first URL
-    let base_client = ReqwestClient::builder();
-    let client = match &http_proxy {
-        Ok(proxy) => {
-            base_client.proxy(reqwest::Proxy::http(proxy).expect("Error setting HTTP proxy"))
-        }
-        Err(_) => base_client,
-    };
-    let client = match &https_proxy {
-        Ok(proxy) => client.proxy(reqwest::Proxy::https(proxy).expect("Error setting HTTP proxy")),
-        Err(_) => client,
-    };
-    let client = client.build().expect("Could not create REST API client");
-
-    let base_exchange_rate_url = "http://api.nbp.pl/api/exchangerates/rates/a/usd/";
-    let mut converted_date =
-        chrono::NaiveDate::parse_from_str(transaction_date, "%m/%d/%y").unwrap();
-
-    // Try to get exchange rate going backwards with dates till success
-    let mut is_success = false;
-    let mut exchange_rate = 0.0;
-    let mut exchange_rate_date: String = "N/A".to_string();
-    while is_success == false {
-        converted_date = converted_date
-            .checked_sub_signed(chrono::Duration::days(1))
-            .expect("Error traversing date");
-
-        let exchange_rate_url: String = base_exchange_rate_url.to_string()
-            + &format!("{}", converted_date.format("%Y-%m-%d"))
-            + "/?format=json";
-
-        let body = client.get(&(exchange_rate_url)).send();
-        let actual_body = body.expect(&format!(
-            "Getting Exchange Rate from NBP ({}) failed",
-            exchange_rate_url
-        ));
-        is_success = actual_body.status().is_success();
-        if is_success == true {
-            log::info!("RESPONSE {:#?}", actual_body);
-
-            let nbp_response = actual_body
-                .json::<NBPResponse<ExchangeRate>>()
-                .expect("Error converting response to JSON");
-            log::info!("body of exchange_rate = {:#?}", nbp_response);
-            exchange_rate = nbp_response.rates[0].mid;
-            exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
-        }
-    }
-
-    Ok((exchange_rate_date, exchange_rate))
 }
 
 fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), String> {
@@ -199,21 +120,52 @@ fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
 fn main() {
     init_logging_infrastructure();
 
+    let matches = App::new("E-trade tax helper")
+        .arg(
+            Arg::with_name("residency")
+                .long("residency")
+                .help("Country of residence e.g. pl , usd ...")
+                .value_name("FILE")
+                .takes_value(true)
+                .default_value("pl"),
+        )
+        .arg(
+            Arg::with_name("pdf documents")
+                .help("Brokerage statement PDF files")
+                .multiple(true),
+        )
+        .get_matches();
+
+    let residency = matches
+        .value_of("residence")
+        .expect("error getting residence value");
+    let rd: Box<dyn etradeTaxReturnHelper::Residency> = match residency {
+        "pl" => Box::new(pl::PL {}),
+        "usd" => Box::new(us::US {}),
+        _ => panic!(
+            "{}",
+            &format!("Error: unimplemented residency: {}", residency)
+        ),
+    };
+
+    let pdfnames = matches
+        .values_of("pdf documents")
+        .expect("error getting brokarage statements pdfs names");
+
     let mut transactions: Vec<Transaction> = Vec::new();
     let args: Vec<String> = std::env::args().collect();
-    // First arg is binary name so advance to actual pdf file names
-    let pdfnames = &args[1..];
 
-    log::info!("{:?}", pdfnames);
     log::info!("Started e-trade-tax-helper");
     // Start from second one
     for pdfname in pdfnames {
         // 1. Get PDF parsed and attach exchange rate
+        log::info!("Processing: {}", pdfname);
         let p = parse_brokerage_statement(&pdfname);
 
         if let Ok((transaction_date, gross_us, tax_us)) = p {
-            let (exchange_rate_date, exchange_rate) =
-                get_exchange_rate(&transaction_date).expect("Error getting exchange rate");
+            let (exchange_rate_date, exchange_rate) = rd
+                .get_exchange_rate(&transaction_date)
+                .expect("Error getting exchange rate");
             let msg = format!(
                 "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} pln, exchange_rate_date: {}",
                 &transaction_date, &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
@@ -230,13 +182,8 @@ fn main() {
             });
         }
     }
-    let (gross_us_pl, tax_us_pl) = compute_tax(transactions);
-    println!("===> PRZYCHOD Z ZAGRANICY: {} PLN", gross_us_pl);
-    println!("===> PODATEK ZAPLACONY ZAGRANICA: {} PLN", tax_us_pl);
-    // Expected full TAX in Poland
-    let full_tax_pl = gross_us_pl * 19.0 / 100.0;
-    let tax_diff_to_pay_pl = full_tax_pl - tax_us_pl;
-    println!("DOPLATA: {} PLN", tax_diff_to_pay_pl);
+    let (gross, tax) = compute_tax(transactions);
+    rd.present_result(gross, tax);
 }
 
 #[cfg(test)]
@@ -244,10 +191,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_exchange_rate() -> Result<(), String> {
+    fn test_exchange_rate_pl() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         assert_eq!(
-            get_exchange_rate("03/01/21"),
+            rd.get_exchange_rate("03/01/21"),
             Ok(("2021-02-26".to_owned(), 3.7247))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_exchange_rate_us() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(us::US {});
+        assert_eq!(
+            rd.get_exchange_rate("03/01/21"),
+            Ok(("N/A".to_owned(), 1.0))
         );
         Ok(())
     }

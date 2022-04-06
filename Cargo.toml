@@ -1,5 +1,5 @@
 [package]
-name = "e-trade-tax-return-helper"
+name = "etradeTaxReturnHelper"
 version = "0.1.0"
 edition = "2021"
 

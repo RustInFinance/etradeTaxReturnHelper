@@ -2,7 +2,12 @@
 name = "etradeTaxReturnHelper"
 version = "0.1.0"
 edition = "2021"
-
+description = "Parses e-trade Brokerage statments for transation details  (income, tax paid) and compute total income and total tax paid according to chosen residency (currency)"
+license = "BSD-3"
+readme = "README.md"
+keywords = ["e-trade"]
+repository = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
+homepage = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

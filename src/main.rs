@@ -117,14 +117,12 @@ fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
     (gross_us_pl, tax_us_pl)
 }
 
-fn main() {
-    init_logging_infrastructure();
-
-    let matches = App::new("E-trade tax helper")
+fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
+    myapp
         .arg(
             Arg::with_name("residency")
                 .long("residency")
-                .help("Country of residence e.g. pl , usd ...")
+                .help("Country of residence e.g. pl , us ...")
                 .value_name("FILE")
                 .takes_value(true)
                 .default_value("pl"),
@@ -134,14 +132,20 @@ fn main() {
                 .help("Brokerage statement PDF files")
                 .multiple(true),
         )
-        .get_matches();
+}
+
+fn main() {
+    init_logging_infrastructure();
+
+    let myapp = App::new("E-trade tax helper");
+    let matches = create_cmd_line_pattern(myapp).get_matches();
 
     let residency = matches
-        .value_of("residence")
-        .expect("error getting residence value");
+        .value_of("residency")
+        .expect("error getting residency value");
     let rd: Box<dyn etradeTaxReturnHelper::Residency> = match residency {
         "pl" => Box::new(pl::PL {}),
-        "usd" => Box::new(us::US {}),
+        "us" => Box::new(us::US {}),
         _ => panic!(
             "{}",
             &format!("Error: unimplemented residency: {}", residency)
@@ -153,7 +157,6 @@ fn main() {
         .expect("error getting brokarage statements pdfs names");
 
     let mut transactions: Vec<Transaction> = Vec::new();
-    let args: Vec<String> = std::env::args().collect();
 
     log::info!("Started e-trade-tax-helper");
     // Start from second one
@@ -189,6 +192,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::{App, Arg, ArgMatches, ErrorKind};
 
     #[test]
     fn test_exchange_rate_pl() -> Result<(), String> {
@@ -264,6 +268,61 @@ mod tests {
         );
         Ok(())
     }
-}
 
-// TODO: cutting out personal info
+    #[test]
+    fn test_cmdline_pl() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = App::new("E-trade tax helper");
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "--residency=pl",
+            "data/example.pdf",
+        ])?;
+        let residency = matches.value_of("residency").ok_or(clap::Error {
+            message: "Unable to get residency value".to_owned(),
+            kind: ErrorKind::InvalidValue,
+            info: None,
+        })?;
+        match residency {
+            "pl" => return Ok(()),
+            _ => clap::Error {
+                message: "Wrong residency value".to_owned(),
+                kind: ErrorKind::InvalidValue,
+                info: None,
+            },
+        };
+        Ok(())
+    }
+    #[test]
+    fn test_cmdline_default() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = App::new("E-trade tax helper");
+        create_cmd_line_pattern(myapp).get_matches_from_safe(vec!["mytest", "data/example.pdf"])?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_cmdline_us() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = App::new("E-trade tax helper");
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "--residency=us",
+            "data/example.pdf",
+        ])?;
+        let residency = matches.value_of("residency").ok_or(clap::Error {
+            message: "Unable to get residency value".to_owned(),
+            kind: ErrorKind::InvalidValue,
+            info: None,
+        })?;
+        match residency {
+            "us" => return Ok(()),
+            _ => clap::Error {
+                message: "Wrong residency value".to_owned(),
+                kind: ErrorKind::InvalidValue,
+                info: None,
+            },
+        };
+        Ok(())
+    }
+}

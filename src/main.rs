@@ -30,15 +30,17 @@ fn init_logging_infrastructure() {
     .expect("Error initializing syslog");
 }
 
-fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), String> {
+fn parse_brokerage_statement(pdftoparse: &str) -> Vec<(String, f32, f32)> {
     //2. parsing each pdf
-    let mypdffile = File::<Vec<u8>>::open(pdftoparse).unwrap();
+    let mypdffile = File::<Vec<u8>>::open(pdftoparse)
+        .expect(&format!("Error opening and parsing file: {}", pdftoparse));
 
     let mut state = ParserState::SearchingDividendEntry;
     let mut transaction_date: String = "N/A".to_string();
     let mut tax_us = 0.0;
+    let mut transactions: Vec<(String, f32, f32)> = vec![];
 
-    log::info!("Parsing: {}", pdftoparse);
+    log::info!("Parsing: {} of {} pages", pdftoparse, mypdffile.num_pages());
     for page in mypdffile.pages() {
         let page = page.unwrap();
         let contents = page.contents.as_ref().unwrap();
@@ -51,43 +53,49 @@ fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), Str
                         let a = &op.operands[0];
                         match a {
                             Primitive::Array(c) => {
-                                // If string is "Dividend"
-                                if let Primitive::String(actual_string) = &c[0] {
-                                    match state {
-                                        ParserState::SearchingDividendEntry => {
-                                            let rust_string =
-                                                actual_string.clone().into_string().unwrap();
-                                            if rust_string == "Dividend" {
-                                                state = ParserState::SearchingINTCEntry;
-                                            } else {
-                                                transaction_date = rust_string;
+                                for e in c {
+                                    if let Primitive::String(actual_string) = e {
+                                        match state {
+                                            ParserState::SearchingDividendEntry => {
+                                                let rust_string =
+                                                    actual_string.clone().into_string().unwrap();
+                                                //println!("rust_string: {}", rust_string);
+                                                if rust_string == "Dividend" {
+                                                    state = ParserState::SearchingINTCEntry;
+                                                } else {
+                                                    transaction_date = rust_string;
+                                                }
                                             }
-                                        }
-                                        ParserState::SearchingINTCEntry => {
-                                            let rust_string =
-                                                actual_string.clone().into_string().unwrap();
-                                            if rust_string == "INTC" {
-                                                state = ParserState::SearchingTaxEntry;
+                                            ParserState::SearchingINTCEntry => {
+                                                let rust_string =
+                                                    actual_string.clone().into_string().unwrap();
+                                                if rust_string == "INTC" {
+                                                    state = ParserState::SearchingTaxEntry;
+                                                }
                                             }
-                                        }
-                                        ParserState::SearchingTaxEntry => {
-                                            tax_us = actual_string
-                                                .clone()
-                                                .into_string()
-                                                .unwrap()
-                                                .parse::<f32>()
-                                                .unwrap();
-                                            state = ParserState::SearchingGrossEntry
-                                        }
-                                        ParserState::SearchingGrossEntry => {
-                                            let gross_us = actual_string
-                                                .clone()
-                                                .into_string()
-                                                .unwrap()
-                                                .parse::<f32>()
-                                                .unwrap();
-                                            state = ParserState::SearchingDividendEntry;
-                                            return Ok((transaction_date, gross_us, tax_us));
+                                            ParserState::SearchingTaxEntry => {
+                                                tax_us = actual_string
+                                                    .clone()
+                                                    .into_string()
+                                                    .unwrap()
+                                                    .parse::<f32>()
+                                                    .unwrap();
+                                                state = ParserState::SearchingGrossEntry
+                                            }
+                                            ParserState::SearchingGrossEntry => {
+                                                let gross_us = actual_string
+                                                    .clone()
+                                                    .into_string()
+                                                    .unwrap()
+                                                    .parse::<f32>()
+                                                    .unwrap();
+                                                state = ParserState::SearchingDividendEntry;
+                                                transactions.push((
+                                                    transaction_date.clone(),
+                                                    gross_us,
+                                                    tax_us,
+                                                ));
+                                            }
                                         }
                                     }
                                 }
@@ -100,7 +108,7 @@ fn parse_brokerage_statement(pdftoparse: &str) -> Result<(String, f32, f32), Str
             }
         }
     }
-    Err(format!("Error parsing pdf: {}", pdftoparse))
+    transactions
 }
 
 fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
@@ -163,9 +171,9 @@ fn main() {
     for pdfname in pdfnames {
         // 1. Get PDF parsed and attach exchange rate
         log::info!("Processing: {}", pdfname);
-        let p = parse_brokerage_statement(&pdfname);
-
-        if let Ok((transaction_date, gross_us, tax_us)) = p {
+        let parsed_transactions = parse_brokerage_statement(&pdfname);
+        for p in parsed_transactions {
+            let (transaction_date, gross_us, tax_us) = p;
             let (exchange_rate_date, exchange_rate) = rd
                 .get_exchange_rate(&transaction_date)
                 .expect("Error getting exchange rate");
@@ -185,6 +193,7 @@ fn main() {
             });
         }
     }
+
     let (gross, tax) = compute_tax(transactions);
     rd.present_result(gross, tax);
 }
@@ -219,13 +228,17 @@ mod tests {
     fn test_parse_brokerage_statement() -> Result<(), String> {
         assert_eq!(
             parse_brokerage_statement("data/example.pdf"),
-            Ok(("03/01/21".to_owned(), 574.42, 86.16))
+            vec![("03/01/21".to_owned(), 574.42, 86.16)]
         );
-        assert_eq!(
-            parse_brokerage_statement("data/example2.pdf"),
-            Err(format!("Error parsing pdf: data/example2.pdf"))
-        );
+        assert_eq!(parse_brokerage_statement("data/example2.pdf"), vec![]);
 
+        assert_eq!(
+            parse_brokerage_statement("data/example3.pdf"),
+            vec![
+                ("06/01/21".to_owned(), 0.17, 0.03),
+                ("06/01/21".to_owned(), 45.87, 6.88)
+            ]
+        );
         Ok(())
     }
 

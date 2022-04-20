@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{App, AppSettings, Arg};
 use pdf::file::File;
 use pdf::primitive::Primitive;
 
@@ -138,14 +138,15 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
         .arg(
             Arg::with_name("pdf documents")
                 .help("Brokerage statement PDF files")
-                .multiple(true),
+                .multiple(true)
+                .required(true),
         )
 }
 
 fn main() {
     init_logging_infrastructure();
 
-    let myapp = App::new("E-trade tax helper");
+    let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches();
 
     let residency = matches
@@ -172,8 +173,7 @@ fn main() {
         // 1. Get PDF parsed and attach exchange rate
         log::info!("Processing: {}", pdfname);
         let parsed_transactions = parse_brokerage_statement(&pdfname);
-        for p in parsed_transactions {
-            let (transaction_date, gross_us, tax_us) = p;
+        for (transaction_date, gross_us, tax_us) in parsed_transactions {
             let (exchange_rate_date, exchange_rate) = rd
                 .get_exchange_rate(&transaction_date)
                 .expect("Error getting exchange rate");

@@ -1,3 +1,4 @@
+use chrono;
 use clap::{App, AppSettings, Arg};
 use pdf::file::File;
 use pdf::primitive::Primitive;
@@ -179,9 +180,10 @@ fn main() {
                 .expect("Error getting exchange rate");
             let msg = format!(
                 "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} pln, exchange_rate_date: {}",
-                &transaction_date, &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
+                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
             )
             .to_owned();
+
             println!("{}", msg);
             log::info!("{}", msg);
             transactions.push(Transaction {

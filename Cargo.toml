@@ -1,6 +1,6 @@
 [package]
 name = "etradeTaxReturnHelper"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Parses e-trade Brokerage statments for transation details  (income, tax paid) and compute total income and total tax paid according to chosen residency (currency)"
 license = "BSD-3-Clause"

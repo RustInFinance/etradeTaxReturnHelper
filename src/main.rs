@@ -181,7 +181,7 @@ fn main() {
                 .get_exchange_rate(&transaction_date)
                 .expect("Error getting exchange rate");
             let msg = format!(
-                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} pln, exchange_rate_date: {}",
+                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
                 chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
             )
             .to_owned();
@@ -212,7 +212,7 @@ mod tests {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(de::DE {});
         assert_eq!(
             rd.get_exchange_rate("03/01/21"),
-            Ok(("2021-02-26".to_owned(), 1.1111))
+            Ok(("2021-02-26".to_owned(), 0.82831))
         );
         Ok(())
     }

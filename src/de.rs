@@ -1,29 +1,47 @@
+use regex::Regex;
+
 pub struct DE {}
 
 impl etradeTaxReturnHelper::Residency for DE {
     fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String> {
-        // To get USD to EUR echange rate we will get USD to PLN and then EUR to PLN and
-        // then compute USD/EUR e.g. USD/EUR = USD/PLN *  1/(EUR/PLN)
-        let usd_pln_res = self.get_nbp_exchange_rate_to_pln(transaction_date, "usd");
-        let eur_pln_res = self.get_nbp_exchange_rate_to_pln(transaction_date, "eur");
-        // If any of exchage rates is an error then declare failure
-        if let Ok((_, usd_pln)) = usd_pln_res {
-            log::info!("USD/PLN : {}", usd_pln);
-            if let Ok((date, eur_pln)) = eur_pln_res {
-                log::info!("EUR/PLN : {}", eur_pln);
-                let usd_eur: f32 = usd_pln / eur_pln;
-                log::info!("USD/EUR : {}", usd_eur);
-                return Ok((date, usd_eur));
-            } else {
-                let msg = "Error: unable to get EUR/PLN exchange rate";
-                log::error!("{}", msg);
-                return Err(msg.to_owned());
-            }
-        } else {
-            let msg = "Error: unable to get USD/PLN exchange rate";
-            log::error!("{}", msg);
-            return Err(msg.to_owned());
+        self.get_exchange_rates(transaction_date, "USD", "EUR")
+    }
+
+    fn parse_exchange_rates(&self, body: &str) -> Result<(f32, String), String> {
+        // to find examplery "1 US Dollar = 0.82831 Euros on 2/26/2021</td>"
+        let pattern = "1 US Dollar = ";
+        let start_offset = body
+            .find(pattern)
+            .ok_or(&format!("Error finding pattern: {}", pattern))?;
+        let pattern_slice = &body[start_offset..start_offset + 100]; // 100 characters should be enough
+                                                                     // Extract exchange rate (fp32 value)
+        let re = Regex::new(r"[0-9]+[.][0-9]+").unwrap();
+
+        let exchange_rate: f32 = match re.find(pattern_slice) {
+            Some(hit) => hit.as_str().parse::<f32>().unwrap(),
+            None => panic!(),
         };
+
+        // Parse date
+        let pattern = "Euros on ";
+        let start_date_offset = pattern_slice
+            .find(pattern)
+            .ok_or(&format!("Error finding pattern: {}", pattern))?;
+        // 2/26/2021 </td>.....
+        let end_date_pattern = "</td";
+        let date_pattern_slice = &pattern_slice[start_date_offset + pattern.chars().count()..];
+        let end_date_offset = date_pattern_slice
+            .find(end_date_pattern)
+            .ok_or(&format!("Error finding pattern: {}", end_date_pattern))?;
+
+        let date_string = &date_pattern_slice[0..end_date_offset];
+        let exchange_rate_date =
+            chrono::NaiveDate::parse_from_str(date_string, "%m/%d/%Y").unwrap();
+
+        Ok((
+            exchange_rate,
+            format!("{}", exchange_rate_date.format("%Y-%m-%d")),
+        ))
     }
 
     fn present_result(&self, gross_us_de: f32, tax_us_de: f32) {

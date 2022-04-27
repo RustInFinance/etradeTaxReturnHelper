@@ -3,6 +3,7 @@ use clap::{App, AppSettings, Arg};
 use pdf::file::File;
 use pdf::primitive::Primitive;
 
+mod de;
 mod pl;
 mod us;
 
@@ -154,6 +155,7 @@ fn main() {
         .value_of("residency")
         .expect("error getting residency value");
     let rd: Box<dyn etradeTaxReturnHelper::Residency> = match residency {
+        "de" => Box::new(de::DE {}),
         "pl" => Box::new(pl::PL {}),
         "us" => Box::new(us::US {}),
         _ => panic!(
@@ -179,7 +181,7 @@ fn main() {
                 .get_exchange_rate(&transaction_date)
                 .expect("Error getting exchange rate");
             let msg = format!(
-                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} pln, exchange_rate_date: {}",
+                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
                 chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
             )
             .to_owned();
@@ -204,6 +206,16 @@ fn main() {
 mod tests {
     use super::*;
     use clap::{App, Arg, ArgMatches, ErrorKind};
+
+    #[test]
+    fn test_exchange_rate_de() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(de::DE {});
+        assert_eq!(
+            rd.get_exchange_rate("03/01/21"),
+            Ok(("2021-02-26".to_owned(), 0.82831))
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_exchange_rate_pl() -> Result<(), String> {
@@ -281,6 +293,31 @@ mod tests {
             compute_tax(transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_cmdline_de() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = App::new("E-trade tax helper");
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "--residency=de",
+            "data/example.pdf",
+        ])?;
+        let residency = matches.value_of("residency").ok_or(clap::Error {
+            message: "Unable to get residency value".to_owned(),
+            kind: ErrorKind::InvalidValue,
+            info: None,
+        })?;
+        match residency {
+            "de" => return Ok(()),
+            _ => clap::Error {
+                message: "Wrong residency value".to_owned(),
+                kind: ErrorKind::InvalidValue,
+                info: None,
+            },
+        };
         Ok(())
     }
 

@@ -1,5 +1,7 @@
+mod logging;
+
 use chrono;
-use regex::Regex;
+use logging::ResultExt;
 use serde::{Deserialize, Serialize};
 
 type ReqwestClient = reqwest::blocking::Client;
@@ -42,18 +44,18 @@ pub trait Residency {
         // If there is proxy then pick first URL
         let base_client = ReqwestClient::builder();
         let client = match &http_proxy {
-            Ok(proxy) => {
-                base_client.proxy(reqwest::Proxy::http(proxy).expect("Error setting HTTP proxy"))
-            }
+            Ok(proxy) => base_client
+                .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
             Err(_) => base_client,
         };
         let client = match &https_proxy {
-            Ok(proxy) => {
-                client.proxy(reqwest::Proxy::https(proxy).expect("Error setting HTTP proxy"))
-            }
+            Ok(proxy) => client
+                .proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy")),
             Err(_) => client,
         };
-        let client = client.build().expect("Could not create REST API client");
+        let client = client
+            .build()
+            .expect_and_log("Could not create REST API client");
 
         let base_exchange_rate_url = "http://api.nbp.pl/api/exchangerates/rates/a/";
         let mut converted_date =
@@ -66,14 +68,14 @@ pub trait Residency {
         while is_success == false {
             converted_date = converted_date
                 .checked_sub_signed(chrono::Duration::days(1))
-                .expect("Error traversing date");
+                .expect_and_log("Error traversing date");
 
             let exchange_rate_url: String = base_exchange_rate_url.to_string()
                 + &format!("{}/{}", currency_code, converted_date.format("%Y-%m-%d"))
                 + "/?format=json";
 
             let body = client.get(&(exchange_rate_url)).send();
-            let actual_body = body.expect(&format!(
+            let actual_body = body.expect_and_log(&format!(
                 "Getting Exchange Rate from NBP ({}) failed",
                 exchange_rate_url
             ));
@@ -83,7 +85,7 @@ pub trait Residency {
 
                 let nbp_response = actual_body
                     .json::<NBPResponse<ExchangeRate>>()
-                    .expect("Error converting response to JSON");
+                    .expect_and_log("Error converting response to JSON");
                 log::info!("body of exchange_rate = {:#?}", nbp_response);
                 exchange_rate = nbp_response.rates[0].mid;
                 exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
@@ -111,18 +113,16 @@ pub trait Residency {
         // If there is proxy then pick first URL
         let base_client = ReqwestClient::builder();
         let client = match &http_proxy {
-            Ok(proxy) => {
-                base_client.proxy(reqwest::Proxy::http(proxy).expect("Error setting HTTP proxy"))
-            }
+            Ok(proxy) => base_client
+                .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
             Err(_) => base_client,
         };
         let client = match &https_proxy {
-            Ok(proxy) => {
-                client.proxy(reqwest::Proxy::https(proxy).expect("Error setting HTTP proxy"))
-            }
+            Ok(proxy) => client
+                .proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy")),
             Err(_) => client,
         };
-        let client = client.build().expect("Could not create client");
+        let client = client.build().expect_and_log("Could not create client");
 
         // Example URL: https://www.exchange-rates.org/Rate/USD/EUR/2-27-2021
 
@@ -132,14 +132,14 @@ pub trait Residency {
 
         converted_date = converted_date
             .checked_sub_signed(chrono::Duration::days(1))
-            .expect("Error traversing date");
+            .expect_and_log("Error traversing date");
 
         let exchange_rate_url: String = base_exchange_rate_url.to_string()
             + &format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y"))
             + "/?format=json";
 
         let body = client.get(&(exchange_rate_url)).send();
-        let actual_body = body.expect(&format!(
+        let actual_body = body.expect_and_log(&format!(
             "Getting Exchange Rate from Exchange-Rates.org ({}) failed",
             exchange_rate_url
         ));
@@ -148,7 +148,7 @@ pub trait Residency {
 
             let exchange_rates_response = actual_body
                 .text()
-                .expect("Error converting response to Text");
+                .expect_and_log("Error converting response to Text");
             log::info!("body of exchange_rate = {:#?}", exchange_rates_response);
             // parsing text response
             if let Ok((exchange_rate, exchange_rate_date)) =

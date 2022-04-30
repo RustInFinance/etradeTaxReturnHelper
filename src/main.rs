@@ -7,6 +7,7 @@ mod de;
 mod logging;
 mod pl;
 mod us;
+use etradeTaxReturnHelper::Transaction;
 use logging::ResultExt;
 
 enum ParserState {
@@ -14,14 +15,6 @@ enum ParserState {
     SearchingINTCEntry,
     SearchingTaxEntry,
     SearchingGrossEntry,
-}
-
-struct Transaction {
-    transaction_date: String,
-    gross_us: f32,
-    tax_us: f32,
-    exchange_rate_date: String,
-    exchange_rate: f32,
 }
 
 fn parse_brokerage_statement(pdftoparse: &str) -> Vec<(String, f32, f32)> {
@@ -160,35 +153,25 @@ fn main() {
         .values_of("pdf documents")
         .expect_and_log("error getting brokarage statements pdfs names");
 
-    let mut transactions: Vec<Transaction> = Vec::new();
+    log::info!("Started etradeTaxHelper");
 
-    log::info!("Started e-trade-tax-helper");
-    // Start from second one
-    for pdfname in pdfnames {
-        // 1. Get PDF parsed and attach exchange rate
-        log::info!("Processing: {}", pdfname);
-        let parsed_transactions = parse_brokerage_statement(&pdfname);
-        for (transaction_date, gross_us, tax_us) in parsed_transactions {
-            let (exchange_rate_date, exchange_rate) = rd
-                .get_exchange_rate(&transaction_date)
-                .expect_and_log("Error getting exchange rate");
+    let mut parsed_transactions: Vec<(String, f32, f32)> = vec![];
+    // 1. Parse PDF documents to get list of transactions
+    pdfnames.for_each(|x| parsed_transactions.append(&mut parse_brokerage_statement(x)));
+    // 2. Get Exchange rates
+    let transactions = rd
+        .get_exchange_rates(parsed_transactions)
+        .expect_and_log("Error: unable to get exchange rates");
+    transactions.iter().for_each(|x| {
             let msg = format!(
                 "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
+                chrono::NaiveDate::parse_from_str(&x.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &x.gross_us, &x.tax_us, &x.exchange_rate, &x.exchange_rate_date
             )
             .to_owned();
 
             println!("{}", msg);
             log::info!("{}", msg);
-            transactions.push(Transaction {
-                transaction_date,
-                gross_us,
-                tax_us,
-                exchange_rate_date,
-                exchange_rate,
             });
-        }
-    }
 
     let (gross, tax) = compute_tax(transactions);
     rd.present_result(gross, tax);
@@ -202,9 +185,16 @@ mod tests {
     #[test]
     fn test_exchange_rate_de() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(de::DE {});
+
+        let transactions = rd
+            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
+            .unwrap();
         assert_eq!(
-            rd.get_exchange_rate("03/01/21"),
-            Ok(("2021-02-26".to_owned(), 0.82831))
+            (
+                &transactions[0].exchange_rate_date,
+                transactions[0].exchange_rate
+            ),
+            (&"2021-02-26".to_owned(), 0.82831)
         );
         Ok(())
     }
@@ -212,9 +202,16 @@ mod tests {
     #[test]
     fn test_exchange_rate_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+
+        let transactions = rd
+            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
+            .unwrap();
         assert_eq!(
-            rd.get_exchange_rate("03/01/21"),
-            Ok(("2021-02-26".to_owned(), 3.7247))
+            (
+                &transactions[0].exchange_rate_date,
+                transactions[0].exchange_rate
+            ),
+            (&"2021-02-26".to_owned(), 3.7247)
         );
         Ok(())
     }
@@ -222,9 +219,15 @@ mod tests {
     #[test]
     fn test_exchange_rate_us() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(us::US {});
+        let transactions = rd
+            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
+            .unwrap();
         assert_eq!(
-            rd.get_exchange_rate("03/01/21"),
-            Ok(("N/A".to_owned(), 1.0))
+            (
+                &transactions[0].exchange_rate_date,
+                transactions[0].exchange_rate
+            ),
+            (&"N/A".to_owned(), 1.0)
         );
         Ok(())
     }

@@ -64,8 +64,6 @@ impl etradeTaxReturnHelper::Residency for PL {
 
             // Try to get exchange rate going backwards with dates till success
             let mut is_success = false;
-            let mut exchange_rate = 0.0;
-            let mut exchange_rate_date: String = "N/A".to_string();
             while is_success == false {
                 converted_date = converted_date
                     .checked_sub_signed(chrono::Duration::days(1))
@@ -88,8 +86,8 @@ impl etradeTaxReturnHelper::Residency for PL {
                         .json::<NBPResponse<ExchangeRate>>()
                         .expect_and_log("Error converting response to JSON");
                     log::info!("body of exchange_rate = {:#?}", nbp_response);
-                    exchange_rate = nbp_response.rates[0].mid;
-                    exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
+                    let exchange_rate = nbp_response.rates[0].mid;
+                    let exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
 
                     detailed_transactions.push(Transaction {
                         transaction_date: transaction_date.clone(),

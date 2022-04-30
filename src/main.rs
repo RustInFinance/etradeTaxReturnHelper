@@ -162,6 +162,17 @@ fn main() {
     let transactions = rd
         .get_exchange_rates(parsed_transactions)
         .expect_and_log("Error: unable to get exchange rates");
+    transactions.iter().for_each(|x| {
+            let msg = format!(
+                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&x.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &x.gross_us, &x.tax_us, &x.exchange_rate, &x.exchange_rate_date
+            )
+            .to_owned();
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+            });
+
     let (gross, tax) = compute_tax(transactions);
     rd.present_result(gross, tax);
 }

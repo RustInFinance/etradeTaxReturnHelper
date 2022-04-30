@@ -4,8 +4,10 @@ use pdf::file::File;
 use pdf::primitive::Primitive;
 
 mod de;
+mod logging;
 mod pl;
 mod us;
+use logging::ResultExt;
 
 enum ParserState {
     SearchingDividendEntry,
@@ -22,20 +24,10 @@ struct Transaction {
     exchange_rate: f32,
 }
 
-fn init_logging_infrastructure() {
-    // TODO(jczaja): test on windows/macos
-    syslog::init(
-        syslog::Facility::LOG_USER,
-        log::LevelFilter::Debug,
-        Some("e-trade-tax-helper"),
-    )
-    .expect("Error initializing syslog");
-}
-
 fn parse_brokerage_statement(pdftoparse: &str) -> Vec<(String, f32, f32)> {
     //2. parsing each pdf
     let mypdffile = File::<Vec<u8>>::open(pdftoparse)
-        .expect(&format!("Error opening and parsing file: {}", pdftoparse));
+        .expect_and_log(&format!("Error opening and parsing file: {}", pdftoparse));
 
     let mut state = ParserState::SearchingDividendEntry;
     let mut transaction_date: String = "N/A".to_string();
@@ -146,14 +138,14 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
 }
 
 fn main() {
-    init_logging_infrastructure();
+    logging::init_logging_infrastructure();
 
     let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches();
 
     let residency = matches
         .value_of("residency")
-        .expect("error getting residency value");
+        .expect_and_log("error getting residency value");
     let rd: Box<dyn etradeTaxReturnHelper::Residency> = match residency {
         "de" => Box::new(de::DE {}),
         "pl" => Box::new(pl::PL {}),
@@ -166,7 +158,7 @@ fn main() {
 
     let pdfnames = matches
         .values_of("pdf documents")
-        .expect("error getting brokarage statements pdfs names");
+        .expect_and_log("error getting brokarage statements pdfs names");
 
     let mut transactions: Vec<Transaction> = Vec::new();
 
@@ -179,7 +171,7 @@ fn main() {
         for (transaction_date, gross_us, tax_us) in parsed_transactions {
             let (exchange_rate_date, exchange_rate) = rd
                 .get_exchange_rate(&transaction_date)
-                .expect("Error getting exchange rate");
+                .expect_and_log("Error getting exchange rate");
             let msg = format!(
                 "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
                 chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date

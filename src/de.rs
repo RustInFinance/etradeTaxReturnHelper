@@ -3,8 +3,11 @@ use regex::Regex;
 pub struct DE {}
 
 impl etradeTaxReturnHelper::Residency for DE {
-    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String> {
-        self.get_exchange_rates(transaction_date, "USD", "EUR")
+    fn get_exchange_rates(
+        &self,
+        transactions: Vec<(String, f32, f32)>,
+    ) -> Result<Vec<etradeTaxReturnHelper::Transaction>, String> {
+        self.get_currency_exchange_rates(transactions, "USD", "EUR")
     }
 
     fn parse_exchange_rates(&self, body: &str) -> Result<(f32, String), String> {

@@ -9,6 +9,12 @@ Project that parse e-trade PDF brokerage statements and compute total gross gain
     3. Download all `ACCOUNT STATEMENT` documents
 3. Run: `etradeTaxReturnHelper <your PDF documents that MAY contains dividends transaction e.g. "*.pdf">`
 
+### FAQ
+1. How can I help?
+  1. Issues and Pull Requests are welcomed!
+  2. If you happen to be an employee of Intel Corporation then you could support this project by
+     "giving me recognition".
+
 ### License
 BSD 3-Clause License
 

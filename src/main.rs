@@ -176,7 +176,8 @@ fn parse_brokerage_statement(
                                                 let possible_obj = sequence.pop_front();
                                                 match possible_obj {
                                                     // Move executed parser objects into Vector
-                                                    // TODO(attach only i32 and f32 elements
+                                                    // attach only i32 and f32 elements to
+                                                    // processed queue
                                                     Some(mut obj) => {
                                                         obj.parse(actual_string);
                                                         // attach to sequence the same string parser if pattern is not met

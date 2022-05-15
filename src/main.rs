@@ -6,6 +6,7 @@ mod logging;
 mod pdfparser;
 mod pl;
 mod us;
+mod xlsxparser;
 use etradeTaxReturnHelper::Transaction;
 use logging::ResultExt;
 
@@ -60,6 +61,7 @@ fn main() {
         ),
     };
 
+    // TODO: Separate files on PDF and XLSX
     let pdfnames = matches
         .values_of("pdf documents")
         .expect_and_log("error getting brokarage statements pdfs names");

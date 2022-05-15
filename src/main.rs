@@ -4,6 +4,7 @@ use clap::{App, AppSettings, Arg};
 mod de;
 mod logging;
 mod pdfparser;
+mod xlsxparser;
 mod pl;
 mod us;
 use etradeTaxReturnHelper::Transaction;
@@ -60,9 +61,12 @@ fn main() {
         ),
     };
 
+    // TODO: Separate files on PDF and XLSX
     let pdfnames = matches
         .values_of("pdf documents")
         .expect_and_log("error getting brokarage statements pdfs names");
+
+
 
     log::info!("Started etradeTaxHelper");
 

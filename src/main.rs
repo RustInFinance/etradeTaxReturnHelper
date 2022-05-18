@@ -1,4 +1,5 @@
 use chrono;
+use chrono::Datelike;
 use clap::{App, AppSettings, Arg};
 
 mod de;
@@ -16,7 +17,7 @@ fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
         .iter()
         .map(|x| x.exchange_rate * x.gross_us)
         .sum();
-    // Tax paind in US in PLN
+    // Tax paid in US in PLN
     let tax_us_pl: f32 = transactions
         .iter()
         .map(|x| x.exchange_rate * x.tax_us)
@@ -35,11 +36,32 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
                 .default_value("pl"),
         )
         .arg(
-            Arg::with_name("pdf documents")
-                .help("Brokerage statement PDF files")
+            Arg::with_name("financial documents")
+                .help("Brokerage statement PDFs, Trade confirmation PDFs and Gain & Losses xlsx documents")
                 .multiple(true)
                 .required(true),
         )
+}
+
+/// Check if all dividends transaction come from the same year
+fn verify_dividends_transactions(div_transactions: &Vec<(String, f32, f32)>) -> Result<(), String> {
+    let mut trans = div_transactions.iter();
+    let (transaction_date, _, _) = trans.next().expect_and_log("No Dividends transactions");
+    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+        .unwrap()
+        .year();
+    let mut verification: Result<(), String> = Ok(());
+    trans.for_each(|(tr_date, _, _)| {
+        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+            .unwrap()
+            .year();
+        if tr_year != transaction_year {
+            let msg: &str =
+                "WARNING! Brokerage statements are related to different years. Was it intentional?";
+            verification = Err(msg.to_owned());
+        }
+    });
+    verification
 }
 
 fn main() {
@@ -47,6 +69,8 @@ fn main() {
 
     let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches();
+
+    log::info!("Started etradeTaxHelper");
 
     let residency = matches
         .value_of("residency")
@@ -61,27 +85,42 @@ fn main() {
         ),
     };
 
-    // TODO: Separate files on PDF and XLSX
     let pdfnames = matches
-        .values_of("pdf documents")
+        .values_of("financial documents")
         .expect_and_log("error getting brokarage statements pdfs names");
-
-    log::info!("Started etradeTaxHelper");
 
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, i32, f32, f32)> = vec![];
     let mut parsed_trade_confirmations: Vec<(String, String, i32, f32, f32, f32, f32, f32)> =
         vec![];
-    // 1. Parse PDF documents to get list of transactions
+    let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+
+    // 1. Parse PDF and XLSX documents to get list of transactions
     pdfnames.for_each(|x| {
-        let (mut div_t, mut sold_t, mut trade_t) = pdfparser::parse_brokerage_statement(x);
-        parsed_div_transactions.append(&mut div_t);
-        parsed_sold_transactions.append(&mut sold_t);
-        parsed_trade_confirmations.append(&mut trade_t);
+        // If name contains .pdf then parse as pdf
+        // if name contains .xlsx then parse as spreadsheet
+        if x.contains(".pdf") {
+            let (mut div_t, mut sold_t, mut trade_t) = pdfparser::parse_brokerage_statement(x);
+            parsed_div_transactions.append(&mut div_t);
+            parsed_sold_transactions.append(&mut sold_t);
+            parsed_trade_confirmations.append(&mut trade_t);
+        } else {
+            parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x));
+        }
     });
-    // 2. Match SOLD transactions with Trade confirmations
+    // 2. Verify Transactions
+    match verify_dividends_transactions(&parsed_div_transactions) {
+        Ok(()) => log::info!("Dividends transactions are consistent"),
+        Err(msg) => {
+            println!("{}", msg);
+            log::warn!("{}", msg);
+        }
+    }
+
+    // 3. Verify and create full sold transactions info needed for TAX purposes
+
     // TODO: Implement trade confirmation missing info
-    // 3. Get Exchange rates
+    // 4. Get Exchange rates
     let transactions = rd
         .get_exchange_rates(parsed_div_transactions)
         .expect_and_log("Error: unable to get exchange rates");
@@ -274,6 +313,25 @@ mod tests {
                 info: None,
             },
         };
+        Ok(())
+    }
+
+    #[test]
+    fn test_dividends_verification_ok() -> Result<(), String> {
+        let transactions: Vec<(String, f32, f32)> = vec![
+            ("06/01/21".to_string(), 100.0, 25.0),
+            ("03/01/21".to_string(), 126.0, 10.0),
+        ];
+        verify_dividends_transactions(&transactions)
+    }
+
+    #[test]
+    fn test_dividends_verification_fail() -> Result<(), String> {
+        let transactions: Vec<(String, f32, f32)> = vec![
+            ("04/11/22".to_string(), 100.0, 25.0),
+            ("03/01/21".to_string(), 126.0, 10.0),
+        ];
+        assert!(verify_dividends_transactions(&transactions).is_err());
         Ok(())
     }
 }

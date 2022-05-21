@@ -64,7 +64,6 @@ fn verify_dividends_transactions(div_transactions: &Vec<(String, f32, f32)>) -> 
     verification
 }
 
-
 /// Trade date is when transaction was trigerred. Commission and Fee should
 /// be using exchange rate from preceeding day of this date
 /// Actual Tax is to be paid from settlement_date
@@ -73,7 +72,6 @@ fn reconstruct_sold_transactions(
     trade_confirmations: &Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
 ) -> Result<Vec<(String, String, String, f32, f32, f32)>, String> {
-
     // Ok What do I need.
     // 1. trade date
     // 2. settlement date
@@ -81,16 +79,23 @@ fn reconstruct_sold_transactions(
     // 4. gross income
     // 5. fee+commission
     // 6. cost cost basis
-    let mut detailed_sold_transactions : Vec<(String, String, String, f32, f32, f32, f32)> = vec![];
+    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32, f32)> = vec![];
 
     // iterate through all sold transactions and update it with needed info
     for (trade_date, _, _, income) in sold_transactions {
         // match trade date and gross with principal and trade date of  trade confirmation
-        
-        let (_, settlement_date, _, _, _, commission, fee, _) = trade_confirmations.iter().find(|(tr_date, _, _, _, principal, _, _, _)| tr_date == trade_date && principal == income).expect_and_log("Error: Sold transaction detected, but corressponding TRADE confirmation is missing. Please download trade confirmation document.\n");
+
+        let (_, settlement_date, _, _, principal, commission, fee, _) = trade_confirmations.iter().find(|(tr_date, _, _, _, _, _, _, net)| tr_date == trade_date && net == income).expect_and_log("Error: Sold transaction detected, but corressponding TRADE confirmation is missing. Please download trade confirmation document.\n");
         let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, principal)| tr_date == trade_date && principal == income).expect_and_log("Error: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document.\n");
         log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, total_fee: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,fee+commission,cost_basis);
-        detailed_sold_transactions.push((trade_date.clone(), settlement_date.clone(), acquisition_date.clone(), *income, fee+commission, *cost_basis));
+        detailed_sold_transactions.push((
+            trade_date.clone(),
+            settlement_date.clone(),
+            acquisition_date.clone(),
+            *principal,
+            fee + commission,
+            *cost_basis,
+        ));
     }
 
     Ok(detailed_sold_transactions)
@@ -154,11 +159,11 @@ fn main() {
         &parsed_sold_transactions,
         &parsed_trade_confirmations,
         &parsed_gain_and_losses,
-    ).expect_and_log("Error reconstructing detailed sold transactions.");
+    )
+    .expect_and_log("Error reconstructing detailed sold transactions.");
 
     //TODO: UT & rethink how to proceed with getting exchange rte not too have two copies of
-    //functions 
-
+    //functions
 
     // 4. Get Exchange rates
     let transactions = rd
@@ -378,20 +383,54 @@ mod tests {
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
         let parsed_sold_transactions: Vec<(String, i32, f32, f32)> = vec![
-            ("06/01/21".to_string(), 1, 25.0 , 25.0),
-            ("03/01/21".to_string(), 2, 10.0, 20.0),
+            ("06/01/21".to_string(), 1, 25.0, 24.8),
+            ("03/01/21".to_string(), 2, 10.0, 19.8),
         ];
 
         let parsed_trade_confirmations: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![
+            (
+                "06/01/21".to_string(),
+                "06/03/21".to_string(),
+                1,
+                25.0,
+                25.0,
+                0.01,
+                0.01,
+                24.8,
+            ),
+            (
+                "03/01/21".to_string(),
+                "03/03/21".to_string(),
+                1,
+                10.0,
+                20.0,
+                0.01,
+                0.01,
+                19.8,
+            ),
         ];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
+            (
+                "01/01/19".to_string(),
+                "06/01/21".to_string(),
+                10.0,
+                10.0,
+                24.8,
+            ),
+            (
+                "01/01/21".to_string(),
+                "03/01/21".to_string(),
+                20.0,
+                20.0,
+                19.8,
+            ),
         ];
 
         let detailed_sold_transactions = reconstruct_sold_transactions(
             &parsed_sold_transactions,
             &parsed_trade_confirmations,
-            &parsed_gain_and_losses,
+            &parsed_gains_and_losses,
         )?;
 
         // 1. trade date
@@ -400,11 +439,28 @@ mod tests {
         // 4. gross income
         // 5. fee+commission
         // 6. cost cost basis
-        assert_eq!(detailed_sold_transactions, vec![
-            ("06/01/21".to_string(), "06/03/21".to_string(),"01/01/19".to_string(), 25.0, 0.02, 10.0),
-            ("03/01/21".to_string(), "03/03/21".to_string(),"01/01/21".to_string(), 25.0, 0.02, 20.0),
-        ]);
-
-
+        assert_eq!(
+            detailed_sold_transactions,
+            vec![
+                (
+                    "06/01/21".to_string(),
+                    "06/03/21".to_string(),
+                    "01/01/19".to_string(),
+                    25.0,
+                    0.02,
+                    10.0
+                ),
+                (
+                    "03/01/21".to_string(),
+                    "03/03/21".to_string(),
+                    "01/01/21".to_string(),
+                    20.0,
+                    0.02,
+                    20.0
+                ),
+            ]
+        );
+        Ok(())
     }
+    // TODO : Make negative tests to reconstruction of transaction
 }

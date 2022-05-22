@@ -8,7 +8,7 @@ mod pdfparser;
 mod pl;
 mod us;
 mod xlsxparser;
-use etradeTaxReturnHelper::Transaction;
+use etradeTaxReturnHelper::{Transaction,Sold_Transaction};
 use logging::ResultExt;
 
 fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
@@ -101,6 +101,90 @@ fn reconstruct_sold_transactions(
     Ok(detailed_sold_transactions)
 }
 
+// TODO(jczaja): UT
+fn create_detailed_div_transactions(
+    transactions: Vec<(String, f32, f32)>,
+    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
+) -> Vec<Transaction> {
+    let mut detailed_transactions: Vec<Transaction> = Vec::new();
+    transactions
+            .iter()
+            .for_each(|(transaction_date, gross_us, tax_us)| {
+                let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
+
+            let msg = format!(
+                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
+            )
+            .to_owned();
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+
+
+                detailed_transactions.push(Transaction {
+                    transaction_date: transaction_date.clone(),
+                    gross_us: gross_us.clone(),
+                    tax_us: tax_us.clone(),
+                    exchange_rate_date: exchange_rate_date,
+                    exchange_rate: exchange_rate,
+                })
+            });
+    detailed_transactions
+}
+
+
+//    pub trade_date: String,
+//    pub settlement_date: String,
+//    pub acquisition_date: String,
+//    pub gross_us: f32,
+//    pub total_fee: f32,
+//    pub exchange_rate_trade_date: String,
+//    pub exchange_rate_trade: f32,
+//    pub exchange_rate_settlement_date: String,
+//    pub exchange_rate_settlement: f32,
+//    pub exchange_rate_acquisition_date: String,
+//    pub exchange_rate_acquisition: f32,
+fn create_detailed_sold_transactions(
+    transactions: Vec<(String, String, String, f32, f32, f32)>,
+    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
+) -> Vec<Sold_Transaction> {
+
+    let mut detailed_transactions: Vec<Sold_Transaction> = Vec::new();
+    transactions
+            .iter()
+            .for_each(|(trade_date, settlement_date, acquisition_date, gross, fees, cost_basis)| {
+                let (exchange_rate__trade_date, exchange_rate_trade) = dates[trade_date].clone().unwrap();
+                let (exchange_rate__settlement_date, exchange_rate_settlement) = dates[settlement_date].clone().unwrap();
+                let (exchange_rate__acquisition_date, exchange_rate_acquisition) = dates[acquisition_date].clone().unwrap();
+
+            let msg = format!(
+                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, gross_income: ${},fees: ${}, exchange_rate_trade: {} , exchange_rate_trade_date: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                chrono::NaiveDate::parse_from_str(&trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                chrono::NaiveDate::parse_from_str(&settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
+            )
+            .to_owned();
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+
+
+                detailed_transactions.push(Transaction {
+                    transaction_date: transaction_date.clone(),
+                    gross_us: gross_us.clone(),
+                    tax_us: tax_us.clone(),
+                    exchange_rate_date: exchange_rate_date,
+                    exchange_rate: exchange_rate,
+                })
+            });
+    detailed_transactions
+
+    
+}
+
+
 fn main() {
     logging::init_logging_infrastructure();
 
@@ -162,23 +246,39 @@ fn main() {
     )
     .expect_and_log("Error reconstructing detailed sold transactions.");
 
-    //TODO: UT & rethink how to proceed with getting exchange rte not too have two copies of
-    //functions
-
     // 4. Get Exchange rates
-    let transactions = rd
-        .get_exchange_rates(parsed_div_transactions)
-        .expect_and_log("Error: unable to get exchange rates");
-    transactions.iter().for_each(|x| {
-            let msg = format!(
-                "TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&x.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &x.gross_us, &x.tax_us, &x.exchange_rate, &x.exchange_rate_date
-            )
-            .to_owned();
+    // Gather all trade , settlement and transaction dates into hash map to be passed to
+    // get_exchange_rate
+    // Hash map : Key(event date) -> (preceeding date, exchange_rate)
+    let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+        std::collections::HashMap::new();
+    parsed_div_transactions
+        .iter()
+        .for_each(|(trade_date, _, _)| {
+            if dates.contains_key(trade_date) == false {
+                dates.insert(trade_date.clone(), None);
+            }
+        });
+    detailed_sold_transactions.iter().for_each(
+        |(trade_date, settlement_date, acquisition_date, _, _, _)| {
+            if dates.contains_key(trade_date) == false {
+                dates.insert(trade_date.clone(), None);
+            }
+            if dates.contains_key(settlement_date) == false {
+                dates.insert(settlement_date.clone(), None);
+            }
+            if dates.contains_key(acquisition_date) == false {
+                dates.insert(acquisition_date.clone(), None);
+            }
+        },
+    );
 
-            println!("{}", msg);
-            log::info!("{}", msg);
-            });
+    rd.get_exchange_rates(&mut dates)
+        .expect_and_log("Error: unable to get exchange rates");
+
+    // Make a detailed_div_transactions
+    let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);
+    let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates);
 
     let (gross, tax) = compute_tax(transactions);
     rd.present_result(gross, tax);

@@ -8,11 +8,11 @@ mod pdfparser;
 mod pl;
 mod us;
 mod xlsxparser;
-use etradeTaxReturnHelper::{Transaction,Sold_Transaction};
+use etradeTaxReturnHelper::{Sold_Transaction, Transaction};
 use logging::ResultExt;
 
-fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
-    // Gross income from dividends in PLN
+fn compute_div_taxation(transactions: Vec<Transaction>) -> (f32, f32) {
+    // Gross income from dividends in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
         .map(|x| x.exchange_rate * x.gross_us)
@@ -23,6 +23,20 @@ fn compute_tax(transactions: Vec<Transaction>) -> (f32, f32) {
         .map(|x| x.exchange_rate * x.tax_us)
         .sum();
     (gross_us_pl, tax_us_pl)
+}
+
+fn compute_sold_taxation(transactions: Vec<Sold_Transaction>) -> (f32, f32) {
+    // Gross income from sold stock in target currency (PLN, EUR etc.)
+    let gross_us_pl: f32 = transactions
+        .iter()
+        .map(|x| x.exchange_rate_settlement * x.gross_us)
+        .sum();
+    // Cost of income e.g. cost_basis[target currency] + fees[target currency]
+    let cost_us_pl: f32 = transactions
+        .iter()
+        .map(|x| x.exchange_rate_acquisition * x.cost_basis + x.exchange_rate_trade * x.total_fee)
+        .sum();
+    (gross_us_pl, cost_us_pl)
 }
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
@@ -133,12 +147,12 @@ fn create_detailed_div_transactions(
     detailed_transactions
 }
 
-
 //    pub trade_date: String,
 //    pub settlement_date: String,
 //    pub acquisition_date: String,
 //    pub gross_us: f32,
 //    pub total_fee: f32,
+//    pub cost_basis: f32,
 //    pub exchange_rate_trade_date: String,
 //    pub exchange_rate_trade: f32,
 //    pub exchange_rate_settlement_date: String,
@@ -149,41 +163,43 @@ fn create_detailed_sold_transactions(
     transactions: Vec<(String, String, String, f32, f32, f32)>,
     dates: &std::collections::HashMap<String, Option<(String, f32)>>,
 ) -> Vec<Sold_Transaction> {
-
     let mut detailed_transactions: Vec<Sold_Transaction> = Vec::new();
     transactions
             .iter()
             .for_each(|(trade_date, settlement_date, acquisition_date, gross, fees, cost_basis)| {
-                let (exchange_rate__trade_date, exchange_rate_trade) = dates[trade_date].clone().unwrap();
-                let (exchange_rate__settlement_date, exchange_rate_settlement) = dates[settlement_date].clone().unwrap();
-                let (exchange_rate__acquisition_date, exchange_rate_acquisition) = dates[acquisition_date].clone().unwrap();
+                let (exchange_rate_trade_date, exchange_rate_trade) = dates[trade_date].clone().unwrap();
+                let (exchange_rate_settlement_date, exchange_rate_settlement) = dates[settlement_date].clone().unwrap();
+                let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates[acquisition_date].clone().unwrap();
 
             let msg = format!(
-                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, gross_income: ${},fees: ${}, exchange_rate_trade: {} , exchange_rate_trade_date: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, gross_income: ${},fees: ${}, cost_basis: {}, exchange_rate_trade: {} , exchange_rate_trade_date: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
                 chrono::NaiveDate::parse_from_str(&trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
+                &gross, &fees, &cost_basis, &exchange_rate_trade, &exchange_rate_trade_date,&exchange_rate_settlement, &exchange_rate_settlement_date, &exchange_rate_acquisition, &exchange_rate_acquisition_date,
             )
             .to_owned();
 
             println!("{}", msg);
             log::info!("{}", msg);
 
-
-                detailed_transactions.push(Transaction {
-                    transaction_date: transaction_date.clone(),
-                    gross_us: gross_us.clone(),
-                    tax_us: tax_us.clone(),
-                    exchange_rate_date: exchange_rate_date,
-                    exchange_rate: exchange_rate,
+                detailed_transactions.push(Sold_Transaction {
+                    trade_date: trade_date.clone(),
+                    settlement_date: settlement_date.clone(),
+                    acquisition_date: acquisition_date.clone(),
+                    gross_us: *gross,
+                    total_fee: *fees,
+                    cost_basis: *cost_basis,
+                    exchange_rate_trade_date: exchange_rate_trade_date,
+                    exchange_rate_trade: exchange_rate_trade,
+                    exchange_rate_settlement_date: exchange_rate_settlement_date,
+                    exchange_rate_settlement: exchange_rate_settlement,
+                    exchange_rate_acquisition_date: exchange_rate_acquisition_date,
+                    exchange_rate_acquisition: exchange_rate_acquisition,
                 })
             });
     detailed_transactions
-
-    
 }
-
 
 fn main() {
     logging::init_logging_infrastructure();
@@ -280,8 +296,9 @@ fn main() {
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates);
 
-    let (gross, tax) = compute_tax(transactions);
-    rd.present_result(gross, tax);
+    let (gross_div, tax_div) = compute_div_taxation(transactions);
+    let (gross_sold, cost_sold) = compute_sold_taxation(sold_transactions);
+    rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
 }
 
 #[cfg(test)]

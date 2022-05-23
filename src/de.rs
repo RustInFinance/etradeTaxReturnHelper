@@ -5,8 +5,8 @@ pub struct DE {}
 impl etradeTaxReturnHelper::Residency for DE {
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>
-    ) -> Result<(), String>{
+        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+    ) -> Result<(), String> {
         self.get_currency_exchange_rates(dates, "USD", "EUR")
     }
 
@@ -47,20 +47,10 @@ impl etradeTaxReturnHelper::Residency for DE {
         ))
     }
 
-    fn present_result(&self, gross_us_de: f32, tax_us_de: f32) {
-        println!("===> GROSS INCOME: {} EUR", gross_us_de);
-        println!("===> TAX PAID IN US: {} EUR", tax_us_de);
-        // Expected full TAX in Poland
-        let full_tax_de = gross_us_de * 25.0 / 100.0;
-        // Normally you pay 15% in US, but if you made wrong
-        // choices in your residency application you may be charged 30%
-        // in that case you do not pay anything in Poland because you paid
-        // 30% alrady in US
-        let tax_diff_to_pay_de = if full_tax_de > tax_us_de {
-            full_tax_de - tax_us_de
-        } else {
-            0.0
-        };
-        println!("ADDITIONAL TAX TO BE PAID: {} EUR", tax_diff_to_pay_de);
+    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32) {
+        println!("===> (DIVIDENDS) INCOME: {} EUR", gross_div);
+        println!("===> (DIVIDENDS) TAX PAID: {} EUR", tax_div);
+        println!("===> (SOLD STOCK) INCOME: {} EUR", gross_sold);
+        println!("===> (SOLD STOCK) TAX PAID: {} EUR", cost_sold);
     }
 }

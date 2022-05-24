@@ -60,7 +60,14 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
 /// Check if all dividends transaction come from the same year
 fn verify_dividends_transactions(div_transactions: &Vec<(String, f32, f32)>) -> Result<(), String> {
     let mut trans = div_transactions.iter();
-    let (transaction_date, _, _) = trans.next().expect_and_log("No Dividends transactions");
+    let (transaction_date, _, _) = match trans.next() {
+        Some((x, a, b)) => (x, a, b),
+        None => {
+            log::info!("No Dividends transactions");
+            return Ok(());
+        }
+    };
+
     let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
         .unwrap()
         .year();
@@ -312,15 +319,12 @@ mod tests {
 
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(),None);
+        dates.insert("03/01/21".to_owned(), None);
         rd.get_exchange_rates(&mut dates).unwrap();
 
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
-            (
-                exchange_rate_date,
-                exchange_rate
-            ),
+            (exchange_rate_date, exchange_rate),
             ("2021-02-26".to_owned(), 0.82831)
         );
         Ok(())
@@ -332,14 +336,11 @@ mod tests {
 
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(),None);
+        dates.insert("03/01/21".to_owned(), None);
         rd.get_exchange_rates(&mut dates).unwrap();
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
-            (
-                exchange_rate_date,
-                exchange_rate
-            ),
+            (exchange_rate_date, exchange_rate),
             ("2021-02-26".to_owned(), 3.7247)
         );
         Ok(())
@@ -350,21 +351,15 @@ mod tests {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(us::US {});
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(),None);
+        dates.insert("03/01/21".to_owned(), None);
         rd.get_exchange_rates(&mut dates).unwrap();
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
-        assert_eq!(
-            (
-                exchange_rate_date,
-                exchange_rate
-            ),
-            ("N/A".to_owned(), 1.0)
-        );
+        assert_eq!((exchange_rate_date, exchange_rate), ("N/A".to_owned(), 1.0));
         Ok(())
     }
 
     #[test]
-    fn test_simple_computation() -> Result<(), String> {
+    fn test_simple_div_taxation() -> Result<(), String> {
         // Init Transactions
         let transactions: Vec<Transaction> = vec![Transaction {
             transaction_date: "N/A".to_string(),
@@ -378,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn test_computation() -> Result<(), String> {
+    fn test_div_taxation() -> Result<(), String> {
         // Init Transactions
         let transactions: Vec<Transaction> = vec![
             Transaction {
@@ -399,6 +394,73 @@ mod tests {
         assert_eq!(
             compute_div_taxation(transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_simple_sold_taxation() -> Result<(), String> {
+        // Init Transactions
+        let transactions: Vec<Sold_Transaction> = vec![Sold_Transaction {
+            trade_date: "N/A".to_string(),
+            settlement_date: "N/A".to_string(),
+            acquisition_date: "N/A".to_string(),
+            gross_us: 100.0,
+            total_fee: 0.02,
+            cost_basis: 70.0,
+            exchange_rate_trade_date: "N/A".to_string(),
+            exchange_rate_trade: 4.0,
+            exchange_rate_settlement_date: "N/A".to_string(),
+            exchange_rate_settlement: 5.0,
+            exchange_rate_acquisition_date: "N/A".to_string(),
+            exchange_rate_acquisition: 6.0,
+        }];
+        assert_eq!(
+            compute_sold_taxation(transactions),
+            (100.0 * 5.0, 70.0 * 6.0 + 0.02 * 4.0)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_sold_taxation() -> Result<(), String> {
+        // Init Transactions
+        let transactions: Vec<Sold_Transaction> = vec![
+            Sold_Transaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                gross_us: 100.0,
+                total_fee: 0.02,
+                cost_basis: 70.0,
+                exchange_rate_trade_date: "N/A".to_string(),
+                exchange_rate_trade: 4.0,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: 5.0,
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: 6.0,
+            },
+            Sold_Transaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                gross_us: 10.0,
+                total_fee: 0.02,
+                cost_basis: 4.0,
+                exchange_rate_trade_date: "N/A".to_string(),
+                exchange_rate_trade: 1.0,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: 2.0,
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: 3.0,
+            },
+        ];
+        assert_eq!(
+            compute_sold_taxation(transactions),
+            (
+                100.0 * 5.0 + 10.0 * 2.0,
+                70.0 * 6.0 + 4.0 * 3.0 + 0.02 * 1.0 + 0.02 * 4.0
+            )
         );
         Ok(())
     }
@@ -491,6 +553,12 @@ mod tests {
             ("06/01/21".to_string(), 100.0, 25.0),
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
+        verify_dividends_transactions(&transactions)
+    }
+
+    #[test]
+    fn test_dividends_verification_empty_ok() -> Result<(), String> {
+        let transactions: Vec<(String, f32, f32)> = vec![];
         verify_dividends_transactions(&transactions)
     }
 

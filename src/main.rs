@@ -310,15 +310,18 @@ mod tests {
     fn test_exchange_rate_de() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(de::DE {});
 
-        let transactions = rd
-            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
-            .unwrap();
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("03/01/21".to_owned(),None);
+        rd.get_exchange_rates(&mut dates).unwrap();
+
+        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
             (
-                &transactions[0].exchange_rate_date,
-                transactions[0].exchange_rate
+                exchange_rate_date,
+                exchange_rate
             ),
-            (&"2021-02-26".to_owned(), 0.82831)
+            ("2021-02-26".to_owned(), 0.82831)
         );
         Ok(())
     }
@@ -327,15 +330,17 @@ mod tests {
     fn test_exchange_rate_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
-        let transactions = rd
-            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
-            .unwrap();
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("03/01/21".to_owned(),None);
+        rd.get_exchange_rates(&mut dates).unwrap();
+        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
             (
-                &transactions[0].exchange_rate_date,
-                transactions[0].exchange_rate
+                exchange_rate_date,
+                exchange_rate
             ),
-            (&"2021-02-26".to_owned(), 3.7247)
+            ("2021-02-26".to_owned(), 3.7247)
         );
         Ok(())
     }
@@ -343,15 +348,17 @@ mod tests {
     #[test]
     fn test_exchange_rate_us() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(us::US {});
-        let transactions = rd
-            .get_exchange_rates(vec![("03/01/21".to_owned(), 0.0, 0.0)])
-            .unwrap();
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("03/01/21".to_owned(),None);
+        rd.get_exchange_rates(&mut dates).unwrap();
+        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
             (
-                &transactions[0].exchange_rate_date,
-                transactions[0].exchange_rate
+                exchange_rate_date,
+                exchange_rate
             ),
-            (&"N/A".to_owned(), 1.0)
+            ("N/A".to_owned(), 1.0)
         );
         Ok(())
     }
@@ -366,7 +373,7 @@ mod tests {
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
         }];
-        assert_eq!(compute_tax(transactions), (400.0, 100.0));
+        assert_eq!(compute_div_taxation(transactions), (400.0, 100.0));
         Ok(())
     }
 
@@ -390,7 +397,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            compute_tax(transactions),
+            compute_div_taxation(transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
         );
         Ok(())

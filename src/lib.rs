@@ -14,13 +14,34 @@ pub struct Transaction {
     pub exchange_rate: f32,
 }
 
+// 1. trade date
+// 2. settlement date
+// 3. date of purchase
+// 4. gross income
+// 5. fee+commission
+// 6. cost cost basis
+pub struct Sold_Transaction {
+    pub trade_date: String,
+    pub settlement_date: String,
+    pub acquisition_date: String,
+    pub gross_us: f32,
+    pub total_fee: f32,
+    pub cost_basis: f32,
+    pub exchange_rate_trade_date: String,
+    pub exchange_rate_trade: f32,
+    pub exchange_rate_settlement_date: String,
+    pub exchange_rate_settlement: f32,
+    pub exchange_rate_acquisition_date: String,
+    pub exchange_rate_acquisition: f32,
+}
+
 pub trait Residency {
     //    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String>;
-    fn present_result(&self, gross: f32, tax: f32);
+    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32);
     fn get_exchange_rates(
         &self,
-        transactions: Vec<(String, f32, f32)>,
-    ) -> Result<Vec<Transaction>, String>;
+        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+    ) -> Result<(), String>;
 
     // Default parser (not to be used)
     fn parse_exchange_rates(&self, _body: &str) -> Result<(f32, String), String> {
@@ -29,10 +50,10 @@ pub trait Residency {
 
     fn get_currency_exchange_rates(
         &self,
-        transactions: Vec<(String, f32, f32)>,
+        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
         from: &str,
         to: &str,
-    ) -> Result<Vec<Transaction>, String> {
+    ) -> Result<(), String> {
         // proxies are taken from env vars: http_proxy and https_proxy
         let http_proxy = std::env::var("http_proxy");
         let https_proxy = std::env::var("https_proxy");
@@ -54,11 +75,9 @@ pub trait Residency {
         // Example URL: https://www.exchange-rates.org/Rate/USD/EUR/2-27-2021
 
         let base_exchange_rate_url = "https://www.exchange-rates.org/Rate/";
-        let mut detailed_transactions: Vec<Transaction> = Vec::new();
 
-        for (transaction_date, gross_us, tax_us) in transactions {
-            let mut converted_date =
-                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap();
+        dates.iter_mut().for_each(|(date, val)| {
+            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").unwrap();
 
             converted_date = converted_date
                 .checked_sub_signed(chrono::Duration::days(1))
@@ -84,18 +103,13 @@ pub trait Residency {
                 if let Ok((exchange_rate, exchange_rate_date)) =
                     self.parse_exchange_rates(&exchange_rates_response)
                 {
-                    detailed_transactions.push(Transaction {
-                        transaction_date,
-                        gross_us,
-                        tax_us,
-                        exchange_rate_date,
-                        exchange_rate,
-                    });
+                    *val = Some((exchange_rate_date, exchange_rate));
                 }
             } else {
-                return Err("Error getting exchange rate".to_owned());
+                panic!("Error getting exchange rate");
             }
-        }
-        Ok(detailed_transactions)
+        });
+
+        Ok(())
     }
 }

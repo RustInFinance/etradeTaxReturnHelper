@@ -4,7 +4,7 @@ impl etradeTaxReturnHelper::Residency for US {
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
     ) -> Result<(), String> {
-        dates.iter_mut().for_each(|(date, val)| {
+        dates.iter_mut().for_each(|(_date, val)| {
             *val = Some(("N/A".to_owned(), 1.0));
         });
         Ok(())

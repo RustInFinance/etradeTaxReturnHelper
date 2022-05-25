@@ -378,54 +378,58 @@ pub fn parse_brokerage_statement(
     (div_transactions, sold_transactions, trades)
 }
 
-#[test]
-#[ignore]
-fn test_parse_brokerage_statement() -> Result<(), String> {
-    assert_eq!(
-        parse_brokerage_statement("data/example.pdf"),
-        (vec![("03/01/21".to_owned(), 574.42, 86.16)], vec![], vec![])
-    );
-    assert_eq!(
-        parse_brokerage_statement("data/example2.pdf"),
-        (vec![], vec![], vec![])
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    #[ignore]
+    fn test_parse_brokerage_statement() -> Result<(), String> {
+        assert_eq!(
+            parse_brokerage_statement("data/example.pdf"),
+            (vec![("03/01/21".to_owned(), 574.42, 86.16)], vec![], vec![])
+        );
+        assert_eq!(
+            parse_brokerage_statement("data/example2.pdf"),
+            (vec![], vec![], vec![])
+        );
 
-    assert_eq!(
-        parse_brokerage_statement("data/example3.pdf"),
-        (
-            vec![
-                ("06/01/21".to_owned(), 0.17, 0.03),
-                ("06/01/21".to_owned(), 45.87, 6.88)
-            ],
-            vec![],
-            vec![]
-        )
-    );
-    assert_eq!(
-        parse_brokerage_statement("data/example4.pdf"),
-        (
-            vec![],
-            vec![("04/13/22".to_owned(), -1, 46.92, 46.90)],
-            vec![]
-        )
-    );
+        assert_eq!(
+            parse_brokerage_statement("data/example3.pdf"),
+            (
+                vec![
+                    ("06/01/21".to_owned(), 0.17, 0.03),
+                    ("06/01/21".to_owned(), 45.87, 6.88)
+                ],
+                vec![],
+                vec![]
+            )
+        );
+        assert_eq!(
+            parse_brokerage_statement("data/example4.pdf"),
+            (
+                vec![],
+                vec![("04/13/22".to_owned(), -1, 46.92, 46.90)],
+                vec![]
+            )
+        );
 
-    assert_eq!(
-        parse_brokerage_statement("data/example5.pdf"),
-        (
-            vec![],
-            vec![],
-            vec![(
-                "04/11/22".to_owned(),
-                "04/13/22".to_owned(),
-                1,
-                46.92,
-                46.92,
-                0.01,
-                0.01,
-                46.9
-            )]
-        )
-    );
-    Ok(())
+        assert_eq!(
+            parse_brokerage_statement("data/example5.pdf"),
+            (
+                vec![],
+                vec![],
+                vec![(
+                    "04/11/22".to_owned(),
+                    "04/13/22".to_owned(),
+                    1,
+                    46.92,
+                    46.92,
+                    0.01,
+                    0.01,
+                    46.9
+                )]
+            )
+        );
+        Ok(())
+    }
 }

@@ -71,37 +71,42 @@ pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f3
     transactions
 }
 
-#[test]
-fn test_parse_gain_and_losses() -> Result<(), String> {
-    assert_eq!(
-        parse_gains_and_losses("data/G&L_Collapsed.xlsx"),
-        (vec![
-            (
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_gain_and_losses() -> Result<(), String> {
+        assert_eq!(
+            parse_gains_and_losses("data/G&L_Collapsed.xlsx"),
+            (vec![
+                (
+                    "04/24/2013".to_owned(),
+                    "04/11/2022".to_owned(),
+                    0.0,
+                    23.5175,
+                    46.9
+                ),
+                (
+                    "08/19/2015".to_owned(),
+                    "05/02/2022".to_owned(),
+                    24.258,
+                    29.28195,
+                    43.67
+                )
+            ])
+        );
+        assert_eq!(
+            parse_gains_and_losses("data/G&L_Expanded.xlsx"),
+            (vec![(
                 "04/24/2013".to_owned(),
                 "04/11/2022".to_owned(),
                 0.0,
                 23.5175,
                 46.9
-            ),
-            (
-                "08/19/2015".to_owned(),
-                "05/02/2022".to_owned(),
-                24.258,
-                29.28195,
-                43.67
-            )
-        ])
-    );
-    assert_eq!(
-        parse_gains_and_losses("data/G&L_Expanded.xlsx"),
-        (vec![(
-            "04/24/2013".to_owned(),
-            "04/11/2022".to_owned(),
-            0.0,
-            23.5175,
-            46.9
-        ),])
-    );
+            ),])
+        );
 
-    Ok(())
+        Ok(())
+    }
 }

@@ -6,6 +6,7 @@ type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;
 
+#[derive(Debug,PartialEq,PartialOrd)]
 pub struct Transaction {
     pub transaction_date: String,
     pub gross_us: f32,

@@ -122,7 +122,6 @@ fn reconstruct_sold_transactions(
     Ok(detailed_sold_transactions)
 }
 
-// TODO(jczaja): UT
 fn create_detailed_div_transactions(
     transactions: Vec<(String, f32, f32)>,
     dates: &std::collections::HashMap<String, Option<(String, f32)>>,
@@ -554,6 +553,42 @@ mod tests {
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
         verify_dividends_transactions(&transactions)
+    }
+
+    #[test]
+    fn test_create_detailed_div_transactions() -> Result<(), String> {
+        let parsed_transactions: Vec<(String, f32, f32)> = vec![
+            ("04/11/21".to_string(), 100.0, 25.0),
+            ("03/01/21".to_string(), 126.0, 10.0),
+        ];
+
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
+        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 3.0)));
+
+        let transactions = create_detailed_div_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            vec![
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross_us: 100.0,
+                    tax_us: 25.0,
+                    exchange_rate_date: "04/10/21".to_string(),
+                    exchange_rate: 3.0,
+                },
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross_us: 126.0,
+                    tax_us: 10.0,
+                    exchange_rate_date: "02/28/21".to_string(),
+                    exchange_rate: 2.0,
+                },
+            ]
+        );
+        Ok(())
     }
 
     #[test]

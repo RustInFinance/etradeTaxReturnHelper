@@ -592,6 +592,76 @@ mod tests {
     }
 
     #[test]
+    fn test_create_detailed_sold_transactions() -> Result<(), String> {
+        let parsed_transactions: Vec<(String, String, String, f32, f32, f32)> = vec![
+            (
+                "03/01/21".to_string(),
+                "03/03/21".to_string(),
+                "01/01/21".to_string(),
+                20.0,
+                0.02,
+                20.0,
+            ),
+            (
+                "06/01/21".to_string(),
+                "06/03/21".to_string(),
+                "01/01/19".to_string(),
+                25.0,
+                0.02,
+                10.0,
+            ),
+        ];
+
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("01/01/21".to_owned(), Some(("12/30/20".to_owned(), 1.0)));
+        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
+        dates.insert("03/03/21".to_owned(), Some(("03/02/21".to_owned(), 2.5)));
+        dates.insert("06/01/21".to_owned(), Some(("06/03/21".to_owned(), 3.0)));
+        dates.insert("06/03/21".to_owned(), Some(("06/05/21".to_owned(), 4.0)));
+        dates.insert("01/01/21".to_owned(), Some(("02/28/21".to_owned(), 5.0)));
+        dates.insert("01/01/19".to_owned(), Some(("12/30/18".to_owned(), 6.0)));
+        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 7.0)));
+
+        let transactions = create_detailed_sold_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            vec![
+                Sold_Transaction {
+                    trade_date: "03/01/21".to_string(),
+                    settlement_date: "03/03/21".to_string(),
+                    acquisition_date: "01/01/21".to_string(),
+                    gross_us: 20.0,
+                    total_fee: 0.02,
+                    cost_basis: 20.0,
+                    exchange_rate_trade_date: "02/28/21".to_string(),
+                    exchange_rate_trade: 2.0,
+                    exchange_rate_settlement_date: "03/02/21".to_string(),
+                    exchange_rate_settlement: 2.5,
+                    exchange_rate_acquisition_date: "02/28/21".to_string(),
+                    exchange_rate_acquisition: 5.0,
+                },
+                Sold_Transaction {
+                    trade_date: "06/01/21".to_string(),
+                    settlement_date: "06/03/21".to_string(),
+                    acquisition_date: "01/01/19".to_string(),
+                    gross_us: 25.0,
+                    total_fee: 0.02,
+                    cost_basis: 10.0,
+                    exchange_rate_trade_date: "06/03/21".to_string(),
+                    exchange_rate_trade: 3.0,
+                    exchange_rate_settlement_date: "06/05/21".to_string(),
+                    exchange_rate_settlement: 4.0,
+                    exchange_rate_acquisition_date: "12/30/18".to_string(),
+                    exchange_rate_acquisition: 6.0,
+                },
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_dividends_verification_empty_ok() -> Result<(), String> {
         let transactions: Vec<(String, f32, f32)> = vec![];
         verify_dividends_transactions(&transactions)

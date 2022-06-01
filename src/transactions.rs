@@ -2,7 +2,7 @@ use chrono;
 use chrono::Datelike;
 
 pub use crate::logging::ResultExt;
-use crate::{Sold_Transaction, Transaction};
+use crate::{SoldTransaction, Transaction};
 
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions(
@@ -54,7 +54,8 @@ pub fn reconstruct_sold_transactions(
     for (trade_date, settlement_date, _, _, income) in sold_transactions {
         // match trade date and gross with principal and trade date of  trade confirmation
 
-        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)| chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string() == *trade_date && inc == income).expect_and_log("Error: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document.\n");
+        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)| chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string() == *trade_date && inc == income).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
         log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,cost_basis);
         detailed_sold_transactions.push((
             trade_date.clone(),
@@ -114,8 +115,8 @@ pub fn create_detailed_div_transactions(
 pub fn create_detailed_sold_transactions(
     transactions: Vec<(String, String, String, f32, f32)>,
     dates: &std::collections::HashMap<String, Option<(String, f32)>>,
-) -> Vec<Sold_Transaction> {
-    let mut detailed_transactions: Vec<Sold_Transaction> = Vec::new();
+) -> Vec<SoldTransaction> {
+    let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions
             .iter()
             .for_each(|(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
@@ -134,7 +135,7 @@ pub fn create_detailed_sold_transactions(
             println!("{}", msg);
             log::info!("{}", msg);
 
-                detailed_transactions.push(Sold_Transaction {
+                detailed_transactions.push(SoldTransaction {
                     settlement_date: settlement_date.clone(),
                     acquisition_date: acquisition_date.clone(),
                     income_us: *income,
@@ -233,7 +234,7 @@ mod tests {
         assert_eq!(
             transactions,
             vec![
-                Sold_Transaction {
+                SoldTransaction {
                     settlement_date: "03/03/21".to_string(),
                     acquisition_date: "01/01/21".to_string(),
                     income_us: 20.0,
@@ -243,7 +244,7 @@ mod tests {
                     exchange_rate_acquisition_date: "02/28/21".to_string(),
                     exchange_rate_acquisition: 5.0,
                 },
-                Sold_Transaction {
+                SoldTransaction {
                     settlement_date: "06/03/21".to_string(),
                     acquisition_date: "01/01/19".to_string(),
                     income_us: 25.0,

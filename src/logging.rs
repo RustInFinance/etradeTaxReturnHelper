@@ -25,6 +25,7 @@ impl<T> ResultExt<T> for Option<T> {
     }
 }
 
+#[allow(dead_code)]
 pub fn init_logging_infrastructure() {
     // TODO(jczaja): test on windows/macos
     syslog::init(

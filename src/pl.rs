@@ -22,6 +22,7 @@ struct NBPResponse<T> {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(non_snake_case)]
 struct ExchangeRate {
     no: String,
     effectiveDate: String,

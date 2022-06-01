@@ -1,13 +1,13 @@
 # etradeTaxReturnHelper
 Project that parse e-trade PDF brokerage statements and compute total gross gain and tax paid in US that are needed for tax return forms out of US.
 
-### Data for Tax form from captial gains (PIT-38 in Poland)
+### Data for Tax form from capital gains (PIT-38 in Poland)
 1. Install this program: `cargo install etradeTaxReturnHelper`
 2. Download PDF documents from a year you are filling your tax return form for example: `Brokerage Statement <xxx>.pdf`:
     1. Login to e-trade, navigate to Documents/Brokerage Statements
     2. Select date period
     3. Download all `ACCOUNT STATEMENT` documents
-3. Run: `etradeTaxReturnHelper <your PDF documents that MAY contains dividends transaction e.g. "*.pdf">`
+3. Run: `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf">`
 
 ### FAQ
 1. How can I help?
@@ -18,7 +18,7 @@ Project that parse e-trade PDF brokerage statements and compute total gross gain
 ### License
 BSD 3-Clause License
 
-Copyright (c) 2022, Jacek Czaja
+Copyright (c) 2022, Intel Corporation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

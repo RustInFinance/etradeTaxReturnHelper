@@ -27,7 +27,7 @@ pub struct Transaction {
 // 3. net income
 // 4. cost cost basis
 #[derive(Debug, PartialEq, PartialOrd)]
-pub struct Sold_Transaction {
+pub struct SoldTransaction {
     pub settlement_date: String,
     pub acquisition_date: String,
     pub income_us: f32,
@@ -131,7 +131,7 @@ fn compute_div_taxation(transactions: Vec<Transaction>) -> (f32, f32) {
     (gross_us_pl, tax_us_pl)
 }
 
-fn compute_sold_taxation(transactions: Vec<Sold_Transaction>) -> (f32, f32) {
+fn compute_sold_taxation(transactions: Vec<SoldTransaction>) -> (f32, f32) {
     // Net income from sold stock in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
@@ -264,7 +264,7 @@ mod tests {
     #[test]
     fn test_simple_sold_taxation() -> Result<(), String> {
         // Init Transactions
-        let transactions: Vec<Sold_Transaction> = vec![Sold_Transaction {
+        let transactions: Vec<SoldTransaction> = vec![SoldTransaction {
             settlement_date: "N/A".to_string(),
             acquisition_date: "N/A".to_string(),
             income_us: 100.0,
@@ -284,8 +284,8 @@ mod tests {
     #[test]
     fn test_sold_taxation() -> Result<(), String> {
         // Init Transactions
-        let transactions: Vec<Sold_Transaction> = vec![
-            Sold_Transaction {
+        let transactions: Vec<SoldTransaction> = vec![
+            SoldTransaction {
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
                 income_us: 100.0,
@@ -295,7 +295,7 @@ mod tests {
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 6.0,
             },
-            Sold_Transaction {
+            SoldTransaction {
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
                 income_us: 10.0,

@@ -14,6 +14,6 @@ impl etradeTaxReturnHelper::Residency for US {
         println!("===> (DIVIDENDS) INCOME: ${} ", gross_div);
         println!("===> (DIVIDENDS) TAX PAID: ${}", tax_div);
         println!("===> (SOLD STOCK) INCOME: ${} ", gross_sold);
-        println!("===> (SOLD STOCK) TAX PAID: ${}", cost_sold);
+        println!("===> (SOLD STOCK) TAX DEDUCTIBLE COST: ${}", cost_sold);
     }
 }

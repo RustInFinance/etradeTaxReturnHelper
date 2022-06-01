@@ -209,7 +209,7 @@ pub fn parse_brokerage_statement(
     pdftoparse: &str,
 ) -> (
     Vec<(String, f32, f32)>,
-    Vec<(String, i32, f32, f32)>,
+    Vec<(String, String, i32, f32, f32)>,
     Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
 ) {
     //2. parsing each pdf
@@ -220,10 +220,10 @@ pub fn parse_brokerage_statement(
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
         std::collections::VecDeque::new();
     let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
-    // TODO(jczaja): Makde transaction_date part of parsing sequence for dividends and sold
-    let mut transaction_date: String = "N/A".to_string();
+    // Queue for transaction dates. Pop last one or last two as trade and settlement dates
+    let mut transaction_dates: Vec<String> = vec![];
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, i32, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
 
     log::info!("Parsing: {} of {} pages", pdftoparse, mypdffile.num_pages());
@@ -269,7 +269,7 @@ pub fn parse_brokerage_statement(
                                                     )
                                                     .is_ok()
                                                     {
-                                                        transaction_date = rust_string.clone();
+                                                        transaction_dates.push(rust_string.clone());
                                                     }
                                                 }
                                             }
@@ -306,7 +306,7 @@ pub fn parse_brokerage_statement(
                                                                     let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
                                                                     let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
                                                                     div_transactions.push((
-                                                                        transaction_date.clone(),
+                                                                        transaction_dates.pop().expect("Error: missing transaction dates when parsing"),
                                                                         gross_us,
                                                                         tax_us,
                                                                     ));
@@ -315,15 +315,21 @@ pub fn parse_brokerage_statement(
                                                                     let quantity =  transaction.next().unwrap().geti32().expect_and_log("Processing of Sold transaction went wrong");
                                                                     let price = transaction.next().unwrap().getf32().expect_and_log("Processing of Sold transaction went wrong");
                                                                     let amount_sold =  transaction.next().unwrap().getf32().expect_and_log("Prasing of Sold transaction went wrong");
+                                                                    // Last transaction date is settlement date
+                                                                    // next to last is trade date
+                                                                    let settlement_date = transaction_dates.pop().expect("Error: missing trade date when parsing");
+                                                                    let trade_date = transaction_dates.pop().expect("Error: missing settlement_date when parsing");
+
                                                                     sold_transactions.push((
-                                                                        transaction_date.clone(),
+                                                                        trade_date,
+                                                                        settlement_date,
                                                                         quantity,
                                                                         price,
-                                                                        amount_sold,
+                                                                        amount_sold, // net income
                                                                     ));
                                                                 }
                                                                 TransactionType::Trade => {
-                                                                    transaction_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
+                                                                    let transaction_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
                                                                     let settlement_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
                                                                     transaction.next().unwrap(); // MKT??
                                                                     transaction.next().unwrap(); // CPT??
@@ -334,7 +340,7 @@ pub fn parse_brokerage_statement(
                                                                     let fee = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // fee
                                                                     let net = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // net
                                                                     trades.push((
-                                                                        transaction_date.clone(),
+                                                                        transaction_date,
                                                                         settlement_date,
                                                                         quantity,
                                                                         price,
@@ -408,7 +414,13 @@ mod tests {
             parse_brokerage_statement("data/example4.pdf"),
             (
                 vec![],
-                vec![("04/13/22".to_owned(), -1, 46.92, 46.90)],
+                vec![(
+                    "04/11/22".to_owned(),
+                    "04/13/22".to_owned(),
+                    -1,
+                    46.92,
+                    46.90
+                )],
                 vec![]
             )
         );

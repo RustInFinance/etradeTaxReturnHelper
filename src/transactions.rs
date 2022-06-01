@@ -2,7 +2,7 @@ use chrono;
 use chrono::Datelike;
 
 pub use crate::logging::ResultExt;
-use etradeTaxReturnHelper::{Sold_Transaction, Transaction};
+use crate::{Sold_Transaction, Transaction};
 
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions(
@@ -34,36 +34,36 @@ pub fn verify_dividends_transactions(
     verification
 }
 
-/// Trade date is when transaction was trigerred. Commission and Fee should
-/// be using exchange rate from preceeding day of this date
+/// Trade date is when transaction was trigerred.
+/// fees and commission are applied at the moment of settlement date so
+/// we ignore those and use net income rather than principal
 /// Actual Tax is to be paid from settlement_date
 pub fn reconstruct_sold_transactions(
-    sold_transactions: &Vec<(String, i32, f32, f32)>,
-    trade_confirmations: &Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
+    sold_transactions: &Vec<(String, String, i32, f32, f32)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
-) -> Result<Vec<(String, String, String, f32, f32, f32)>, String> {
+) -> Result<Vec<(String, String, String, f32, f32)>, String> {
     // Ok What do I need.
     // 1. trade date
     // 2. settlement date
     // 3. date of purchase
     // 4. gross income
-    // 5. fee+commission
-    // 6. cost cost basis
-    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32, f32)> = vec![];
+    // 5. cost cost basis
+    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32)> = vec![];
 
     // iterate through all sold transactions and update it with needed info
-    for (trade_date, _, _, income) in sold_transactions {
+    for (trade_date, settlement_date, _, _, income) in sold_transactions {
         // match trade date and gross with principal and trade date of  trade confirmation
 
-        let (_, settlement_date, _, _, principal, commission, fee, _) = trade_confirmations.iter().find(|(tr_date, _, _, _, _, _, _, net)| tr_date == trade_date && net == income).expect_and_log("Error: Sold transaction detected, but corressponding TRADE confirmation is missing. Please download trade confirmation document.\n");
-        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, principal)| tr_date == trade_date && principal == income).expect_and_log("Error: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document.\n");
-        log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, total_fee: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,fee+commission,cost_basis);
+        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)| chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string() == *trade_date && inc == income).expect_and_log("Error: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document.\n");
+        log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,cost_basis);
         detailed_sold_transactions.push((
             trade_date.clone(),
             settlement_date.clone(),
-            acquisition_date.clone(),
-            *principal,
-            fee + commission,
+            chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%Y")
+                .unwrap()
+                .format("%m/%d/%y")
+                .to_string(),
+            *income,
             *cost_basis,
         ));
     }
@@ -105,33 +105,29 @@ pub fn create_detailed_div_transactions(
 //    pub trade_date: String,
 //    pub settlement_date: String,
 //    pub acquisition_date: String,
-//    pub gross_us: f32,
-//    pub total_fee: f32,
+//    pub income_us: f32,
 //    pub cost_basis: f32,
-//    pub exchange_rate_trade_date: String,
-//    pub exchange_rate_trade: f32,
 //    pub exchange_rate_settlement_date: String,
 //    pub exchange_rate_settlement: f32,
 //    pub exchange_rate_acquisition_date: String,
 //    pub exchange_rate_acquisition: f32,
 pub fn create_detailed_sold_transactions(
-    transactions: Vec<(String, String, String, f32, f32, f32)>,
+    transactions: Vec<(String, String, String, f32, f32)>,
     dates: &std::collections::HashMap<String, Option<(String, f32)>>,
 ) -> Vec<Sold_Transaction> {
     let mut detailed_transactions: Vec<Sold_Transaction> = Vec::new();
     transactions
             .iter()
-            .for_each(|(trade_date, settlement_date, acquisition_date, gross, fees, cost_basis)| {
-                let (exchange_rate_trade_date, exchange_rate_trade) = dates[trade_date].clone().unwrap();
+            .for_each(|(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
                 let (exchange_rate_settlement_date, exchange_rate_settlement) = dates[settlement_date].clone().unwrap();
                 let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates[acquisition_date].clone().unwrap();
 
             let msg = format!(
-                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, gross_income: ${},fees: ${}, cost_basis: {}, exchange_rate_trade: {} , exchange_rate_trade_date: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
                 chrono::NaiveDate::parse_from_str(&trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                &gross, &fees, &cost_basis, &exchange_rate_trade, &exchange_rate_trade_date,&exchange_rate_settlement, &exchange_rate_settlement_date, &exchange_rate_acquisition, &exchange_rate_acquisition_date,
+                &income, &cost_basis, &exchange_rate_settlement, &exchange_rate_settlement_date, &exchange_rate_acquisition, &exchange_rate_acquisition_date,
             )
             .to_owned();
 
@@ -139,14 +135,10 @@ pub fn create_detailed_sold_transactions(
             log::info!("{}", msg);
 
                 detailed_transactions.push(Sold_Transaction {
-                    trade_date: trade_date.clone(),
                     settlement_date: settlement_date.clone(),
                     acquisition_date: acquisition_date.clone(),
-                    gross_us: *gross,
-                    total_fee: *fees,
+                    income_us: *income,
                     cost_basis: *cost_basis,
-                    exchange_rate_trade_date: exchange_rate_trade_date,
-                    exchange_rate_trade: exchange_rate_trade,
                     exchange_rate_settlement_date: exchange_rate_settlement_date,
                     exchange_rate_settlement: exchange_rate_settlement,
                     exchange_rate_acquisition_date: exchange_rate_acquisition_date,
@@ -208,13 +200,12 @@ mod tests {
 
     #[test]
     fn test_create_detailed_sold_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, String, String, f32, f32, f32)> = vec![
+        let parsed_transactions: Vec<(String, String, String, f32, f32)> = vec![
             (
                 "03/01/21".to_string(),
                 "03/03/21".to_string(),
                 "01/01/21".to_string(),
                 20.0,
-                0.02,
                 20.0,
             ),
             (
@@ -222,7 +213,6 @@ mod tests {
                 "06/03/21".to_string(),
                 "01/01/19".to_string(),
                 25.0,
-                0.02,
                 10.0,
             ),
         ];
@@ -244,28 +234,20 @@ mod tests {
             transactions,
             vec![
                 Sold_Transaction {
-                    trade_date: "03/01/21".to_string(),
                     settlement_date: "03/03/21".to_string(),
                     acquisition_date: "01/01/21".to_string(),
-                    gross_us: 20.0,
-                    total_fee: 0.02,
+                    income_us: 20.0,
                     cost_basis: 20.0,
-                    exchange_rate_trade_date: "02/28/21".to_string(),
-                    exchange_rate_trade: 2.0,
                     exchange_rate_settlement_date: "03/02/21".to_string(),
                     exchange_rate_settlement: 2.5,
                     exchange_rate_acquisition_date: "02/28/21".to_string(),
                     exchange_rate_acquisition: 5.0,
                 },
                 Sold_Transaction {
-                    trade_date: "06/01/21".to_string(),
                     settlement_date: "06/03/21".to_string(),
                     acquisition_date: "01/01/19".to_string(),
-                    gross_us: 25.0,
-                    total_fee: 0.02,
+                    income_us: 25.0,
                     cost_basis: 10.0,
-                    exchange_rate_trade_date: "06/03/21".to_string(),
-                    exchange_rate_trade: 3.0,
                     exchange_rate_settlement_date: "06/05/21".to_string(),
                     exchange_rate_settlement: 4.0,
                     exchange_rate_acquisition_date: "12/30/18".to_string(),
@@ -294,30 +276,19 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, i32, f32, f32)> = vec![
-            ("06/01/21".to_string(), 1, 25.0, 24.8),
-            ("03/01/21".to_string(), 2, 10.0, 19.8),
-        ];
-
-        let parsed_trade_confirmations: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
             (
                 "06/01/21".to_string(),
                 "06/03/21".to_string(),
                 1,
                 25.0,
-                25.0,
-                0.01,
-                0.01,
                 24.8,
             ),
             (
                 "03/01/21".to_string(),
                 "03/03/21".to_string(),
-                1,
+                2,
                 10.0,
-                20.0,
-                0.01,
-                0.01,
                 19.8,
             ),
         ];
@@ -339,18 +310,14 @@ mod tests {
             ),
         ];
 
-        let detailed_sold_transactions = reconstruct_sold_transactions(
-            &parsed_sold_transactions,
-            &parsed_trade_confirmations,
-            &parsed_gains_and_losses,
-        )?;
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)?;
 
         // 1. trade date
         // 2. settlement date
         // 3. date of purchase
-        // 4. gross income
-        // 5. fee+commission
-        // 6. cost cost basis
+        // 4. net income
+        // 5. cost cost basis
         assert_eq!(
             detailed_sold_transactions,
             vec![
@@ -358,21 +325,70 @@ mod tests {
                     "06/01/21".to_string(),
                     "06/03/21".to_string(),
                     "01/01/19".to_string(),
-                    25.0,
-                    0.02,
+                    24.8,
                     10.0
                 ),
                 (
                     "03/01/21".to_string(),
                     "03/03/21".to_string(),
                     "01/01/21".to_string(),
-                    20.0,
-                    0.02,
+                    19.8,
                     20.0
                 ),
             ]
         );
         Ok(())
     }
-    // TODO : Make negative tests to reconstruction of transaction
+
+    #[test]
+    #[should_panic]
+    fn test_sold_transaction_reconstruction_no_gains_fail() {
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+            (
+                "06/01/21".to_string(),
+                "06/03/21".to_string(),
+                1,
+                25.0,
+                24.8,
+            ),
+            (
+                "03/01/21".to_string(),
+                "03/03/21".to_string(),
+                2,
+                10.0,
+                19.8,
+            ),
+        ];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_sold_transaction_reconstruction_just_brokerages_fail() {
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+            (
+                "06/01/21".to_string(),
+                "06/03/21".to_string(),
+                1,
+                25.0,
+                24.8,
+            ),
+            (
+                "03/01/21".to_string(),
+                "03/03/21".to_string(),
+                2,
+                10.0,
+                19.8,
+            ),
+        ];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+    }
 }

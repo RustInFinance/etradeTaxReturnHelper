@@ -19,7 +19,7 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
         )
         .arg(
             Arg::with_name("financial documents")
-                .help("Brokerage statement PDFs, Trade confirmation PDFs and Gain & Losses xlsx documents")
+                .help("Brokerage statement PDFs  and Gain & Losses xlsx documents\n\nBrokerege statements can be downloaded from:\n\thttps://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\nGain&Losses documents can be downloaded from:\n\thttps://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n")
                 .multiple(true)
                 .required(true),
         )
@@ -48,7 +48,7 @@ fn main() {
 
     let pdfnames = matches
         .values_of("financial documents")
-        .expect_and_log("error getting brokarage statements pdfs names");
+        .expect_and_log("error getting brokarage statements pdfs names.\n\nBrokerege statements can be downloaded from:\n\nhttps://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n");
 
     let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, pdfnames).unwrap();
 

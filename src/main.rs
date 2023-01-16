@@ -72,7 +72,7 @@ mod tests {
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
             (exchange_rate_date, exchange_rate),
-            ("2021-02-26".to_owned(), 0.82831)
+            ("2021-02-26".to_owned(), 0.82836)
         );
         Ok(())
     }

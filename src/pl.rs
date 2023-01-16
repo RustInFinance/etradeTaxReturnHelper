@@ -93,7 +93,11 @@ impl etradeTaxReturnHelper::Residency for PL {
     }
 
     fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32) {
-        println!("===> (DYWIDENDY) PRZYCHOD Z ZAGRANICY: {} PLN", gross_div);
+        println!("(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {} PLN", gross_div);
+        println!(
+            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: {} PLN",
+            0.19 * gross_div
+        );
         println!(
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: {} PLN",
             tax_div

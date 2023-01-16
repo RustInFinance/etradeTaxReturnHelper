@@ -26,9 +26,11 @@ fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
 }
 
 fn main() {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
     logging::init_logging_infrastructure();
 
-    let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+    let myapp = App::new("etradeTaxHelper ".to_string() + VERSION)
+        .setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches();
 
     log::info!("Started etradeTaxHelper");

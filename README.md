@@ -26,7 +26,7 @@ Project that parse e-trade PDF brokerage statements and Gain and Losses document
 ### License
 BSD 3-Clause License
 
-Copyright (c) 2022, Intel Corporation
+Copyright (c) 2022, Jacek Czaja
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

@@ -27,11 +27,9 @@ impl<T> ResultExt<T> for Option<T> {
 
 #[allow(dead_code)]
 pub fn init_logging_infrastructure() {
-    // TODO(jczaja): test on windows/macos
-    syslog::init(
-        syslog::Facility::LOG_USER,
-        log::LevelFilter::Debug,
-        Some("etradeTaxReturnHelper"),
-    )
-    .expect("Error initializing syslog");
+    // Make a default logging level: error
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "error")
+    }
+    simple_logger::SimpleLogger::new().env().init().unwrap();
 }

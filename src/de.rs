@@ -18,6 +18,7 @@ impl etradeTaxReturnHelper::Residency for DE {
             .ok_or(&format!("Error finding pattern: {}", pattern))?;
         let pattern_slice = &body[start_offset..start_offset + 100]; // 100 characters should be enough
                                                                      // Extract exchange rate (fp32 value)
+        log::info!("Exchange rate slice:  {}", pattern_slice);
         let re = Regex::new(r"[0-9]+[.][0-9]+").unwrap();
 
         let exchange_rate: f32 = match re.find(pattern_slice) {

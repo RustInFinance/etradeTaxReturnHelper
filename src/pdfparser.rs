@@ -45,7 +45,10 @@ impl Entry for F32Entry {
             .clone()
             .into_string()
             .expect(&format!("Error parsing : {:#?} to f32", pstr));
+        // Extracted string should have "," removed and then be parsed
         self.val = mystr
+            .trim()
+            .replace(",", "")
             .parse::<f32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
     }
@@ -387,6 +390,33 @@ pub fn parse_brokerage_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parser() -> Result<(), String> {
+        // quantity
+        let data: Vec<u8> = vec!['1' as u8];
+        let mut i = I32Entry { val: 0 };
+        i.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(i.geti32(), Some(1));
+
+        // price
+        let data: Vec<u8> = vec![
+            '2' as u8, '8' as u8, '.' as u8, '2' as u8, '0' as u8, '3' as u8, '5' as u8,
+        ];
+        let mut f = F32Entry { val: 0.0 };
+        f.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(f.getf32(), Some(28.2035));
+
+        // amount
+        let data: Vec<u8> = vec![
+            '4' as u8, ',' as u8, '8' as u8, '7' as u8, '7' as u8, '.' as u8, '3' as u8, '6' as u8,
+        ];
+        let mut f = F32Entry { val: 0.0 };
+        f.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(f.getf32(), Some(4877.36));
+        Ok(())
+    }
+
     #[test]
     #[ignore]
     fn test_parse_brokerage_statement() -> Result<(), String> {

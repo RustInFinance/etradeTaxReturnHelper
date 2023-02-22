@@ -12,7 +12,7 @@ impl etradeTaxReturnHelper::Residency for DE {
 
     fn parse_exchange_rates(&self, body: &str) -> Result<(f32, String), String> {
         // to find examplery "1 US Dollar = 0.82831 Euros on 2/26/2021</td>"
-        let pattern = "1 US Dollar = ";
+        let pattern = "1 USD</span> =";
         let start_offset = body
             .find(pattern)
             .ok_or(&format!("Error finding pattern: {}", pattern))?;
@@ -26,20 +26,21 @@ impl etradeTaxReturnHelper::Residency for DE {
         };
 
         // Parse date
-        let pattern = "Euros on ";
-        let start_date_offset = pattern_slice
+        let pattern = "USD to EUR on ";
+        let start_date_offset = body
             .find(pattern)
             .ok_or(&format!("Error finding pattern: {}", pattern))?;
-        // 2/26/2021 </td>.....
-        let end_date_pattern = "</td";
-        let date_pattern_slice = &pattern_slice[start_date_offset + pattern.chars().count()..];
-        let end_date_offset = date_pattern_slice
-            .find(end_date_pattern)
-            .ok_or(&format!("Error finding pattern: {}", end_date_pattern))?;
+        // ..USD to EUR on 2023-2-20....
+        let date_pattern_slice = &body[start_date_offset + pattern.chars().count()..];
 
-        let date_string = &date_pattern_slice[0..end_date_offset];
+        let re = Regex::new(r"[0-9]+[-][0-9]+-[0-9]+").unwrap();
+        let date_string: &str = match re.find(date_pattern_slice) {
+            Some(hit) => hit.as_str(),
+            None => panic!(),
+        };
+
         let exchange_rate_date =
-            chrono::NaiveDate::parse_from_str(date_string, "%m/%d/%Y").unwrap();
+            chrono::NaiveDate::parse_from_str(date_string, "%Y-%m-%d").unwrap();
 
         Ok((
             exchange_rate,

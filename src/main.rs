@@ -68,13 +68,13 @@ mod tests {
 
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(), None);
+        dates.insert("02/21/23".to_owned(), None);
         rd.get_exchange_rates(&mut dates).unwrap();
 
-        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
+        let (exchange_rate_date, exchange_rate) = dates.remove("02/21/23").unwrap().unwrap();
         assert_eq!(
             (exchange_rate_date, exchange_rate),
-            ("2021-02-26".to_owned(), 0.82836)
+            ("2023-02-20".to_owned(), 0.93561)
         );
         Ok(())
     }

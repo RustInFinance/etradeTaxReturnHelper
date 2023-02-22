@@ -98,13 +98,22 @@ mod tests {
         );
         assert_eq!(
             parse_gains_and_losses("data/G&L_Expanded.xlsx"),
-            (vec![(
-                "04/24/2013".to_owned(),
-                "04/11/2022".to_owned(),
-                0.0,
-                23.5175,
-                46.9
-            ),])
+            (vec![
+                (
+                    "04/24/2013".to_owned(),
+                    "04/11/2022".to_owned(),
+                    0.0,
+                    23.5175,
+                    46.9
+                ),
+                (
+                    "08/19/2015".to_owned(),
+                    "05/02/2022".to_owned(),
+                    24.258,
+                    29.28195,
+                    43.67
+                )
+            ])
         );
 
         Ok(())

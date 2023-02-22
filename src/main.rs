@@ -198,20 +198,23 @@ mod tests {
         // Check printed values or returned values?
         let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
             "mytest",
-            "data/Brokerage Statement - XXXX0848 - 202102.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202103.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202105.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202106.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202108.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202109.pdf",
-            "data/Brokerage Statement - XXXX0848 - 202112.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202202.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202203.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202204.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202205.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202206.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202209.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202211.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202212.pdf",
+            "data/G&L_Collapsed.xlsx",
         ])?;
+
         let pdfnames = matches
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
         assert_eq!(
             etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
-            Ok((9674.047, 1451.0844, 0.0, 0.0))
+            Ok((14062.57, 2109.3772, 395.45355, 91.156715))
         );
         Ok(())
     }

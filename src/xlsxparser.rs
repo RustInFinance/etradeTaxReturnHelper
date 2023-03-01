@@ -3,6 +3,12 @@ use calamine::{open_workbook, Reader, Xlsx};
 pub use crate::logging::ResultExt;
 
 /// This function parses G&L Collappsed and Expanded for needed transaction details
+/// and it returns found sold transactions in a form:
+/// date when sold stock was acquired (date_acquired)
+/// date when stock was sold (date_sold)
+/// aqusition cost of sold stock (aquisition_cost)
+/// adjusted aquisition cost of sold stock (cost_basis)
+/// income from sold stock (total_proceeds)
 pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f32, f32)> {
     let mut excel: Xlsx<_> = open_workbook(xlsxtoparse)
         .expect_and_log(&format!("Error opening XLSX file: {}", xlsxtoparse));
@@ -54,6 +60,19 @@ pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f3
                 transakcja[cost_basis_idx],
                 transakcja[total_proceeds_idx]
             );
+            // If row is ill formed or emtpy then it means user added something and this is to be
+            // dropped
+            if transakcja[date_acquired_idx].is_empty()
+                && transakcja[date_sold_idx].is_empty()
+                && transakcja[acquistion_cost_idx].is_empty()
+                && transakcja[cost_basis_idx].is_empty()
+                && transakcja[total_proceeds_idx].is_empty()
+            {
+                log::info!(
+                    "G&L Finished parsing due to empty raw of data. Did you modified document?"
+                );
+                break;
+            }
 
             //println!("transakcja: {:?}", transakcja);
             transactions.push((

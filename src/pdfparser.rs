@@ -207,7 +207,15 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<net amount>
 }
-
+///  This function parses given PDF document
+///  and returns result of parsing which is a tuple of
+///  found Dividends paid transactions (div_transactions),
+///  Sold stock transactions (sold_transactions)
+///  information on transactions in case of parsing trade document (trades)
+///  Dividends paid transaction is:
+///        transaction date, gross_us, tax_us,
+///  Sold stock transaction is :
+///     (trade_date, settlement_date, quantity, price, amount_sold)
 pub fn parse_brokerage_statement(
     pdftoparse: &str,
 ) -> (

@@ -275,6 +275,8 @@ mod tests {
         Ok(())
     }
 
+    // TODO: Make reconstruction of transactions based on Roman data
+
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
         let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![

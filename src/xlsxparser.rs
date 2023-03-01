@@ -87,6 +87,7 @@ pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f3
             ));
         }
     }
+    log::info!("G&L Transactions: {:#?}",transactions);
     transactions
 }
 

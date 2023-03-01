@@ -52,9 +52,17 @@ pub fn reconstruct_sold_transactions(
 
     // iterate through all sold transactions and update it with needed info
     for (trade_date, settlement_date, _, _, income) in sold_transactions {
-        // match trade date and gross with principal and trade date of  trade confirmation
+        // match trade date and gross with corressponding data from Gain and Losses docs
+        // Note: comparison of transaction value is done according to rounded value due
+        // to diffreences in roudings in PDF and XLSX documents
 
-        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)| chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string() == *trade_date && inc == income).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)|{
+            let tr_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y").unwrap().format("%m/%d/%y").to_string();
+            let incs = (inc*100.0).round();
+            let incomes = (income*100.0).round();
+            log::info!("Key tr_date: {}, inc: {}, trade_date: {}, income: {}",tr_date,incs,*trade_date,incomes);
+            tr_date == *trade_date && incs == incomes
+         }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
             https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
         log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,cost_basis);
         detailed_sold_transactions.push((
@@ -275,8 +283,6 @@ mod tests {
         Ok(())
     }
 
-    // TODO: Make reconstruction of transactions based on Roman data
-
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
         let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
@@ -339,6 +345,61 @@ mod tests {
                     20.0
                 ),
             ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_sold_transaction_reconstruction_second() -> Result<(), String> {
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![(
+            "11/07/22".to_string(), // trade date
+            "11/09/22".to_string(), // settlement date
+            173,                    // quantity
+            28.2035,                // price
+            4877.36,                // amount sold
+        )];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
+            (
+                "05/02/22".to_string(), // date when sold stock was acquired (date_acquired)
+                "07/19/22".to_string(), // date when stock was sold (date_sold)
+                0.0,                    // aqusition cost of sold stock (aquisition_cost)
+                1593.0,                 // adjusted aquisition cost of sold stock (cost_basis)
+                1415.480004,            // income from sold stock (total_proceeds)
+            ),
+            (
+                "02/18/22".to_string(),
+                "07/19/22".to_string(),
+                4241.16,
+                4989.6,
+                4325.10001,
+            ),
+            (
+                "08/19/22".to_string(),
+                "11/07/22".to_string(),
+                5236.0872,
+                6160.0975,
+                4877.355438,
+            ),
+        ];
+
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)?;
+
+        // 1. trade date
+        // 2. settlement date
+        // 3. date of purchase
+        // 4. net income
+        // 5. cost cost basis
+        assert_eq!(
+            detailed_sold_transactions,
+            vec![(
+                "11/07/22".to_string(),
+                "11/09/22".to_string(),
+                "08/19/22".to_string(),
+                4877.36,
+                5236.0874
+            ),]
         );
         Ok(())
     }

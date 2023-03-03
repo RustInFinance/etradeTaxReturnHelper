@@ -51,28 +51,23 @@ pub fn reconstruct_sold_transactions(
     let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32)> = vec![];
 
     // iterate through all sold transactions and update it with needed info
-    for (trade_date, settlement_date, _, _, income) in sold_transactions {
-        // match trade date and gross with corressponding data from Gain and Losses docs
-        // Note: comparison of transaction value is done according to rounded value due
-        // to diffreences in roudings in PDF and XLSX documents
+    for (acquisition_date, tr_date, cost_basis, _, inc) in gains_and_losses {
+        // match trade date and gross with principal and trade date of  trade confirmation
 
-        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)|{
-            let tr_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y").unwrap().format("%m/%d/%y").to_string();
-            let incs = (inc*100.0).round();
-            let incomes = (income*100.0).round();
-            log::info!("Key tr_date: {}, inc: {}, trade_date: {}, income: {}",tr_date,incs,*trade_date,incomes);
-            tr_date == *trade_date && incs == incomes
-         }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, _)| *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string()).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
             https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
-        log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,cost_basis);
+        log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",tr_date,settlement_date,acquisition_date,inc,cost_basis);
         detailed_sold_transactions.push((
-            trade_date.clone(),
+            chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
+                .unwrap()
+                .format("%m/%d/%y")
+                .to_string(),
             settlement_date.clone(),
             chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%Y")
                 .unwrap()
                 .format("%m/%d/%y")
                 .to_string(),
-            *income,
+            *inc,
             *cost_basis,
         ));
     }

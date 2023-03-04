@@ -57,7 +57,7 @@ pub fn reconstruct_sold_transactions(
         // to diffreences in roudings in PDF and XLSX documents
 
         let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)|{
-            let tr_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y").unwrap().format("%m/%d/%y").to_string();
+            let tr_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string();
             let incs = (inc*100.0).round();
             let incomes = (income*100.0).round();
             log::info!("Key tr_date: {}, inc: {}, trade_date: {}, income: {}",tr_date,incs,*trade_date,incomes);
@@ -304,15 +304,15 @@ mod tests {
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
             (
-                "01/01/19".to_string(),
-                "06/01/21".to_string(),
+                "01/01/2019".to_string(),
+                "06/01/2021".to_string(),
                 10.0,
                 10.0,
                 24.8,
             ),
             (
-                "01/01/21".to_string(),
-                "03/01/21".to_string(),
+                "01/01/2021".to_string(),
+                "03/01/2021".to_string(),
                 20.0,
                 20.0,
                 19.8,

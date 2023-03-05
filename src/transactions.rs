@@ -310,15 +310,15 @@ mod tests {
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
             (
-                "01/01/19".to_string(),
-                "06/01/21".to_string(),
+                "01/01/2019".to_string(),
+                "06/01/2021".to_string(),
                 10.0,
                 10.0,
                 24.8,
             ),
             (
-                "01/01/21".to_string(),
-                "03/01/21".to_string(),
+                "01/01/2021".to_string(),
+                "03/01/2021".to_string(),
                 20.0,
                 20.0,
                 19.8,

@@ -41,6 +41,7 @@ pub fn verify_dividends_transactions(
 pub fn reconstruct_sold_transactions(
     sold_transactions: &Vec<(String, String, i32, f32, f32)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
+
 ) -> Result<Vec<(String, String, String, f32, f32)>, String> {
     // Ok What do I need.
     // 1. trade date
@@ -50,29 +51,34 @@ pub fn reconstruct_sold_transactions(
     // 5. cost cost basis
     let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32)> = vec![];
 
-    // iterate through all sold transactions and update it with needed info
-    for (trade_date, settlement_date, _, _, income) in sold_transactions {
-        // match trade date and gross with corressponding data from Gain and Losses docs
-        // Note: comparison of transaction value is done according to rounded value due
-        // to diffreences in roudings in PDF and XLSX documents
+    if gains_and_losses.is_empty() {
+        panic!("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
+    }
 
-        let (acquisition_date, _, cost_basis, _, _) = gains_and_losses.iter().find(|(_, tr_date, _,_, inc)|{
-            let tr_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string();
+    // iterate through all sold transactions and update it with needed info
+    for (acquisition_date, tr_date, cost_basis, _, inc) in gains_and_losses {
+        // match trade date and gross with principal and trade date of  trade confirmation
+
+        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, income)|{
             let incs = (inc*100.0).round();
             let incomes = (income*100.0).round();
-            log::info!("Key tr_date: {}, inc: {}, trade_date: {}, income: {}",tr_date,incs,*trade_date,incomes);
-            tr_date == *trade_date && incs == incomes
-         }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+            log::info!("Key tr_date: {}, inc: {}, trade_date: {}, income: {}",tr_date,incs,*trade_dt,incomes);
+            *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string()
+        }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
             https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
-        log::info!("Detailed sold transaction => trade_date: {}, settlement_date: {}, acquisition_date: {}, income: {}, cost_basis: {}",trade_date,settlement_date,acquisition_date,income,cost_basis);
+
         detailed_sold_transactions.push((
-            trade_date.clone(),
+            chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
+                .unwrap()
+                .format("%m/%d/%y")
+                .to_string(),
             settlement_date.clone(),
             chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%Y")
                 .unwrap()
                 .format("%m/%d/%y")
                 .to_string(),
-            *income,
+            *inc,
             *cost_basis,
         ));
     }
@@ -350,7 +356,8 @@ mod tests {
     }
 
     #[test]
-    fn test_sold_transaction_reconstruction_second() -> Result<(), String> {
+    #[should_panic]
+    fn test_sold_transaction_reconstruction_second_fail() {
         let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![(
             "11/07/22".to_string(), // trade date
             "11/09/22".to_string(), // settlement date
@@ -384,22 +391,94 @@ mod tests {
         ];
 
         let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+    }
+
+    #[test]
+    fn test_sold_transaction_reconstruction_multistock() -> Result<(), String> {
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+            (
+                "12/21/22".to_string(),
+                "12/23/22".to_string(),
+                163,
+                26.5900,
+                4332.44,
+            ),
+            (
+                "12/19/22".to_string(),
+                "12/21/22".to_string(),
+                252,
+                26.5900,
+                6698.00,
+            ),
+        ];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
+            (
+                "08/19/21".to_string(),
+                "12/19/22".to_string(),
+                4336.4874,
+                4758.6971,
+                2711.0954,
+            ),
+            (
+                "05/03/21".to_string(),
+                "12/21/22".to_string(),
+                0.0,
+                3876.918,
+                2046.61285,
+            ),
+            (
+                "08/19/22".to_string(),
+                "12/19/22".to_string(),
+                5045.6257,
+                5936.0274,
+                3986.9048,
+            ),
+            (
+                "05/02/22".to_string(),
+                "12/21/22".to_string(),
+                0.0,
+                4013.65,
+                2285.82733,
+            ),
+        ];
+
+        let detailed_sold_transactions =
             reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)?;
 
-        // 1. trade date
-        // 2. settlement date
-        // 3. date of purchase
-        // 4. net income
-        // 5. cost cost basis
         assert_eq!(
             detailed_sold_transactions,
-            vec![(
-                "11/07/22".to_string(),
-                "11/09/22".to_string(),
-                "08/19/22".to_string(),
-                4877.36,
-                5236.0874
-            ),]
+            vec![
+                (
+                    "12/19/22".to_string(),
+                    "12/21/22".to_string(),
+                    "08/19/21".to_string(),
+                    2711.0954,
+                    4336.4874,
+                ),
+                (
+                    "12/21/22".to_string(),
+                    "12/23/22".to_string(),
+                    "05/03/21".to_string(),
+                    2046.61285,
+                    0.0,
+                ),
+                (
+                    "12/19/22".to_string(),
+                    "12/21/22".to_string(),
+                    "08/19/22".to_string(),
+                    3986.9048,
+                    5045.6257,
+                ),
+                (
+                    "12/21/22".to_string(),
+                    "12/23/22".to_string(),
+                    "05/02/22".to_string(),
+                    2285.82733,
+                    0.0,
+                ),
+            ]
         );
         Ok(())
     }
@@ -407,32 +486,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_sold_transaction_reconstruction_no_gains_fail() {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
-            (
-                "06/01/21".to_string(),
-                "06/03/21".to_string(),
-                1,
-                25.0,
-                24.8,
-            ),
-            (
-                "03/01/21".to_string(),
-                "03/03/21".to_string(),
-                2,
-                10.0,
-                19.8,
-            ),
-        ];
-
-        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-
-        let detailed_sold_transactions =
-            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_sold_transaction_reconstruction_just_brokerages_fail() {
         let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
             (
                 "06/01/21".to_string(),

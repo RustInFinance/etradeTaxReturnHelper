@@ -41,7 +41,6 @@ pub fn verify_dividends_transactions(
 pub fn reconstruct_sold_transactions(
     sold_transactions: &Vec<(String, String, i32, f32, f32)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
-
 ) -> Result<Vec<(String, String, String, f32, f32)>, String> {
     // Ok What do I need.
     // 1. trade date

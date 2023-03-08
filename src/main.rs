@@ -230,6 +230,7 @@ mod tests {
             "data/Brokerage Statement - XXXX0848 - 202202.pdf",
             "data/Brokerage Statement - XXXX0848 - 202203.pdf",
             "data/Brokerage Statement - XXXX0848 - 202204.pdf",
+            "data/Brokerage Statement - XXXX0848 - 202205.pdf",
             "data/G&L_Collapsed.xlsx",
         ])?;
         let pdfnames = matches
@@ -237,7 +238,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         assert_eq!(
             etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
-            Ok((2930.206, 439.54138, 201.32295, 0.0))
+            Ok((2930.206, 439.54138, 395.45355, 91.156715))
         );
         Ok(())
     }

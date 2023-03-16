@@ -50,7 +50,7 @@ pub fn reconstruct_sold_transactions(
     // 5. cost cost basis
     let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32)> = vec![];
 
-    if gains_and_losses.is_empty() {
+    if sold_transactions.len() > 0 && gains_and_losses.is_empty() {
         panic!("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
             https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
     }
@@ -282,6 +282,23 @@ mod tests {
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
         assert!(verify_dividends_transactions(&transactions).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_sold_transaction_reconstruction_dividiends_only() -> Result<(), String> {
+        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)?;
+        // 1. trade date
+        // 2. settlement date
+        // 3. date of purchase
+        // 4. net income
+        // 5. cost cost basis
+        assert_eq!(detailed_sold_transactions, vec![]);
         Ok(())
     }
 

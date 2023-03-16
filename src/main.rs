@@ -242,4 +242,24 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    #[ignore]
+    fn test_sold_dividends_only_taxation() -> Result<(), clap::Error> {
+        // Get all brokerage with dividends only
+        let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "data/Brokerage Statement - XXXX0848 - 202206.pdf",
+        ])?;
+        let pdfnames = matches
+            .values_of("financial documents")
+            .expect_and_log("error getting brokarage statements pdfs names");
+        assert_eq!(
+            etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
+            Ok((3272.3125, 490.82773, 0.0, 0.0)),
+        );
+        Ok(())
+    }
 }

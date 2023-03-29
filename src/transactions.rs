@@ -59,7 +59,7 @@ pub fn reconstruct_sold_transactions(
     for (acquisition_date, tr_date, cost_basis, _, inc) in gains_and_losses {
         // match trade date and gross with principal and trade date of  trade confirmation
 
-        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, income)|{
+        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, _income)|{
             *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string()
         }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
             https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");

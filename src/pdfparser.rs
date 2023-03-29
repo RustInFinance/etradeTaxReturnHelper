@@ -98,7 +98,7 @@ impl Entry for DateEntry {
 
 struct StringEntry {
     pub val: String,
-    pub pattern: String,
+    pub patterns: Vec<String>,
 }
 
 impl Entry for StringEntry {
@@ -112,15 +112,15 @@ impl Entry for StringEntry {
         Some(self.val.clone())
     }
     fn is_pattern(&self) -> bool {
-        self.pattern == self.val
+        self.patterns.iter().find(|&x| self.val == *x).is_some()
     }
 }
 
 fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "INTC".to_owned(),
-    })); // INTC
+        patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+    })); // INTC, DLB
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
 }
@@ -138,72 +138,72 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
     sequence.push_back(Box::new(I32Entry { val: 0 })); // / CPT
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "INTC".to_owned(),
+        patterns: vec!["INTC".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "SELL".to_owned(),
+        patterns: vec!["SELL".to_owned()],
     }));
     sequence.push_back(Box::new(I32Entry { val: 0 })); // Quantity
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "$".to_owned(),
+        patterns: vec!["$".to_owned()],
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<price>
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "Stock".to_owned(),
+        patterns: vec!["Stock".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "Plan".to_owned(),
+        patterns: vec!["Plan".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "PRINCIPAL".to_owned(),
+        patterns: vec!["PRINCIPAL".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "$".to_owned(),
+        patterns: vec!["$".to_owned()],
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<principal>
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "INTEL".to_owned(),
+        patterns: vec!["INTEL".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "CORP".to_owned(),
+        patterns: vec!["CORP".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "COMMISSION".to_owned(),
+        patterns: vec!["COMMISSION".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "$".to_owned(),
+        patterns: vec!["$".to_owned()],
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<commission>
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "FEE".to_owned(),
+        patterns: vec!["FEE".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "$".to_owned(),
+        patterns: vec!["$".to_owned()],
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<fee>
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "NET".to_owned(),
+        patterns: vec!["NET".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "AMOUNT".to_owned(),
+        patterns: vec!["AMOUNT".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        pattern: "$".to_owned(),
+        patterns: vec!["$".to_owned()],
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<net amount>
 }
@@ -422,6 +422,14 @@ mod tests {
         let mut f = F32Entry { val: 0.0 };
         f.parse(&pdf::primitive::PdfString::new(data));
         assert_eq!(f.getf32(), Some(4877.36));
+
+        // company code
+        let data: Vec<u8> = vec!['D' as u8, 'L' as u8, 'B' as u8];
+        let mut s = StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        };
+        s.parse(&pdf::primitive::PdfString::new(data));
         Ok(())
     }
 

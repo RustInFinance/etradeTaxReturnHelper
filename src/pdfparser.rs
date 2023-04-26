@@ -437,8 +437,6 @@ pub fn parse_brokerage_statement(
     (div_transactions, sold_transactions, trades)
 }
 
-//TODO: make the same UT for empty settlement date
-
 #[cfg(test)]
 mod tests {
     use super::*;

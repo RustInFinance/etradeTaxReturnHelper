@@ -13,7 +13,7 @@ homepage = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
 [dependencies]
 pdf = "0.7.2"
 chrono = "0.4"
-reqwest = { version = "0.11.9", features = ["blocking", "json"] }
+reqwest = { version = "0.11.16", features = ["blocking", "json"] }
 serde = { version = "1.0.104", features = ["derive"] }
 simple_logger = "4.0.0"
 log = "0.4.0"

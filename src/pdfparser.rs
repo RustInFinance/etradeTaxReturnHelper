@@ -207,6 +207,54 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
     })); // $...
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // ..<net amount>
 }
+
+fn yield_sold_transaction(
+    transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
+    transaction_dates: &mut Vec<String>,
+) -> Option<(String, String, i32, f32, f32)> {
+    let quantity = transaction
+        .next()
+        .unwrap()
+        .geti32()
+        .expect_and_log("Processing of Sold transaction went wrong");
+    let price = transaction
+        .next()
+        .unwrap()
+        .getf32()
+        .expect_and_log("Processing of Sold transaction went wrong");
+    let amount_sold = transaction
+        .next()
+        .unwrap()
+        .getf32()
+        .expect_and_log("Prasing of Sold transaction went wrong");
+    // Last transaction date is settlement date
+    // next to last is trade date
+    let (trade_date, settlement_date) = match transaction_dates.len() {
+        2 => {
+            let settlement_date = transaction_dates
+                .pop()
+                .expect("Error: missing trade date when parsing");
+            let trade_date = transaction_dates
+                .pop()
+                .expect("Error: missing settlement_date when parsing");
+            (trade_date, settlement_date)
+        }
+        1 => {
+            log::info!("Detected unsettled sold transaction. Skipping");
+            return None;
+        }
+        _ => {
+            log::error!(
+                "Error parsing transaction & settlement dates. Number of parsed dates: {}",
+                transaction_dates.len()
+            );
+            panic!("Error processing sold transaction. Exitting!")
+        }
+    };
+
+    Some((trade_date, settlement_date, quantity, price, amount_sold))
+}
+
 ///  This function parses given PDF document
 ///  and returns result of parsing which is a tuple of
 ///  found Dividends paid transactions (div_transactions),
@@ -323,21 +371,15 @@ pub fn parse_brokerage_statement(
                                                                     ));
                                                                 }
                                                                 TransactionType::Sold => {
-                                                                    let quantity =  transaction.next().unwrap().geti32().expect_and_log("Processing of Sold transaction went wrong");
-                                                                    let price = transaction.next().unwrap().getf32().expect_and_log("Processing of Sold transaction went wrong");
-                                                                    let amount_sold =  transaction.next().unwrap().getf32().expect_and_log("Prasing of Sold transaction went wrong");
-                                                                    // Last transaction date is settlement date
-                                                                    // next to last is trade date
-                                                                    let settlement_date = transaction_dates.pop().expect("Error: missing trade date when parsing");
-                                                                    let trade_date = transaction_dates.pop().expect("Error: missing settlement_date when parsing");
-
-                                                                    sold_transactions.push((
-                                                                        trade_date,
-                                                                        settlement_date,
-                                                                        quantity,
-                                                                        price,
-                                                                        amount_sold, // net income
-                                                                    ));
+                                                                    if let Some(trans_details) =
+                                                                        yield_sold_transaction(
+                                                                            &mut transaction,
+                                                                            &mut transaction_dates,
+                                                                        )
+                                                                    {
+                                                                        sold_transactions
+                                                                            .push(trans_details);
+                                                                    }
                                                                 }
                                                                 TransactionType::Trade => {
                                                                     let transaction_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
@@ -395,6 +437,8 @@ pub fn parse_brokerage_statement(
     (div_transactions, sold_transactions, trades)
 }
 
+//TODO: make the same UT for empty settlement date
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,6 +474,41 @@ mod tests {
             patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
         };
         s.parse(&pdf::primitive::PdfString::new(data));
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_validation() -> Result<(), String> {
+        let mut transaction_dates: Vec<String> =
+            vec!["11/29/22".to_string(), "12/01/22".to_string()];
+        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
+            std::collections::VecDeque::new();
+        create_sold_parsing_sequence(&mut sequence);
+        let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(I32Entry { val: 42 })); //quantity
+        processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
+        processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
+
+        yield_sold_transaction(&mut processed_sequence.iter(), &mut transaction_dates)
+            .ok_or("Parsing error".to_string())?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_unsettled_transaction_validation() -> Result<(), String> {
+        let mut transaction_dates: Vec<String> = vec!["11/29/22".to_string()];
+        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
+            std::collections::VecDeque::new();
+        create_sold_parsing_sequence(&mut sequence);
+        let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(I32Entry { val: 42 })); //quantity
+        processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
+        processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
+
+        assert_eq!(
+            yield_sold_transaction(&mut processed_sequence.iter(), &mut transaction_dates),
+            None
+        );
         Ok(())
     }
 

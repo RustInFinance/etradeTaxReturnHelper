@@ -54,7 +54,7 @@ impl etradeTaxReturnHelper::Residency for PL {
             .build()
             .expect_and_log("Could not create REST API client");
 
-        let base_exchange_rate_url = "http://api.nbp.pl/api/exchangerates/rates/a/";
+        let base_exchange_rate_url = "https://api.nbp.pl/api/exchangerates/rates/a/";
 
         dates.iter_mut().for_each(|(date, val)| {
             let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").unwrap();

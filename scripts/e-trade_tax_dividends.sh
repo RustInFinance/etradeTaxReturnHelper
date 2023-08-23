@@ -3,11 +3,11 @@
 function GetRate() { 
 
 prev_day=`date -d "$1 1 day ago" +'%F'`
-kurs=`curl -X GET "http://api.nbp.pl/api/exchangerates/rates/a/usd/$prev_day/?format=json"`
+kurs=`curl -X GET "https://api.nbp.pl/api/exchangerates/rates/a/usd/$prev_day/?format=json"`
 
 while [ "$kurs" = "404 NotFound - Not Found - Brak danych" ]; do
 prev_day=`date -d "$prev_day 1 day ago" +'%F'`
-kurs=`curl -X GET "http://api.nbp.pl/api/exchangerates/rates/a/usd/$prev_day/?format=json"`
+kurs=`curl -X GET "https://api.nbp.pl/api/exchangerates/rates/a/usd/$prev_day/?format=json"`
 done
 
 # Extract value from Json output

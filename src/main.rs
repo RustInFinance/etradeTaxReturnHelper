@@ -31,7 +31,7 @@ fn main() {
 
     let myapp = App::new("etradeTaxHelper ".to_string() + VERSION)
         .setting(AppSettings::ArgRequiredElseHelp);
-    let matches = create_cmd_line_pattern(myapp).get_matches();
+    let matches = create_cmd_line_pattern(myapp).get_matches_from(wild::args());
 
     log::info!("Started etradeTaxHelper");
 

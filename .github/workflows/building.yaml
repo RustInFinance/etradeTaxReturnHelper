@@ -22,7 +22,7 @@ jobs:
 
   build_windows:
       name: etradeTaxReturnHelper windows artifacts publish
-      runs-on: windows-2019
+      runs-on: windows-latest
       strategy:
         matrix:
           toolchain:

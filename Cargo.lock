@@ -394,6 +394,7 @@ dependencies = [
  "reqwest",
  "serde",
  "simple_logger",
+ "wild",
 ]
 
 [[package]]
@@ -1652,6 +1653,15 @@ name = "weezl"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9193164d4de03a926d909d3bc7c30543cecb35400c02114792c2cae20d5e2dbb"
+
+[[package]]
+name = "wild"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10d01931a94d5a115a53f95292f51d316856b68a035618eb831bbba593a30b67"
+dependencies = [
+ "glob",
+]
 
 [[package]]
 name = "winapi"

@@ -403,8 +403,7 @@ mod tests {
             ),
         ];
 
-        let _detailed_sold_transactions =
-            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+        let _ = reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
     }
 
     #[test]
@@ -518,7 +517,6 @@ mod tests {
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
-        let _detailed_sold_transactions =
-            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+        let _ = reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
     }
 }

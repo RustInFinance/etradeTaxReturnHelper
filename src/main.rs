@@ -60,7 +60,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::{App, Arg, ArgMatches, ErrorKind, Values};
+    use clap::{App, ErrorKind};
 
     #[test]
     fn test_exchange_rate_de() -> Result<(), String> {

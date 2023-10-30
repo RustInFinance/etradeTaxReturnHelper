@@ -1,11 +1,18 @@
 use clap::{App, AppSettings, Arg};
+use std::env;
 
 mod de;
+mod gui;
 mod logging;
 mod pl;
 mod us;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
+
+// TODO: GUI
+// TODO: Make GUI optional e.g. not needed for Linux if not available
+// TODO: Drag&Drop to work on MultiBrowser field
+
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
     myapp
@@ -29,11 +36,18 @@ fn main() {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     logging::init_logging_infrastructure();
 
+    log::info!("Started etradeTaxHelper");
+    // If there is no arguments then start GUI
+    let args: Vec<String> = env::args().collect();
+    if args.len() <= 1 {
+        gui::gui::run_gui();
+        return;
+    } 
+
     let myapp = App::new("etradeTaxHelper ".to_string() + VERSION)
         .setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches_from(wild::args());
 
-    log::info!("Started etradeTaxHelper");
 
     let residency = matches
         .value_of("residency")

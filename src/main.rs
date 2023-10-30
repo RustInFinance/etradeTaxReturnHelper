@@ -13,7 +13,6 @@ use logging::ResultExt;
 // TODO: Make GUI optional e.g. not needed for Linux if not available
 // TODO: Drag&Drop to work on MultiBrowser field
 
-
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
     myapp
         .arg(
@@ -42,12 +41,11 @@ fn main() {
     if args.len() <= 1 {
         gui::gui::run_gui();
         return;
-    } 
+    }
 
     let myapp = App::new("etradeTaxHelper ".to_string() + VERSION)
         .setting(AppSettings::ArgRequiredElseHelp);
     let matches = create_cmd_line_pattern(myapp).get_matches_from(wild::args());
-
 
     let residency = matches
         .value_of("residency")

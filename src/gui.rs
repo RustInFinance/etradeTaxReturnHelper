@@ -17,6 +17,58 @@ pub mod gui {
         window,
     };
 
+    pub struct MyMenu {
+        _menu: menu::SysMenuBar,
+    }
+
+    #[derive(Copy, Clone)]
+    pub enum Message {
+        ChoiceChanged,
+        Changed,
+        Execute,
+        Open,
+        Quit,
+        Copy,
+        Paste,
+    }
+
+    impl MyMenu {
+        pub fn new(s: &app::Sender<Message>) -> Self {
+            let mut menu = menu::SysMenuBar::default().with_size(800, 35);
+            menu.set_frame(FrameType::FlatBox);
+
+            menu.add_emit(
+                "&File/Open\t",
+                Shortcut::Ctrl | 's',
+                menu::MenuFlag::Normal,
+                *s,
+                Message::Open,
+            );
+
+            menu.add_emit(
+                "&File/Quit\t",
+                Shortcut::Ctrl | 'q',
+                menu::MenuFlag::Normal,
+                *s,
+                Message::Quit,
+            );
+
+            Self { _menu: menu }
+        }
+    }
+
+    fn feed_input(browser: &mut MultiBrowser) {
+        let docs = [
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/Brokerage Statement - XXXX0848 - 202202.pdf",
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/Brokerage Statement - XXXX0848 - 202203.pdf",
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/Brokerage Statement - XXXX0848 - 202204.pdf",
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/Brokerage Statement - XXXX0848 - 202205.pdf",
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/Brokerage Statement - XXXX0848 - 202206.pdf",
+        "/home/jczaja/e-trade-tax-return-pl-helper/etrade_data/G&L_Expanded.xlsx"];
+
+        docs.iter().for_each(|x| browser.add(x));
+    }
+
     pub fn run_gui() {
         log::info!("Starting GUI");
 
@@ -25,9 +77,9 @@ pub mod gui {
         const DOCUMENTS_REL_WIDTH: f64 = 0.2;
         const TRANSACTIONS_REL_WIDTH: f64 = 0.5;
         const SUMMARY_REL_WIDTH: f64 = 0.3;
-        const documents_col_width: i32 = (DOCUMENTS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
-        const transactions_col_width: i32 = (TRANSACTIONS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
-        const summary_col_width: i32 = (SUMMARY_REL_WIDTH * WIND_SIZE_X as f64) as i32;
+        const DOCUMENTS_COL_WIDTH: i32 = (DOCUMENTS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
+        const TRANSACTIONS_COL_WIDTH: i32 = (TRANSACTIONS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
+        const SUMMARY_COL_WIDTH: i32 = (SUMMARY_REL_WIDTH * WIND_SIZE_X as f64) as i32;
 
         let app = app::App::default();
         let mut wind = window::Window::default()
@@ -37,53 +89,53 @@ pub mod gui {
 
         wind.make_resizable(true);
 
+        let (s, r) = app::channel::<Message>();
+        let _menu = MyMenu::new(&s);
+
         let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
         pack.set_type(fltk::group::PackType::Horizontal);
 
-        let mut pack1 = Pack::new(0, 0, documents_col_width, 300, "");
+        let mut pack1 = Pack::new(0, 0, DOCUMENTS_COL_WIDTH, 300, "");
         pack1.set_type(fltk::group::PackType::Vertical);
-        let mut frame1 = Frame::new(0, 0, documents_col_width, 30, "Documents");
+        let mut frame1 = Frame::new(0, 0, DOCUMENTS_COL_WIDTH, 30, "Documents");
         frame1.set_frame(FrameType::EngravedFrame);
-        let mut browser = MultiBrowser::new(0, 30, documents_col_width, 270, "");
-        browser.add("Document1");
-        browser.add("Document2");
+        let mut browser = MultiBrowser::new(0, 30, DOCUMENTS_COL_WIDTH, 270, "");
+        feed_input(&mut browser);
 
         pack1.end();
 
-        let mut pack2 = Pack::new(0, 0, transactions_col_width, 300, "");
+        let mut pack2 = Pack::new(0, 0, TRANSACTIONS_COL_WIDTH, 300, "");
         pack2.set_type(fltk::group::PackType::Vertical);
-        let mut frame2 = Frame::new(0, 0, transactions_col_width, 30, "Transactions");
+        let mut frame2 = Frame::new(0, 0, TRANSACTIONS_COL_WIDTH, 30, "Transactions");
         frame2.set_frame(FrameType::EngravedFrame);
 
         let mut buffer = TextBuffer::default();
-        buffer.set_text("
- DIV TRANSACTION date: 2022-03-01, gross: $698.25, tax_us: $104.74, exchange_rate: 4.1965 , exchange_rate_date: 2022-02-28\n
- DIV TRANSACTION date: 2022-06-01, gross: $767.23, tax_us: $115.08, exchange_rate: 4.2651 , exchange_rate_date: 2022-05-31\n
- DIV TRANSACTION date: 2022-09-01, gross: $827.46, tax_us: $124.12, exchange_rate: 4.736 , exchange_rate_date: 2022-08-31\n
- DIV TRANSACTION date: 2022-12-01, gross: $874.54, tax_us: $131.18, exchange_rate: 4.5066 , exchange_rate_date: 2022-11-30\n
- SOLD TRANSACTION trade_date: 2022-04-11, settlement_date: 2022-04-13, acquisition_date: 2013-04-24, net_income: $46.9,  cost_basis: 0, exchange_rate_settlement: 4.2926 , exchange_rate_settlement_date: 2022-04-12, exchange_rate_acquisition: 3.1811 , exchange_rate_acquisition_date: 2013-04-23\n
- SOLD TRANSACTION trade_date: 2022-05-02, settlement_date: 2022-05-04, acquisition_date: 2015-08-19, net_income: $43.67,  cost_basis: 24.258, exchange_rate_settlement: 4.4454 , exchange_rate_settlement_date: 2022-05-02, exchange_rate_acquisition: 3.7578 , exchange_rate_acquisition_date: 2015-08-18
-");
+        buffer.set_text("");
 
-        let mut tdisplay = TextDisplay::new(0, 30, transactions_col_width, 270, "");
+        let mut tdisplay = TextDisplay::new(0, 30, TRANSACTIONS_COL_WIDTH, 270, "");
         tdisplay.set_buffer(buffer);
 
         pack2.end();
 
-        let mut pack3 = Pack::new(0, 0, summary_col_width, 300, "");
+        let mut pack3 = Pack::new(0, 0, SUMMARY_COL_WIDTH, 300, "");
         pack3.set_type(fltk::group::PackType::Vertical);
-        let mut frame3 = Frame::new(0, 0, summary_col_width, 30, "Summary");
+        let mut frame3 = Frame::new(0, 0, SUMMARY_COL_WIDTH, 30, "Summary");
         frame3.set_frame(FrameType::EngravedFrame);
 
         let mut buffer = TextBuffer::default();
-        buffer.set_text("===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 2671.89 PLN\n===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 2109.38 PLN\n===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 395.45 PLN\n===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 91.16 PLN");
+        buffer.set_text("");
 
-        let mut sdisplay = TextDisplay::new(0, 30, summary_col_width, 270, "");
+        let mut sdisplay = TextDisplay::new(0, 30, SUMMARY_COL_WIDTH, 270, "");
         sdisplay.set_buffer(buffer);
+
+        let mut execute_button = Button::new(0, 0, SUMMARY_COL_WIDTH, 0, "Execute");
+        //execute_button.emit(s, Message::Execute);
 
         pack3.end();
 
         pack.end();
+
+        //        let mut status_line = StatusLine::new(0, wind.height() - 30, wind.width(), 30, "");
 
         wind.handle(move |wind, ev| {
             let mut dnd = false;
@@ -160,9 +212,9 @@ pub mod gui {
         wind.end();
         wind.show();
 
+        //        let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, ).unwrap();
+        //    execute_button.set_callback(move |_| display.set_label("Hello world"));
+
         app.run().unwrap();
-        while app.wait() {
-            // handle events
-        }
     }
 }

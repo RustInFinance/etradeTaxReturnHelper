@@ -66,7 +66,8 @@ fn main() {
 
     let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, pdfnames).unwrap();
 
-    rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    presentation.iter().for_each(|x| println!("{x}"));
 }
 
 #[cfg(test)]

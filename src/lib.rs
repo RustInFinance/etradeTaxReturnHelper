@@ -40,7 +40,13 @@ pub struct SoldTransaction {
 
 pub trait Residency {
     //    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String>;
-    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32);
+    fn present_result(
+        &self,
+        gross_div: f32,
+        tax_div: f32,
+        gross_sold: f32,
+        cost_sold: f32,
+    ) -> Vec<String>;
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,

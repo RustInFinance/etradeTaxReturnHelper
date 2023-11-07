@@ -92,23 +92,65 @@ impl etradeTaxReturnHelper::Residency for PL {
         Ok(())
     }
 
-    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32) {
-        println!("(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {:.2} PLN", gross_div);
-        println!(
+    fn present_result(
+        &self,
+        gross_div: f32,
+        tax_div: f32,
+        gross_sold: f32,
+        cost_sold: f32,
+    ) -> Vec<String> {
+        let mut presentation: Vec<String> = vec![];
+        presentation.push(format!(
+            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
+            gross_div
+        ));
+        presentation.push(format!(
             "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: {:.2} PLN",
             (0.19 * gross_div)
-        );
-        println!(
+        ));
+        presentation.push(format!(
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: {:.2} PLN",
             tax_div
-        );
-        println!(
+        ));
+        presentation.push(format!(
             "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
             gross_sold
-        );
-        println!(
+        ));
+        presentation.push(format!(
             "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: {:.2} PLN",
             cost_sold
-        );
+        ));
+        presentation
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_present_result_pl() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+
+        let gross_div = 100.0f32;
+        let tax_div = 15.0f32;
+        let gross_sold = 1000.0f32;
+        let cost_sold = 10.0f32;
+
+        let ref_results: Vec<String> = vec![
+            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
+            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
+            "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 15.00 PLN".to_string(),
+            "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
+            "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
+        ];
+
+        let results = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+
+        results
+            .iter()
+            .zip(&ref_results)
+            .for_each(|(a, b)| assert_eq!(a, b));
+
+        Ok(())
     }
 }

@@ -88,28 +88,24 @@ pub fn create_detailed_div_transactions(
 ) -> Vec<Transaction> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
     transactions
-            .iter()
-            .for_each(|(transaction_date, gross_us, tax_us)| {
-                let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
+        .iter()
+        .for_each(|(transaction_date, gross_us, tax_us)| {
+            let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
 
-            let msg = format!(
-                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
-            )
-            .to_owned();
+            let transaction = Transaction {
+                transaction_date: transaction_date.clone(),
+                gross_us: gross_us.clone(),
+                tax_us: tax_us.clone(),
+                exchange_rate_date,
+                exchange_rate,
+            };
+
+            let msg = transaction.format_to_print();
 
             println!("{}", msg);
             log::info!("{}", msg);
-
-
-                detailed_transactions.push(Transaction {
-                    transaction_date: transaction_date.clone(),
-                    gross_us: gross_us.clone(),
-                    tax_us: tax_us.clone(),
-                    exchange_rate_date: exchange_rate_date,
-                    exchange_rate: exchange_rate,
-                })
-            });
+            detailed_transactions.push(transaction);
+        });
     detailed_transactions
 }
 

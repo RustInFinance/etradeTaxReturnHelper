@@ -22,6 +22,16 @@ pub struct Transaction {
     pub exchange_rate: f32,
 }
 
+impl Transaction {
+    pub fn format_to_print(&self) -> String {
+        format!(
+                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &self.gross_us, &self.tax_us, &self.exchange_rate, &self.exchange_rate_date
+            )
+            .to_owned()
+    }
+}
+
 // 1. settlement date
 // 2. date of purchase
 // 3. net income
@@ -150,6 +160,8 @@ fn compute_sold_taxation(transactions: Vec<SoldTransaction>) -> (f32, f32) {
         .sum();
     (gross_us_pl, cost_us_pl)
 }
+
+pub fn format_sold_transactions_to_string() {}
 
 pub fn run_taxation(
     rd: &Box<dyn Residency>,

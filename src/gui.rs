@@ -129,8 +129,14 @@ pub mod gui {
         let mut buffer = TextBuffer::default();
         buffer.set_text("");
 
-        let mut tdisplay = TextDisplay::new(0, 30, TRANSACTIONS_COL_WIDTH, 270, "");
-        tdisplay.set_buffer(buffer);
+        let tdisplay = Rc::new(RefCell::new(TextDisplay::new(
+            0,
+            30,
+            TRANSACTIONS_COL_WIDTH,
+            270,
+            "",
+        )));
+        tdisplay.borrow_mut().set_buffer(buffer);
 
         pack2.end();
 
@@ -168,6 +174,7 @@ pub mod gui {
 
         let sdisplay_cloned = sdisplay.clone();
         let ndisplay_cloned = ndisplay.clone();
+        let tdisplay_cloned = tdisplay.clone();
         let browser_cloned = browser.clone();
         execute_button.set_callback(move |_| {
             let mut buffer = sdisplay_cloned
@@ -178,12 +185,14 @@ pub mod gui {
                 .borrow()
                 .buffer()
                 .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
+            let mut tbuffer = tdisplay_cloned
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Transactions TextDisplay");
             let mut file_names: Vec<String> = vec![];
             let list_names = browser_cloned.borrow();
             log::info!("Processing {} files", list_names.size());
-            for i in 1..list_names.size()
-            /*+1*/
-            {
+            for i in 1..list_names.size() + 1 {
                 let line_content = browser_cloned.borrow().text(i);
                 match line_content {
                     Some(text) => {
@@ -197,16 +206,24 @@ pub mod gui {
                 }
             }
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-            let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, sold_transactions) = match run_taxation(&rd, file_names) {
-                Ok((gd, td, gs, cs, dts, sts)) => (gd, td, gs, cs, dts, sts),
-                Err(err) => {
-                    nbuffer.set_text(&err);
-                    panic!("Error: unable to perform taxation");
-                }
-            };
+            let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, sold_transactions) =
+                match run_taxation(&rd, file_names) {
+                    Ok((gd, td, gs, cs, dts, sts)) => (gd, td, gs, cs, dts, sts),
+                    Err(err) => {
+                        nbuffer.set_text(&err);
+                        panic!("Error: unable to perform taxation");
+                    }
+                };
             let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
-
             buffer.set_text(&presentation.join("\n"));
+            let mut transactions_strings: Vec<String> = vec![];
+            div_transactions
+                .iter()
+                .for_each(|x| transactions_strings.push(x.format_to_print()));
+            sold_transactions
+                .iter()
+                .for_each(|x| transactions_strings.push(x.format_to_print()));
+            tbuffer.set_text(&transactions_strings.join("\n"));
         });
 
         //        let mut status_line = StatusLine::new(0, wind.height() - 30, wind.width(), 30, "");
@@ -260,10 +277,10 @@ pub mod gui {
                         (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
                         frame2.height(),
                     );
-                    tdisplay.set_size(
-                        (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
-                        tdisplay.height(),
-                    );
+                    let ht = tdisplay.borrow().height();
+                    tdisplay
+                        .borrow_mut()
+                        .set_size((TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32, ht);
 
                     //Third column
                     pack3.set_size(

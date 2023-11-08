@@ -67,7 +67,7 @@ fn main() {
 
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-    let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, pdfnames).unwrap();
+    let (gross_div, tax_div, gross_sold, cost_sold, _, _) = run_taxation(&rd, pdfnames).unwrap();
 
     let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
@@ -229,11 +229,17 @@ mod tests {
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
-        assert_eq!(
-            etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
-            Ok((14062.57, 2109.3772, 395.45355, 91.156715))
-        );
-        Ok(())
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (14062.57, 2109.3772, 395.45355, 91.156715)
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
     }
 
     #[test]
@@ -254,11 +260,17 @@ mod tests {
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
-        assert_eq!(
-            etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
-            Ok((2930.206, 439.54138, 395.45355, 91.156715))
-        );
-        Ok(())
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (2930.206, 439.54138, 395.45355, 91.156715)
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
     }
 
     #[test]
@@ -275,10 +287,16 @@ mod tests {
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
-        assert_eq!(
-            etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
-            Ok((3272.3125, 490.82773, 0.0, 0.0)),
-        );
-        Ok(())
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (3272.3125, 490.82773, 0.0, 0.0),
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
     }
 }

@@ -197,8 +197,8 @@ pub mod gui {
                 }
             }
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-            let (gross_div, tax_div, gross_sold, cost_sold) = match run_taxation(&rd, file_names) {
-                Ok((gd, td, gs, cs)) => (gd, td, gs, cs),
+            let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, sold_transactions) = match run_taxation(&rd, file_names) {
+                Ok((gd, td, gs, cs, dts, sts)) => (gd, td, gs, cs, dts, sts),
                 Err(err) => {
                     nbuffer.set_text(&err);
                     panic!("Error: unable to perform taxation");

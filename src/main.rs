@@ -9,7 +9,8 @@ mod us;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: GUI
+// TODO: GUI : choosing residency
+// TODO: GUI : Error messages section (Redirecting to GUI the errors)
 // TODO: Make GUI optional e.g. not needed for Linux if not available
 // TODO: Drag&Drop to work on MultiBrowser field
 
@@ -63,6 +64,8 @@ fn main() {
     let pdfnames = matches
         .values_of("financial documents")
         .expect_and_log("error getting brokarage statements pdfs names.\n\nBrokerege statements can be downloaded from:\n\nhttps://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n");
+
+    let pdfnames : Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, pdfnames).unwrap();
 

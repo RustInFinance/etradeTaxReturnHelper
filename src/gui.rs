@@ -1,5 +1,6 @@
 pub mod gui {
 
+pub use crate::logging::ResultExt;
     use fltk::{
         app,
         browser::MultiBrowser,
@@ -16,6 +17,12 @@ pub mod gui {
         text::{TextBuffer, TextDisplay},
         window,
     };
+
+    use crate::pl::PL;
+    use crate::run_taxation;
+
+    use std::rc::Rc;
+    use std::cell::RefCell;
 
     pub struct MyMenu {
         _menu: menu::SysMenuBar,
@@ -72,20 +79,22 @@ pub mod gui {
     pub fn run_gui() {
         log::info!("Starting GUI");
 
-        const WIND_SIZE_X: i32 = 800;
-        const WIND_SIZE_Y: i32 = 600;
+        const WIND_SIZE_X: i32 = 1024;
+        const WIND_SIZE_Y: i32 = 768;
         const DOCUMENTS_REL_WIDTH: f64 = 0.2;
-        const TRANSACTIONS_REL_WIDTH: f64 = 0.5;
-        const SUMMARY_REL_WIDTH: f64 = 0.3;
+        const TRANSACTIONS_REL_WIDTH: f64 = 0.4;
+        const SUMMARY_REL_WIDTH: f64 = 0.4;
         const DOCUMENTS_COL_WIDTH: i32 = (DOCUMENTS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
         const TRANSACTIONS_COL_WIDTH: i32 = (TRANSACTIONS_REL_WIDTH * WIND_SIZE_X as f64) as i32;
         const SUMMARY_COL_WIDTH: i32 = (SUMMARY_REL_WIDTH * WIND_SIZE_X as f64) as i32;
 
         let app = app::App::default();
+
         let mut wind = window::Window::default()
             .with_size(WIND_SIZE_X, WIND_SIZE_Y)
             .center_screen()
-            .with_label("eTradeTaxReturnHelper");
+            .with_label("eTradeTaxReturnHelper"
+                );
 
         wind.make_resizable(true);
 
@@ -99,8 +108,11 @@ pub mod gui {
         pack1.set_type(fltk::group::PackType::Vertical);
         let mut frame1 = Frame::new(0, 0, DOCUMENTS_COL_WIDTH, 30, "Documents");
         frame1.set_frame(FrameType::EngravedFrame);
-        let mut browser = MultiBrowser::new(0, 30, DOCUMENTS_COL_WIDTH, 270, "");
-        feed_input(&mut browser);
+
+        let mut browser = Rc::new(RefCell::new(
+            MultiBrowser::new(0, 30, DOCUMENTS_COL_WIDTH, 270, "")
+        ));
+        feed_input(&mut browser.borrow_mut());
 
         pack1.end();
 
@@ -123,17 +135,41 @@ pub mod gui {
         frame3.set_frame(FrameType::EngravedFrame);
 
         let mut buffer = TextBuffer::default();
-        buffer.set_text("");
+        buffer.set_text("KUPA!");
 
-        let mut sdisplay = TextDisplay::new(0, 30, SUMMARY_COL_WIDTH, 270, "");
-        sdisplay.set_buffer(buffer);
 
-        let mut execute_button = Button::new(0, 0, SUMMARY_COL_WIDTH, 0, "Execute");
-        //execute_button.emit(s, Message::Execute);
+
+        let mut sdisplay = Rc::new(RefCell::new(
+        TextDisplay::new(0, 30, SUMMARY_COL_WIDTH, 270, "")));
+        sdisplay.borrow_mut().set_buffer(buffer);
+
+        let mut execute_button = Button::new(0, 300, SUMMARY_COL_WIDTH, 30, "Execute");
 
         pack3.end();
 
         pack.end();
+
+        let sdisplay_cloned = sdisplay.clone();
+        let browser_cloned = browser.clone();
+        execute_button.set_callback(move |_| {
+            let mut buffer = sdisplay_cloned.borrow().buffer().expect_and_log("Error: No buffer assigned to Summary TextDisplay");
+            let mut file_names : Vec<String> = vec![];
+            let list_names = browser_cloned.borrow();
+            log::info!("Processing {} files",list_names.size());
+            for i in 1..list_names.size()+1 {
+                let line_content = browser_cloned.borrow().text(i);
+                match line_content {
+                    Some(text) => {log::info!("File to be processed: {}", text); file_names.push(text)},
+                    None => log::error!("Error: No content in Multbrowse line: {i}"),
+                }
+            }
+            let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+            let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, file_names).unwrap();
+            let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+            
+            buffer.set_text(&presentation.join("\n"));
+        }); 
+
 
         //        let mut status_line = StatusLine::new(0, wind.height() - 30, wind.width(), 30, "");
 
@@ -153,7 +189,7 @@ pub mod gui {
                 Event::Paste => {
                     let files = app::event_text();
                     for file in files.split('\n') {
-                        browser.add(file);
+                        browser.borrow_mut().add(file);
                     }
                     true
                 }
@@ -171,9 +207,11 @@ pub mod gui {
                         (DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32,
                         frame1.height(),
                     );
-                    browser.set_size(
+
+                    let height = browser.borrow().height();
+                    browser.borrow_mut().set_size(
                         (DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32,
-                        browser.height(),
+                        height,
                     );
 
                     //Second column
@@ -199,9 +237,10 @@ pub mod gui {
                         (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
                         frame3.height(),
                     );
-                    sdisplay.set_size(
+                    let height = sdisplay.borrow().height();
+                    sdisplay.borrow_mut().set_size(
                         (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
-                        sdisplay.height(),
+                        height, 
                     );
                     true
                 }
@@ -213,7 +252,6 @@ pub mod gui {
         wind.show();
 
         //        let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, ).unwrap();
-        //    execute_button.set_callback(move |_| display.set_label("Hello world"));
 
         app.run().unwrap();
     }

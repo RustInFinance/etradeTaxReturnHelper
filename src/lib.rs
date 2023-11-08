@@ -153,14 +153,14 @@ fn compute_sold_taxation(transactions: Vec<SoldTransaction>) -> (f32, f32) {
 
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
-    names: clap::Values,
+    names: Vec<String>,
 ) -> Result<(f32, f32, f32, f32), String> {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
     // 1. Parse PDF and XLSX documents to get list of transactions
-    names.for_each(|x| {
+    names.iter().for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {

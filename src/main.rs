@@ -65,7 +65,7 @@ fn main() {
         .values_of("financial documents")
         .expect_and_log("error getting brokarage statements pdfs names.\n\nBrokerege statements can be downloaded from:\n\nhttps://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n");
 
-    let pdfnames : Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+    let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, pdfnames).unwrap();
 
@@ -228,6 +228,7 @@ mod tests {
         let pdfnames = matches
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
         assert_eq!(
             etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
             Ok((14062.57, 2109.3772, 395.45355, 91.156715))
@@ -252,6 +253,7 @@ mod tests {
         let pdfnames = matches
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
         assert_eq!(
             etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
             Ok((2930.206, 439.54138, 395.45355, 91.156715))
@@ -272,6 +274,7 @@ mod tests {
         let pdfnames = matches
             .values_of("financial documents")
             .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
         assert_eq!(
             etradeTaxReturnHelper::run_taxation(&rd, pdfnames),
             Ok((3272.3125, 490.82773, 0.0, 0.0)),

@@ -1,6 +1,6 @@
 pub mod gui {
 
-pub use crate::logging::ResultExt;
+    pub use crate::logging::ResultExt;
     use fltk::{
         app,
         browser::MultiBrowser,
@@ -21,8 +21,8 @@ pub use crate::logging::ResultExt;
     use crate::pl::PL;
     use crate::run_taxation;
 
-    use std::rc::Rc;
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     pub struct MyMenu {
         _menu: menu::SysMenuBar,
@@ -93,13 +93,14 @@ pub use crate::logging::ResultExt;
         let mut wind = window::Window::default()
             .with_size(WIND_SIZE_X, WIND_SIZE_Y)
             .center_screen()
-            .with_label("eTradeTaxReturnHelper"
-                );
+            .with_label("eTradeTaxReturnHelper");
 
         wind.make_resizable(true);
 
         let (s, r) = app::channel::<Message>();
         let _menu = MyMenu::new(&s);
+
+        let mut uberpack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
 
         let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
         pack.set_type(fltk::group::PackType::Horizontal);
@@ -109,9 +110,13 @@ pub use crate::logging::ResultExt;
         let mut frame1 = Frame::new(0, 0, DOCUMENTS_COL_WIDTH, 30, "Documents");
         frame1.set_frame(FrameType::EngravedFrame);
 
-        let mut browser = Rc::new(RefCell::new(
-            MultiBrowser::new(0, 30, DOCUMENTS_COL_WIDTH, 270, "")
-        ));
+        let mut browser = Rc::new(RefCell::new(MultiBrowser::new(
+            0,
+            30,
+            DOCUMENTS_COL_WIDTH,
+            270,
+            "",
+        )));
         feed_input(&mut browser.borrow_mut());
 
         pack1.end();
@@ -135,12 +140,15 @@ pub use crate::logging::ResultExt;
         frame3.set_frame(FrameType::EngravedFrame);
 
         let mut buffer = TextBuffer::default();
-        buffer.set_text("KUPA!");
+        buffer.set_text("Hi! Please load your documents and click >>Execute<<");
 
-
-
-        let mut sdisplay = Rc::new(RefCell::new(
-        TextDisplay::new(0, 30, SUMMARY_COL_WIDTH, 270, "")));
+        let sdisplay = Rc::new(RefCell::new(TextDisplay::new(
+            0,
+            30,
+            SUMMARY_COL_WIDTH,
+            270,
+            "",
+        )));
         sdisplay.borrow_mut().set_buffer(buffer);
 
         let mut execute_button = Button::new(0, 300, SUMMARY_COL_WIDTH, 30, "Execute");
@@ -149,27 +157,57 @@ pub use crate::logging::ResultExt;
 
         pack.end();
 
+        let mut frame4 = Frame::new(0, 200, WIND_SIZE_X, 30, "Notes:");
+        frame4.set_frame(FrameType::EngravedFrame);
+        let mut buffer = TextBuffer::default();
+        buffer.set_text("Neither warnings nor errors yet!");
+        let ndisplay = Rc::new(RefCell::new(TextDisplay::new(0, 30, WIND_SIZE_X, 270, "")));
+        ndisplay.borrow_mut().set_buffer(buffer);
+
+        uberpack.end();
+
         let sdisplay_cloned = sdisplay.clone();
+        let ndisplay_cloned = ndisplay.clone();
         let browser_cloned = browser.clone();
         execute_button.set_callback(move |_| {
-            let mut buffer = sdisplay_cloned.borrow().buffer().expect_and_log("Error: No buffer assigned to Summary TextDisplay");
-            let mut file_names : Vec<String> = vec![];
+            let mut buffer = sdisplay_cloned
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Summary TextDisplay");
+            let mut nbuffer = ndisplay_cloned
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
+            let mut file_names: Vec<String> = vec![];
             let list_names = browser_cloned.borrow();
-            log::info!("Processing {} files",list_names.size());
-            for i in 1..list_names.size()+1 {
+            log::info!("Processing {} files", list_names.size());
+            for i in 1..list_names.size()
+            /*+1*/
+            {
                 let line_content = browser_cloned.borrow().text(i);
                 match line_content {
-                    Some(text) => {log::info!("File to be processed: {}", text); file_names.push(text)},
-                    None => log::error!("Error: No content in Multbrowse line: {i}"),
+                    Some(text) => {
+                        log::info!("File to be processed: {}", text);
+                        file_names.push(text)
+                    }
+                    None => {
+                        log::error!("Error: No content in Multbrowse line: {i}");
+                        nbuffer.set_text("Error: No content in Multbrowse line: {i}");
+                    }
                 }
             }
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-            let (gross_div, tax_div, gross_sold, cost_sold) = run_taxation(&rd, file_names).unwrap();
+            let (gross_div, tax_div, gross_sold, cost_sold) = match run_taxation(&rd, file_names) {
+                Ok((gd, td, gs, cs)) => (gd, td, gs, cs),
+                Err(err) => {
+                    nbuffer.set_text(&err);
+                    panic!("Error: unable to perform taxation");
+                }
+            };
             let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
-            
-            buffer.set_text(&presentation.join("\n"));
-        }); 
 
+            buffer.set_text(&presentation.join("\n"));
+        });
 
         //        let mut status_line = StatusLine::new(0, wind.height() - 30, wind.width(), 30, "");
 
@@ -209,10 +247,9 @@ pub use crate::logging::ResultExt;
                     );
 
                     let height = browser.borrow().height();
-                    browser.borrow_mut().set_size(
-                        (DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32,
-                        height,
-                    );
+                    browser
+                        .borrow_mut()
+                        .set_size((DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32, height);
 
                     //Second column
                     pack2.set_size(
@@ -228,7 +265,7 @@ pub use crate::logging::ResultExt;
                         tdisplay.height(),
                     );
 
-                    //Second column
+                    //Third column
                     pack3.set_size(
                         (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
                         pack3.height(),
@@ -240,7 +277,7 @@ pub use crate::logging::ResultExt;
                     let height = sdisplay.borrow().height();
                     sdisplay.borrow_mut().set_size(
                         (TRANSACTIONS_REL_WIDTH * wind.width() as f64) as i32,
-                        height, 
+                        height,
                     );
                     true
                 }

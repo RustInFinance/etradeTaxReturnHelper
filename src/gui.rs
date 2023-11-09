@@ -1,3 +1,4 @@
+#[cfg(feature = "gui")]
 pub mod gui {
 
     pub use crate::logging::ResultExt;

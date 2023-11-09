@@ -39,7 +39,7 @@ jobs:
             path: etradeTaxReturnHelper
 
   build_and_test:
-      name: etradeTaxReturnHelper building
+      name: etradeTaxReturnHelper GUI building
       runs-on: ubuntu-latest
       steps:
         - name: Install system dependencies
@@ -61,3 +61,24 @@ jobs:
           run: |
             cargo test
 
+  build_and_test_no_gui:
+      name: etradeTaxReturnHelper building
+      runs-on: ubuntu-latest
+      steps:
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+        - uses: actions/checkout@v2
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+        - name: Cargo build
+          env:
+            LIBRARY_PATH: ./
+          run: |
+            cargo build --no-default-features --release
+        - name: Cargo test
+          env:
+            LIBRARY_PATH: ./
+          run: |
+            cargo test

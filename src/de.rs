@@ -49,10 +49,51 @@ impl etradeTaxReturnHelper::Residency for DE {
         ))
     }
 
-    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32) {
-        println!("===> (DIVIDENDS) INCOME: {} EUR", gross_div);
-        println!("===> (DIVIDENDS) TAX PAID: {} EUR", tax_div);
-        println!("===> (SOLD STOCK) INCOME: {} EUR", gross_sold);
-        println!("===> (SOLD STOCK) TAX DEDUCTIBLE COST: {} EUR", cost_sold);
+    fn present_result(
+        &self,
+        gross_div: f32,
+        tax_div: f32,
+        gross_sold: f32,
+        cost_sold: f32,
+    ) -> Vec<String> {
+        let mut presentation: Vec<String> = vec![];
+        presentation.push(format!("===> (DIVIDENDS) INCOME: {:.2} EUR", gross_div));
+        presentation.push(format!("===> (DIVIDENDS) TAX PAID: {:.2} EUR", tax_div));
+        presentation.push(format!("===> (SOLD STOCK) INCOME: {:.2} EUR", gross_sold));
+        presentation.push(format!(
+            "===> (SOLD STOCK) TAX DEDUCTIBLE COST: {:.2} EUR",
+            cost_sold
+        ));
+        presentation
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_present_result_de() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(DE {});
+
+        let gross_div = 100.0f32;
+        let tax_div = 15.0f32;
+        let gross_sold = 1000.0f32;
+        let cost_sold = 10.0f32;
+
+        let ref_results: Vec<String> = vec![
+            "===> (DIVIDENDS) INCOME: 100.00 EUR".to_string(),
+            "===> (DIVIDENDS) TAX PAID: 15.00 EUR".to_string(),
+            "===> (SOLD STOCK) INCOME: 1000.00 EUR".to_string(),
+            "===> (SOLD STOCK) TAX DEDUCTIBLE COST: 10.00 EUR".to_string(),
+        ];
+
+        let results = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+
+        results
+            .iter()
+            .zip(&ref_results)
+            .for_each(|(a, b)| assert_eq!(a, b));
+
+        Ok(())
     }
 }

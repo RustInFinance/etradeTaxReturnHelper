@@ -22,6 +22,16 @@ pub struct Transaction {
     pub exchange_rate: f32,
 }
 
+impl Transaction {
+    pub fn format_to_print(&self) -> String {
+        format!(
+                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &self.gross_us, &self.tax_us, &self.exchange_rate, &self.exchange_rate_date
+            )
+            .to_owned()
+    }
+}
+
 // 1. settlement date
 // 2. date of purchase
 // 3. net income
@@ -29,6 +39,7 @@ pub struct Transaction {
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct SoldTransaction {
     pub settlement_date: String,
+    pub trade_date: String,
     pub acquisition_date: String,
     pub income_us: f32,
     pub cost_basis: f32,
@@ -38,9 +49,28 @@ pub struct SoldTransaction {
     pub exchange_rate_acquisition: f32,
 }
 
+impl SoldTransaction {
+    pub fn format_to_print(&self) -> String {
+        format!(
+                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                chrono::NaiveDate::parse_from_str(&self.settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                chrono::NaiveDate::parse_from_str(&self.acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
+                &self.income_us, &self.cost_basis, &self.exchange_rate_settlement, &self.exchange_rate_settlement_date, &self.exchange_rate_acquisition, &self.exchange_rate_acquisition_date,
+            )
+            .to_owned()
+    }
+}
+
 pub trait Residency {
     //    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String>;
-    fn present_result(&self, gross_div: f32, tax_div: f32, gross_sold: f32, cost_sold: f32);
+    fn present_result(
+        &self,
+        gross_div: f32,
+        tax_div: f32,
+        gross_sold: f32,
+        cost_sold: f32,
+    ) -> Vec<String>;
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
@@ -117,7 +147,7 @@ pub trait Residency {
     }
 }
 
-fn compute_div_taxation(transactions: Vec<Transaction>) -> (f32, f32) {
+fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
@@ -131,7 +161,7 @@ fn compute_div_taxation(transactions: Vec<Transaction>) -> (f32, f32) {
     (gross_us_pl, tax_us_pl)
 }
 
-fn compute_sold_taxation(transactions: Vec<SoldTransaction>) -> (f32, f32) {
+fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
     // Net income from sold stock in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
@@ -145,16 +175,18 @@ fn compute_sold_taxation(transactions: Vec<SoldTransaction>) -> (f32, f32) {
     (gross_us_pl, cost_us_pl)
 }
 
+pub fn format_sold_transactions_to_string() {}
+
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
-    names: clap::Values,
-) -> Result<(f32, f32, f32, f32), String> {
+    names: Vec<String>,
+) -> Result<(f32, f32, f32, f32, Vec<Transaction>, Vec<SoldTransaction>), String> {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
     // 1. Parse PDF and XLSX documents to get list of transactions
-    names.for_each(|x| {
+    names.iter().for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
@@ -213,9 +245,16 @@ pub fn run_taxation(
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates);
 
-    let (gross_div, tax_div) = compute_div_taxation(transactions);
-    let (gross_sold, cost_sold) = compute_sold_taxation(sold_transactions);
-    Ok((gross_div, tax_div, gross_sold, cost_sold))
+    let (gross_div, tax_div) = compute_div_taxation(&transactions);
+    let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
+    Ok((
+        gross_div,
+        tax_div,
+        gross_sold,
+        cost_sold,
+        transactions,
+        sold_transactions,
+    ))
 }
 
 #[cfg(test)]
@@ -231,7 +270,7 @@ mod tests {
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
         }];
-        assert_eq!(compute_div_taxation(transactions), (400.0, 100.0));
+        assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
         Ok(())
     }
 
@@ -255,7 +294,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            compute_div_taxation(transactions),
+            compute_div_taxation(&transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
         );
         Ok(())
@@ -265,6 +304,7 @@ mod tests {
     fn test_simple_sold_taxation() -> Result<(), String> {
         // Init Transactions
         let transactions: Vec<SoldTransaction> = vec![SoldTransaction {
+            trade_date: "N/A".to_string(),
             settlement_date: "N/A".to_string(),
             acquisition_date: "N/A".to_string(),
             income_us: 100.0,
@@ -275,7 +315,7 @@ mod tests {
             exchange_rate_acquisition: 6.0,
         }];
         assert_eq!(
-            compute_sold_taxation(transactions),
+            compute_sold_taxation(&transactions),
             (100.0 * 5.0, 70.0 * 6.0)
         );
         Ok(())
@@ -286,6 +326,7 @@ mod tests {
         // Init Transactions
         let transactions: Vec<SoldTransaction> = vec![
             SoldTransaction {
+                trade_date: "N/A".to_string(),
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
                 income_us: 100.0,
@@ -296,6 +337,7 @@ mod tests {
                 exchange_rate_acquisition: 6.0,
             },
             SoldTransaction {
+                trade_date: "N/A".to_string(),
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
                 income_us: 10.0,
@@ -307,7 +349,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            compute_sold_taxation(transactions),
+            compute_sold_taxation(&transactions),
             (100.0 * 5.0 + 10.0 * 2.0, 70.0 * 6.0 + 4.0 * 3.0)
         );
         Ok(())

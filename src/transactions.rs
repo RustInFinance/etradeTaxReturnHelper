@@ -88,28 +88,24 @@ pub fn create_detailed_div_transactions(
 ) -> Vec<Transaction> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
     transactions
-            .iter()
-            .for_each(|(transaction_date, gross_us, tax_us)| {
-                let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
+        .iter()
+        .for_each(|(transaction_date, gross_us, tax_us)| {
+            let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
 
-            let msg = format!(
-                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &gross_us, &tax_us, &exchange_rate, &exchange_rate_date
-            )
-            .to_owned();
+            let transaction = Transaction {
+                transaction_date: transaction_date.clone(),
+                gross_us: gross_us.clone(),
+                tax_us: tax_us.clone(),
+                exchange_rate_date,
+                exchange_rate,
+            };
+
+            let msg = transaction.format_to_print();
 
             println!("{}", msg);
             log::info!("{}", msg);
-
-
-                detailed_transactions.push(Transaction {
-                    transaction_date: transaction_date.clone(),
-                    gross_us: gross_us.clone(),
-                    tax_us: tax_us.clone(),
-                    exchange_rate_date: exchange_rate_date,
-                    exchange_rate: exchange_rate,
-                })
-            });
+            detailed_transactions.push(transaction);
+        });
     detailed_transactions
 }
 
@@ -127,35 +123,33 @@ pub fn create_detailed_sold_transactions(
     dates: &std::collections::HashMap<String, Option<(String, f32)>>,
 ) -> Vec<SoldTransaction> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
-    transactions
-            .iter()
-            .for_each(|(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
-                let (exchange_rate_settlement_date, exchange_rate_settlement) = dates[settlement_date].clone().unwrap();
-                let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates[acquisition_date].clone().unwrap();
+    transactions.iter().for_each(
+        |(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
+            let (exchange_rate_settlement_date, exchange_rate_settlement) =
+                dates[settlement_date].clone().unwrap();
+            let (exchange_rate_acquisition_date, exchange_rate_acquisition) =
+                dates[acquisition_date].clone().unwrap();
 
-            let msg = format!(
-                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
-                chrono::NaiveDate::parse_from_str(&trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                chrono::NaiveDate::parse_from_str(&settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                &income, &cost_basis, &exchange_rate_settlement, &exchange_rate_settlement_date, &exchange_rate_acquisition, &exchange_rate_acquisition_date,
-            )
-            .to_owned();
+            let transaction = SoldTransaction {
+                settlement_date: settlement_date.clone(),
+                trade_date: trade_date.clone(),
+                acquisition_date: acquisition_date.clone(),
+                income_us: *income,
+                cost_basis: *cost_basis,
+                exchange_rate_settlement_date,
+                exchange_rate_settlement,
+                exchange_rate_acquisition_date,
+                exchange_rate_acquisition,
+            };
+
+            let msg = transaction.format_to_print();
 
             println!("{}", msg);
             log::info!("{}", msg);
 
-                detailed_transactions.push(SoldTransaction {
-                    settlement_date: settlement_date.clone(),
-                    acquisition_date: acquisition_date.clone(),
-                    income_us: *income,
-                    cost_basis: *cost_basis,
-                    exchange_rate_settlement_date: exchange_rate_settlement_date,
-                    exchange_rate_settlement: exchange_rate_settlement,
-                    exchange_rate_acquisition_date: exchange_rate_acquisition_date,
-                    exchange_rate_acquisition: exchange_rate_acquisition,
-                })
-            });
+            detailed_transactions.push(transaction);
+        },
+    );
     detailed_transactions
 }
 
@@ -245,6 +239,7 @@ mod tests {
             transactions,
             vec![
                 SoldTransaction {
+                    trade_date: "03/01/21".to_string(),
                     settlement_date: "03/03/21".to_string(),
                     acquisition_date: "01/01/21".to_string(),
                     income_us: 20.0,
@@ -255,6 +250,7 @@ mod tests {
                     exchange_rate_acquisition: 5.0,
                 },
                 SoldTransaction {
+                    trade_date: "06/01/21".to_string(),
                     settlement_date: "06/03/21".to_string(),
                     acquisition_date: "01/01/19".to_string(),
                     income_us: 25.0,

@@ -12,7 +12,6 @@ use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
 // TODO: GUI : Error messages section (Redirecting to GUI the errors)
-// TODO: Make GUI optional e.g. not needed for Linux if not available
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
 

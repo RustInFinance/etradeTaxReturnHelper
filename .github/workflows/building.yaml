@@ -76,9 +76,9 @@ jobs:
           env:
             LIBRARY_PATH: ./
           run: |
-            cargo build --no-default-features --release
+            cargo build --release --no-default-features
         - name: Cargo test
           env:
             LIBRARY_PATH: ./
           run: |
-            cargo test
+            cargo test --no-default-features

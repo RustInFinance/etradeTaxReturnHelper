@@ -2,15 +2,16 @@ use clap::{App, AppSettings, Arg};
 use std::env;
 
 mod de;
-mod gui;
 mod logging;
 mod pl;
 mod us;
+
+mod gui;
+
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
 // TODO: GUI : Error messages section (Redirecting to GUI the errors)
-// TODO: Make GUI optional e.g. not needed for Linux if not available
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
 
@@ -40,8 +41,11 @@ fn main() {
     // If there is no arguments then start GUI
     let args: Vec<String> = env::args().collect();
     if args.len() <= 1 {
-        gui::gui::run_gui();
-        return;
+        #[cfg(feature = "gui")]
+        {
+            gui::gui::run_gui();
+            return;
+        }
     }
 
     let myapp = App::new("etradeTaxHelper ".to_string() + VERSION)

@@ -247,7 +247,14 @@ pub fn run_taxation(
 
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    Ok((gross_div, tax_div, gross_sold, cost_sold, transactions, sold_transactions))
+    Ok((
+        gross_div,
+        tax_div,
+        gross_sold,
+        cost_sold,
+        transactions,
+        sold_transactions,
+    ))
 }
 
 #[cfg(test)]

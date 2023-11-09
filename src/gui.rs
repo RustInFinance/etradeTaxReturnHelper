@@ -172,7 +172,7 @@ pub mod gui {
 
         let mut uberpack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
 
-        let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
+        let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y / 2 as i32, "");
         pack.set_type(fltk::group::PackType::Horizontal);
 
         let mut pack1 = Pack::new(0, 0, DOCUMENTS_COL_WIDTH, 300, "");
@@ -219,8 +219,7 @@ pub mod gui {
         let mut frame3 = Frame::new(0, 0, SUMMARY_COL_WIDTH, 30, "Summary");
         frame3.set_frame(FrameType::EngravedFrame);
 
-        let mut buffer = TextBuffer::default();
-        buffer.set_text("Hi! Please >>Add<< your documents and click >>Execute<<");
+        let buffer = TextBuffer::default();
 
         let sdisplay = Rc::new(RefCell::new(TextDisplay::new(
             0,
@@ -238,10 +237,10 @@ pub mod gui {
 
         pack.end();
 
-        let mut frame4 = Frame::new(0, 200, WIND_SIZE_X, 30, "Notes:");
+        let mut frame4 = Frame::new(0, pack.height(), WIND_SIZE_X, 30, "Notes:");
         frame4.set_frame(FrameType::EngravedFrame);
         let mut buffer = TextBuffer::default();
-        buffer.set_text("Neither warnings nor errors yet!");
+        buffer.set_text("Hi! Please >>Add<< your documents and click >>Execute<<");
         let ndisplay = Rc::new(RefCell::new(TextDisplay::new(0, 30, WIND_SIZE_X, 270, "")));
         ndisplay.borrow_mut().set_buffer(buffer);
 
@@ -278,10 +277,13 @@ pub mod gui {
                     true
                 }
                 Event::Resize => {
+                    uberpack.set_size(wind.width(), wind.height());
+                    frame4.set_size(wind.width(), frame4.height());
+
                     // First column
                     pack.set_size(
                         (DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32,
-                        pack.height(),
+                        wind.height() / 2,
                     );
                     pack1.set_size(
                         (DOCUMENTS_REL_WIDTH * wind.width() as f64) as i32,

@@ -109,28 +109,31 @@ pub trait Residency {
 
         let base_exchange_rate_url = "https://www.exchange-rates.org/Rate/";
 
-        dates.iter_mut().for_each(|(date, val)| {
-            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").unwrap();
+        dates.iter_mut().try_for_each(|(date, val)| {
+            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
+                .map_err(|x| format!("Unable to convert date {x}"))?;
 
             converted_date = converted_date
                 .checked_sub_signed(chrono::Duration::days(1))
-                .expect_and_log("Error traversing date");
+                .ok_or("Error traversing date")?;
 
             let exchange_rate_url: String = base_exchange_rate_url.to_string()
                 + &format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y"))
                 + "/?format=json";
 
             let body = client.get(&(exchange_rate_url)).send();
-            let actual_body = body.expect_and_log(&format!(
-                "Getting Exchange Rate from Exchange-Rates.org ({}) failed",
-                exchange_rate_url
-            ));
+            let actual_body = body.map_err(|_| {
+                format!(
+                    "Getting Exchange Rate from Exchange-Rates.org ({}) failed",
+                    exchange_rate_url
+                )
+            })?;
             if actual_body.status().is_success() {
                 log::info!("RESPONSE {:#?}", actual_body);
 
                 let exchange_rates_response = actual_body
                     .text()
-                    .expect_and_log("Error converting response to Text");
+                    .map_err(|_| "Error converting response to Text")?;
                 log::info!("body of exchange_rate = {:#?}", &exchange_rates_response);
                 // parsing text response
                 if let Ok((exchange_rate, exchange_rate_date)) =
@@ -138,10 +141,11 @@ pub trait Residency {
                 {
                     *val = Some((exchange_rate_date, exchange_rate));
                 }
+                Ok(())
             } else {
-                panic!("Error getting exchange rate");
+                return Err("Error getting exchange rate".to_string());
             }
-        });
+        })?;
 
         Ok(())
     }
@@ -198,18 +202,12 @@ pub fn run_taxation(
         }
     });
     // 2. Verify Transactions
-    match verify_dividends_transactions(&parsed_div_transactions) {
-        Ok(()) => log::info!("Dividends transactions are consistent"),
-        Err(msg) => {
-            println!("{}", msg);
-            log::warn!("{}", msg);
-        }
-    }
+    verify_dividends_transactions(&parsed_div_transactions)?;
+    log::info!("Dividends transactions are consistent");
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =
-        reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gain_and_losses)
-            .expect_and_log("Error reconstructing detailed sold transactions.");
+        reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gain_and_losses)?;
 
     // 4. Get Exchange rates
     // Gather all trade , settlement and transaction dates into hash map to be passed to
@@ -238,8 +236,7 @@ pub fn run_taxation(
         },
     );
 
-    rd.get_exchange_rates(&mut dates)
-        .expect_and_log("Error: unable to get exchange rates");
+    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+&x)?;
 
     // Make a detailed_div_transactions
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);

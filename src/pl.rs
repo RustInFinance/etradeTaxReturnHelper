@@ -41,22 +41,26 @@ impl etradeTaxReturnHelper::Residency for PL {
         // If there is proxy then pick first URL
         let base_client = ReqwestClient::builder();
         let client = match &http_proxy {
-            Ok(proxy) => base_client
-                .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
+            Ok(proxy) => base_client.proxy(
+                reqwest::Proxy::http(proxy)
+                    .map_err(|x| format!("Error setting HTTP proxy. \nDetails: {}", x))?,
+            ),
             Err(_) => base_client,
         };
         let client = match &https_proxy {
-            Ok(proxy) => client
-                .proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy")),
+            Ok(proxy) => client.proxy(
+                reqwest::Proxy::https(proxy)
+                    .map_err(|x| format!("Error setting HTTPS proxy. \nDetails: {}", x))?,
+            ),
             Err(_) => client,
         };
         let client = client
             .build()
-            .expect_and_log("Could not create REST API client");
+            .map_err(|_| "Could not create REST API client")?;
 
         let base_exchange_rate_url = "https://api.nbp.pl/api/exchangerates/rates/a/";
 
-        dates.iter_mut().for_each(|(date, val)| {
+        dates.iter_mut().try_for_each(|(date, val)| {
             let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").unwrap();
 
             // Try to get exchange rate going backwards with dates till success
@@ -64,31 +68,34 @@ impl etradeTaxReturnHelper::Residency for PL {
             while is_success == false {
                 converted_date = converted_date
                     .checked_sub_signed(chrono::Duration::days(1))
-                    .expect_and_log("Error traversing date");
+                    .ok_or("Error traversing date")?;
 
                 let exchange_rate_url: String = base_exchange_rate_url.to_string()
                     + &format!("usd/{}", converted_date.format("%Y-%m-%d"))
                     + "/?format=json";
 
                 let body = client.get(&(exchange_rate_url)).send();
-                let actual_body = body.expect_and_log(&format!(
-                    "Getting Exchange Rate from NBP ({}) failed",
-                    exchange_rate_url
-                ));
+                let actual_body = body.map_err(|_| {
+                    format!(
+                        "Getting Exchange Rate from NBP ({}) failed",
+                        exchange_rate_url
+                    )
+                })?;
                 is_success = actual_body.status().is_success();
                 if is_success == true {
                     log::info!("RESPONSE {:#?}", actual_body);
 
                     let nbp_response = actual_body
                         .json::<NBPResponse<ExchangeRate>>()
-                        .expect_and_log("Error converting response to JSON");
+                        .map_err(|_| "Error: getting exchange rate from NBP")?;
                     log::info!("body of exchange_rate = {:#?}", nbp_response);
                     let exchange_rate = nbp_response.rates[0].mid;
                     let exchange_rate_date = format!("{}", converted_date.format("%Y-%m-%d"));
                     *val = Some((exchange_rate_date, exchange_rate));
                 };
             }
-        });
+            Ok::<(), String>(())
+        })?;
         Ok(())
     }
 

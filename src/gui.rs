@@ -79,7 +79,7 @@ pub mod gui {
             let mut file_names: Vec<String> = vec![];
             let list_names = browser.borrow();
             log::info!("Processing {} files", list_names.size());
-            for i in 1..list_names.size() + 1 {
+            for i in 1..=list_names.size()  {
                 let line_content = browser.borrow().text(i);
                 match line_content {
                     Some(text) => {
@@ -92,10 +92,13 @@ pub mod gui {
                     }
                 }
             }
+            buffer.set_text("");
+            tbuffer.set_text("");
+            nbuffer.set_text("Running...");
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
             let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, sold_transactions) =
                 match run_taxation(&rd, file_names) {
-                    Ok((gd, td, gs, cs, dts, sts)) => (gd, td, gs, cs, dts, sts),
+                    Ok((gd, td, gs, cs, dts, sts)) => {nbuffer.set_text("Finished");(gd, td, gs, cs, dts, sts)},
                     Err(err) => {
                         nbuffer.set_text(&err);
                         panic!("Error: unable to perform taxation");
@@ -217,7 +220,7 @@ pub mod gui {
 
         let mut pack3 = Pack::new(0, 0, SUMMARY_COL_WIDTH, 300, "");
         pack3.set_type(fltk::group::PackType::Vertical);
-        let mut frame3 = Frame::new(0, 0, SUMMARY_COL_WIDTH, 30, "Summary");
+        let mut frame3 = Frame::new(0, 0, SUMMARY_COL_WIDTH, 30, "Summary (Data for your Tax form)");
         frame3.set_frame(FrameType::EngravedFrame);
 
         let buffer = TextBuffer::default();

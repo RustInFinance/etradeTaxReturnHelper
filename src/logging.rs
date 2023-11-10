@@ -33,3 +33,4 @@ pub fn init_logging_infrastructure() {
     }
     simple_logger::SimpleLogger::new().env().init().unwrap();
 }
+

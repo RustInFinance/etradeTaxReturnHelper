@@ -208,8 +208,7 @@ pub fn run_taxation(
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =
-        reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gain_and_losses)
-            .expect_and_log("Error reconstructing detailed sold transactions.");
+        reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gain_and_losses)?;
 
     // 4. Get Exchange rates
     // Gather all trade , settlement and transaction dates into hash map to be passed to

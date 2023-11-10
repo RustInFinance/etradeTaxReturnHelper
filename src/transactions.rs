@@ -51,8 +51,8 @@ pub fn reconstruct_sold_transactions(
     let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32)> = vec![];
 
     if sold_transactions.len() > 0 && gains_and_losses.is_empty() {
-        panic!("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
-            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
+        return Err("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n".to_string());
     }
 
     // iterate through all sold transactions and update it with needed info

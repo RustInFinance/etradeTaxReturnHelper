@@ -14,7 +14,9 @@ Project that parse e-trade PDF brokerage statements and Gain and Losses document
     1. For Windows OS you can download binary (zip archive holding executable) from [releases](https://github.com/jczaja/e-trade-tax-return-pl-helper/releases) webpage. Place executable in the same directory as desired e-trade documents. Open Windows terminal (command prompt or powershell) and type `etradeTaxReturnHelper.exe *.pdf *.xlsx`
 
     2. For Linux you need Rust and Cargo installed and then you can install this project (crate):
-            `cargo install etradeTaxReturnHelper` 
+            `cargo install etradeTaxReturnHelper`
+    3. For Linux where there is no X server or no priviligies to install system dependencies then you could try to install non-GUI version:
+           `cargo install  etradeTaxReturnHelper --no-default-features`
 
 2. How does it work?
     Here is a [demo(PL)](https://www.youtube.com/watch?v=Juw3KJ1JdcA)

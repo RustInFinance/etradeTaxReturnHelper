@@ -49,10 +49,31 @@ pub mod gui {
         docs.iter().for_each(|x| browser.add(x));
     }
 
-    fn create_clear_documents(browser: Rc<RefCell<MultiBrowser>>, clear_button: &mut Button) {
+    fn create_clear_documents(
+        browser: Rc<RefCell<MultiBrowser>>,
+        tdisplay: Rc<RefCell<TextDisplay>>,
+        sdisplay: Rc<RefCell<TextDisplay>>,
+        ndisplay: Rc<RefCell<TextDisplay>>,
+        clear_button: &mut Button,
+    ) {
         clear_button.set_callback(move |_| {
+            let mut buffer = sdisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Summary TextDisplay");
+            let mut nbuffer = ndisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
+            let mut tbuffer = tdisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Transactions TextDisplay");
             let mut filelist = browser.borrow_mut();
             filelist.clear();
+            buffer.set_text("");
+            tbuffer.set_text("");
+            nbuffer.set_text("");
         });
     }
 
@@ -107,8 +128,11 @@ pub mod gui {
                         panic!("Error: unable to perform taxation");
                     }
                 };
-            let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+            let (presentation,warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
             buffer.set_text(&presentation.join("\n"));
+            if let Some(warn_msg) = warning {
+                nbuffer.set_text(&warn_msg);
+            }
             let mut transactions_strings: Vec<String> = vec![];
             div_transactions
                 .iter()
@@ -260,7 +284,13 @@ pub mod gui {
         uberpack.end();
 
         create_choose_documents_dialog(browser.clone(), &mut load_button);
-        create_clear_documents(browser.clone(), &mut clear_button);
+        create_clear_documents(
+            browser.clone(),
+            tdisplay.clone(),
+            sdisplay.clone(),
+            ndisplay.clone(),
+            &mut clear_button,
+        );
         create_execute_documents(
             browser.clone(),
             tdisplay.clone(),

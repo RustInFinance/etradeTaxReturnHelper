@@ -393,7 +393,7 @@ dependencies = [
 
 [[package]]
 name = "etradeTaxReturnHelper"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "calamine",
  "chrono",

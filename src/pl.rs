@@ -105,15 +105,16 @@ impl etradeTaxReturnHelper::Residency for PL {
         tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
-    ) -> Vec<String> {
+    ) -> (Vec<String>, Option<String>) {
         let mut presentation: Vec<String> = vec![];
+        let tax_pl = 0.19 * gross_div;
         presentation.push(format!(
             "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
             gross_div
         ));
         presentation.push(format!(
             "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: {:.2} PLN",
-            (0.19 * gross_div)
+            tax_pl
         ));
         presentation.push(format!(
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: {:.2} PLN",
@@ -127,7 +128,11 @@ impl etradeTaxReturnHelper::Residency for PL {
             "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: {:.2} PLN",
             cost_sold
         ));
-        presentation
+        if tax_div > tax_pl {
+            (presentation,Some(format!("Warning: Tax paid in US({tax_div} PLN) is higher than the tax that you are to pay in Poland({tax_pl} PLN). This usually means that there was a problem with declaration of your residency to avoid double taxation")))
+        } else {
+            (presentation, None)
+        }
     }
 }
 
@@ -151,12 +156,46 @@ mod tests {
             "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];
 
-        let results = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, _) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
 
         results
             .iter()
             .zip(&ref_results)
             .for_each(|(a, b)| assert_eq!(a, b));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_present_result_double_taxation_warning_pl() -> Result<(), String> {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+
+        let gross_div = 100.0f32;
+        let tax_div = 30.0f32;
+        let gross_sold = 1000.0f32;
+        let cost_sold = 10.0f32;
+
+        let ref_results: Vec<String> = vec![
+            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
+            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
+            "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 30.00 PLN".to_string(),
+            "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
+            "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
+        ];
+
+        let (results, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+
+        results
+            .iter()
+            .zip(&ref_results)
+            .for_each(|(a, b)| assert_eq!(a, b));
+
+        let ref_msg = "Warning: Tax paid in US(30 PLN) is higher than the tax that you are to pay in Poland(19 PLN). This usually means that there was a problem with declaration of your residency to avoid double taxation".to_string();
+
+        match (warning) {
+            Some(msg) => assert_eq!(msg, ref_msg),
+            None => return Err("Error: expected information on to high tax".to_string()),
+        }
 
         Ok(())
     }

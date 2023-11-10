@@ -70,7 +70,7 @@ pub trait Residency {
         tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
-    ) -> Vec<String>;
+    ) -> (Vec<String>, Option<String>);
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,

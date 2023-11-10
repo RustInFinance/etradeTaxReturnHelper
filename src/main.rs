@@ -11,7 +11,6 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: GUI : Error messages section (Redirecting to GUI the errors)
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
 
@@ -78,8 +77,12 @@ fn main() {
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
 
-    let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    let (presentation, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
+
+    if let Some(warn_msg) = warning {
+        println!("\n\nWARNING: {warn_msg}");
+    }
 }
 
 #[cfg(test)]

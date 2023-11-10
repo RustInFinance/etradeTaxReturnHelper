@@ -198,13 +198,8 @@ pub fn run_taxation(
         }
     });
     // 2. Verify Transactions
-    match verify_dividends_transactions(&parsed_div_transactions) {
-        Ok(()) => log::info!("Dividends transactions are consistent"),
-        Err(msg) => {
-            println!("{}", msg);
-            log::warn!("{}", msg);
-        }
-    }
+    verify_dividends_transactions(&parsed_div_transactions)?;
+    log::info!("Dividends transactions are consistent");
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =

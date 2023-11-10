@@ -26,8 +26,7 @@ pub fn verify_dividends_transactions(
             .unwrap()
             .year();
         if tr_year != transaction_year {
-            let msg: &str =
-                "WARNING! Brokerage statements are related to different years. Was it intentional?";
+            let msg: &str = "Error:  Brokerage statements are related to different years!";
             verification = Err(msg.to_owned());
         }
     });

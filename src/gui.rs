@@ -99,7 +99,7 @@ pub mod gui {
             let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, sold_transactions) =
                 match run_taxation(&rd, file_names) {
                     Ok((gd, td, gs, cs, dts, sts)) => {
-                        nbuffer.set_text("Finished");
+                        nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
                         (gd, td, gs, cs, dts, sts)
                     }
                     Err(err) => {

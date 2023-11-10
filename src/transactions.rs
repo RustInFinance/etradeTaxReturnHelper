@@ -491,7 +491,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_sold_transaction_reconstruction_no_gains_fail() {
         let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
             (
@@ -512,6 +511,9 @@ mod tests {
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
-        let _ = reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+        let result =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+        assert_eq!( result , Err("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
+            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n".to_string()));
     }
 }

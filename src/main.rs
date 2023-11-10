@@ -71,7 +71,12 @@ fn main() {
 
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-    let (gross_div, tax_div, gross_sold, cost_sold, _, _) = run_taxation(&rd, pdfnames).unwrap();
+    let (gross_div, tax_div, gross_sold, cost_sold) = match run_taxation(&rd, pdfnames) {
+        Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+            (gross_div, tax_div, gross_sold, cost_sold)
+        }
+        Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
+    };
 
     let presentation = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
@@ -242,7 +247,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 

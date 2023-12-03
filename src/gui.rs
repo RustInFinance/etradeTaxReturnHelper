@@ -146,6 +146,9 @@ pub mod gui {
 
     fn create_choose_documents_dialog(
         browser: Rc<RefCell<MultiBrowser>>,
+        tdisplay: Rc<RefCell<TextDisplay>>,
+        sdisplay: Rc<RefCell<TextDisplay>>,
+        ndisplay: Rc<RefCell<TextDisplay>>,
         load_button: &mut Button,
     ) {
         load_button.set_callback(move |_| {
@@ -175,6 +178,21 @@ pub mod gui {
                     .expect_and_log("Unable to extract choosen file name");
                 filelist.add(&filename);
             }
+            let mut buffer = sdisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Summary TextDisplay");
+            let mut nbuffer = ndisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
+            let mut tbuffer = tdisplay
+                .borrow()
+                .buffer()
+                .expect_and_log("Error: No buffer assigned to Transactions TextDisplay");
+            buffer.set_text("");
+            tbuffer.set_text("");
+            nbuffer.set_text("");
         });
     }
 
@@ -220,7 +238,7 @@ pub mod gui {
         )));
         //feed_input(&mut browser.borrow_mut());
 
-        let mut load_button = Button::new(0, 300, DOCUMENTS_COL_WIDTH, 30, "Add");
+        let mut load_button = Button::new(0, 300, DOCUMENTS_COL_WIDTH, 30, "1. Add");
         load_button.set_label_font(Font::HelveticaBold);
         let mut clear_button = Button::new(0, 300, DOCUMENTS_COL_WIDTH, 30, "Remove All");
         clear_button.set_label_font(Font::HelveticaBold);
@@ -267,7 +285,7 @@ pub mod gui {
         )));
         sdisplay.borrow_mut().set_buffer(buffer);
 
-        let mut execute_button = Button::new(0, 300, SUMMARY_COL_WIDTH, 30, "Execute");
+        let mut execute_button = Button::new(0, 300, SUMMARY_COL_WIDTH, 30, "2. Execute");
         execute_button.set_label_font(Font::HelveticaBold);
 
         pack3.end();
@@ -277,13 +295,20 @@ pub mod gui {
         let mut frame4 = Frame::new(0, pack.height(), WIND_SIZE_X, 30, "Notes:");
         frame4.set_frame(FrameType::EngravedFrame);
         let mut buffer = TextBuffer::default();
-        buffer.set_text("Hi! Please >>Add<< your documents and click >>Execute<<");
+        buffer.set_text("Hi!\n\n 1. Add your documents \n 2.  Execute calculation");
         let ndisplay = Rc::new(RefCell::new(TextDisplay::new(0, 30, WIND_SIZE_X, 270, "")));
         ndisplay.borrow_mut().set_buffer(buffer);
+        ndisplay.borrow_mut().set_text_size(20);
 
         uberpack.end();
 
-        create_choose_documents_dialog(browser.clone(), &mut load_button);
+        create_choose_documents_dialog(
+            browser.clone(),
+            tdisplay.clone(),
+            sdisplay.clone(),
+            ndisplay.clone(),
+            &mut load_button,
+        );
         create_clear_documents(
             browser.clone(),
             tdisplay.clone(),
@@ -385,6 +410,21 @@ pub mod gui {
                                 list.remove(idx);
                             }
                         }
+
+                        let mut buffer = sdisplay
+                            .borrow()
+                            .buffer()
+                            .expect_and_log("Error: No buffer assigned to Summary TextDisplay");
+                        let mut nbuffer = ndisplay
+                            .borrow()
+                            .buffer()
+                            .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
+                        let mut tbuffer = tdisplay.borrow().buffer().expect_and_log(
+                            "Error: No buffer assigned to Transactions TextDisplay",
+                        );
+                        buffer.set_text("");
+                        tbuffer.set_text("");
+                        nbuffer.set_text("");
                     }
                     true
                 }

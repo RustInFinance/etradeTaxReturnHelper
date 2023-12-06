@@ -266,11 +266,14 @@ fn yield_sold_transaction(
 ///     (trade_date, settlement_date, quantity, price, amount_sold)
 pub fn parse_brokerage_statement(
     pdftoparse: &str,
-) -> (
-    Vec<(String, f32, f32)>,
-    Vec<(String, String, i32, f32, f32)>,
-    Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
-) {
+) -> Result<
+    (
+        Vec<(String, f32, f32)>,
+        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
+    ),
+    &str,
+> {
     //2. parsing each pdf
     let mypdffile = File::<Vec<u8>>::open(pdftoparse)
         .expect_and_log(&format!("Error opening and parsing file: {}", pdftoparse));
@@ -434,7 +437,7 @@ pub fn parse_brokerage_statement(
             }
         }
     }
-    (div_transactions, sold_transactions, trades)
+    Ok((div_transactions, sold_transactions, trades))
 }
 
 #[cfg(test)]
@@ -515,15 +518,15 @@ mod tests {
     fn test_parse_brokerage_statement() -> Result<(), String> {
         assert_eq!(
             parse_brokerage_statement("data/example-divs.pdf"),
-            (
+            (Ok((
                 vec![("03/01/22".to_owned(), 698.25, 104.74)],
                 vec![],
                 vec![]
-            )
+            )))
         );
         assert_eq!(
             parse_brokerage_statement("data/example-sold-wire.pdf"),
-            (
+            Ok((
                 vec![],
                 vec![(
                     "05/02/22".to_owned(),
@@ -533,7 +536,7 @@ mod tests {
                     43.67
                 )],
                 vec![]
-            )
+            ))
         );
 
         //TODO(jczaja): Renable reinvest dividends case as soon as you get some PDFs

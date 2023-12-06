@@ -1,8 +1,8 @@
+mod csvparser;
 mod logging;
 mod pdfparser;
 mod transactions;
 mod xlsxparser;
-mod csvparser;
 
 use chrono;
 
@@ -118,7 +118,8 @@ pub trait Residency {
                 .checked_sub_signed(chrono::Duration::days(1))
                 .ok_or("Error traversing date")?;
 
-            let fms = format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y")) + "/?format=json";
+            let fms =
+                format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y")) + "/?format=json";
             let exchange_rate_url: String = base_exchange_rate_url.to_string() + fms.as_str();
 
             let body = client.get(&(exchange_rate_url)).send();
@@ -188,19 +189,23 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut parsed_revolut_transactions: Vec<csvparser::Currency> = vec![];
 
     // 1. Parse PDF and XLSX documents to get list of transactions
-    names.iter().for_each(|x| {
+    names.iter().try_for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x);
+            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x)?;
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
+        } else if x.contains(".xlsx") {
+            parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else {
-            parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x));
+            parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
         }
-    });
+        Ok::<(), &str>(())
+    })?;
     // 2. Verify Transactions
     verify_dividends_transactions(&parsed_div_transactions)?;
     log::info!("Dividends transactions are consistent");

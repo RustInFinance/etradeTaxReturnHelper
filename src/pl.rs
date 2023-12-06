@@ -71,7 +71,7 @@ impl etradeTaxReturnHelper::Residency for PL {
                     .ok_or("Error traversing date")?;
 
                 let exchange_rate_url: String = base_exchange_rate_url.to_string()
-                    + &format!("usd/{}", converted_date.format("%Y-%m-%d"))
+                    + format!("usd/{}", converted_date.format("%Y-%m-%d")).as_str()
                     + "/?format=json";
 
                 let body = client.get(&(exchange_rate_url)).send();

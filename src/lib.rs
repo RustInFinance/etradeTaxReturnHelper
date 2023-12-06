@@ -2,6 +2,7 @@ mod logging;
 mod pdfparser;
 mod transactions;
 mod xlsxparser;
+mod csvparser;
 
 use chrono;
 
@@ -117,9 +118,8 @@ pub trait Residency {
                 .checked_sub_signed(chrono::Duration::days(1))
                 .ok_or("Error traversing date")?;
 
-            let exchange_rate_url: String = base_exchange_rate_url.to_string()
-                + &format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y"))
-                + "/?format=json";
+            let fms = format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y")) + "/?format=json";
+            let exchange_rate_url: String = base_exchange_rate_url.to_string() + fms.as_str();
 
             let body = client.get(&(exchange_rate_url)).send();
             let actual_body = body.map_err(|_| {
@@ -236,7 +236,7 @@ pub fn run_taxation(
         },
     );
 
-    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+&x)?;
+    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);

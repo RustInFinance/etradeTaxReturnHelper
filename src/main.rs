@@ -11,8 +11,10 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: Add revolut parser (CSV, savings and investments) 
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
+// TODO: Change run_taxation for_Each into try_for_Ech if possible
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
     myapp

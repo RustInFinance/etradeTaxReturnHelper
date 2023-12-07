@@ -166,4 +166,20 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_parse_incomes() -> Result<(), String> {
+        let moneyin = Series::new("Money in", vec!["+€6,000", "+€3,000"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df =
+            DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(
+            parse_incomes(df),
+            Ok(vec![Currency::EUR(6000.00), Currency::EUR(3000.00)])
+        );
+
+        Ok(())
+    }
 }

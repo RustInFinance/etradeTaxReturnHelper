@@ -11,7 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Add revolut parser (CSV, savings and investments)
+// TODO: Add unit tests in CSV parser
+// TODO: Add Tax computation for revolut transactions
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field

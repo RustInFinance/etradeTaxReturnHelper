@@ -23,8 +23,7 @@ pub enum Currency {
     EUR(f64),
 }
 
-//TODO: Change to Result<>
-fn extract_cash(cashline: &str) -> Result<Currency, &str> {
+fn extract_cash(cashline: &str) -> Result<Currency, &'static str> {
     // We need to erase "," before processing it by parser
     log::info!("Entry moneyin line: {cashline}");
     let cashline_string: String = cashline.to_string().replace(",", "");
@@ -36,7 +35,7 @@ fn extract_cash(cashline: &str) -> Result<Currency, &str> {
         Ok((_, (_, value))) => return Ok(Currency::EUR(value)),
         Err(_) => match pln_parser(cashline_string.as_str()) {
             Ok((_, (_, value, _, _))) => return Ok(Currency::PLN(value)),
-            Err(_) => return Err("Error converting: {cashline}"),
+            Err(_) => return Err("Error converting: {cashline_string}"),
         },
     }
 }
@@ -83,7 +82,46 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
     Ok(filtred_df)
 }
 
-pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<Vec<Currency>, &str> {
+fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<chrono::NaiveDate>, &'static str> {
+    let completed_date = df
+        .column("Completed Date")
+        .map_err(|_| "Error: Unable to select Complete Date")?;
+    let mut dates: Vec<chrono::NaiveDate> = vec![];
+    let possible_dates = completed_date
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+    possible_dates.into_iter().for_each(|x| {
+        if let Some(d) = x {
+            let cd = chrono::NaiveDate::parse_from_str(&d, "%e %b %Y")
+                .expect("Error converting cell to NaiveDate");
+
+            dates.push(cd);
+        }
+    });
+
+    Ok(dates)
+}
+
+fn parse_incomes(df: DataFrame) -> Result<Vec<Currency>, &'static str> {
+    let mut incomes: Vec<Currency> = vec![];
+    let moneyin = df
+        .column("Money in")
+        .map_err(|_| "Error: Unable to select Money In")?;
+    let possible_incomes = moneyin
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+    possible_incomes.into_iter().try_for_each(|x| {
+        if let Some(d) = x {
+            incomes.push(extract_cash(d)?);
+        }
+        Ok::<(), &str>(())
+    })?;
+    Ok(incomes)
+}
+
+pub fn parse_revolut_transactions(
+    csvtoparse: &str,
+) -> Result<Vec<(chrono::NaiveDate, Currency)>, &str> {
     let df = CsvReader::from_path(csvtoparse)
         .map_err(|_| "Error: opening CSV")?
         .has_header(true)
@@ -96,9 +134,19 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<Vec<Currency>, &st
 
     log::info!("DF: {filtred_df}");
 
-    // TODO: Implement properly
-    let mut incomes: Vec<Currency> = vec![];
-    Ok(incomes)
+    let dates = parse_transaction_dates(&filtred_df)?;
+    log::info!("Dates: {:?}", dates);
+
+    let incomes = parse_incomes(filtred_df)?;
+    println!("Incomes: {:?}", incomes);
+
+    let mut transactions: Vec<(chrono::NaiveDate, Currency)> = vec![];
+    let mut iter = std::iter::zip(dates, incomes);
+    iter.for_each(|(d, m)| {
+        transactions.push((d, m));
+    });
+
+    Ok(transactions)
 }
 
 mod tests {

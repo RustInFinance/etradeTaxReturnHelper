@@ -189,7 +189,7 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_transactions: Vec<csvparser::Currency> = vec![];
+    let mut parsed_revolut_transactions: Vec<(chrono::NaiveDate, csvparser::Currency)> = vec![];
 
     // 1. Parse PDF and XLSX documents to get list of transactions
     names.iter().try_for_each(|x| {

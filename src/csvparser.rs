@@ -138,7 +138,7 @@ pub fn parse_revolut_transactions(
     log::info!("Dates: {:?}", dates);
 
     let incomes = parse_incomes(filtred_df)?;
-    println!("Incomes: {:?}", incomes);
+    log::info!("Incomes: {:?}", incomes);
 
     let mut transactions: Vec<(chrono::NaiveDate, Currency)> = vec![];
     let mut iter = std::iter::zip(dates, incomes);
@@ -178,6 +178,800 @@ mod tests {
         assert_eq!(
             parse_incomes(df),
             Ok(vec![Currency::EUR(6000.00), Currency::EUR(3000.00)])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_transaction_dates() -> Result<(), String> {
+        let completed_dates = Series::new("Completed Date", vec!["25 Aug 2023", "1 Sep 2023"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df = DataFrame::new(vec![description, completed_dates])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        let expected_first_date =
+            chrono::NaiveDate::parse_from_str("25 Aug 2023", "%e %b %Y").unwrap();
+        let expected_second_date =
+            chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap();
+
+        assert_eq!(
+            parse_transaction_dates(&df),
+            Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_transactions_eur() -> Result<(), String> {
+        let expected_result = Ok(vec![
+            (
+                chrono::NaiveDate::parse_from_str("24 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.05),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.07),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("28 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("29 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("31 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("28 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("29 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("28 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("29 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("31 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.24),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.25),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.27),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::EUR(0.26),
+            ),
+        ]);
+
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/Revolut_21sie2023_27lis2023.csv"),
+            expected_result
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_transactions_pln() -> Result<(), String> {
+        let expected_result = Ok(vec![
+            (
+                chrono::NaiveDate::parse_from_str("29 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.44),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.45),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("31 Aug 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.44),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.45),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.44),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.44),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.45),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.77),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.77),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.77),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.78),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.77),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.01),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("28 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("29 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Sep 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.01),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.0),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.05),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.05),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.05),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("28 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("29 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("30 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("31 Oct 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("1 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("2 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("3 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.06),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("4 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("5 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.11),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("6 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("7 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("8 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.11),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("9 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("10 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("11 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("12 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.11),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("13 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("14 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("15 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("16 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.11),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("17 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("18 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("19 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("20 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("21 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(1.12),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("22 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.82),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("23 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.83),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("24 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.83),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("25 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.83),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("26 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.83),
+            ),
+            (
+                chrono::NaiveDate::parse_from_str("27 Nov 2023", "%e %b %Y").unwrap(),
+                Currency::PLN(0.83),
+            ),
+        ]);
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/Revolut_30cze2023_27lis2023.csv"),
+            expected_result
         );
 
         Ok(())

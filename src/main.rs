@@ -11,12 +11,13 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Add unit tests in CSV parser
+// TODO: make usd based on parameter
 // TODO: Add Tax computation for revolut transactions
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
 // TODO: Change run_taxation for_Each into try_for_Ech if possible
+// TODO: taxation of EUR instruments in US
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
     myapp
@@ -101,7 +102,7 @@ mod tests {
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
         dates.insert("02/21/23".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
+        rd.get_exchange_rates(&mut dates,etradeTaxReturnHelper::Currency::USD(0.0)).unwrap();
 
         let (exchange_rate_date, exchange_rate) = dates.remove("02/21/23").unwrap().unwrap();
         assert_eq!(
@@ -118,7 +119,7 @@ mod tests {
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
         dates.insert("03/01/21".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
+        rd.get_exchange_rates(&mut dates,etradeTaxReturnHelper::Currency::USD(0.0)).unwrap();
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!(
             (exchange_rate_date, exchange_rate),
@@ -133,7 +134,7 @@ mod tests {
         let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
             std::collections::HashMap::new();
         dates.insert("03/01/21".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
+        rd.get_exchange_rates(&mut dates,etradeTaxReturnHelper::Currency::USD(0.0)).unwrap();
         let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
         assert_eq!((exchange_rate_date, exchange_rate), ("N/A".to_owned(), 1.0));
         Ok(())

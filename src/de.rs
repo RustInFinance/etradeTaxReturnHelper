@@ -6,8 +6,15 @@ impl etradeTaxReturnHelper::Residency for DE {
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        from: etradeTaxReturnHelper::Currency
     ) -> Result<(), String> {
-        self.get_currency_exchange_rates(dates, "USD", "EUR")
+
+        let source_currency = match from {
+            etradeTaxReturnHelper::Currency::USD(_) => "USD",
+            etradeTaxReturnHelper::Currency::EUR(_) => "EUR",
+            etradeTaxReturnHelper::Currency::PLN(_) => "PLN",
+        };
+        self.get_currency_exchange_rates(dates, source_currency, "EUR")
     }
 
     fn parse_exchange_rates(&self, body: &str) -> Result<(f32, String), String> {

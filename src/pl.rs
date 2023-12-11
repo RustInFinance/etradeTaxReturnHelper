@@ -33,7 +33,21 @@ impl etradeTaxReturnHelper::Residency for PL {
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        from: etradeTaxReturnHelper::Currency
     ) -> Result<(), String> {
+
+        let source_currency = match from {
+            etradeTaxReturnHelper::Currency::USD(_) => "usd",
+            etradeTaxReturnHelper::Currency::EUR(_) => "eur",
+            etradeTaxReturnHelper::Currency::PLN(_) => {
+                dates.iter_mut().for_each(|(_, val)| {
+                    *val = Some(("N/A".to_owned(), 1.0));
+                });
+                return Ok(()); 
+            }, 
+                                                              
+        };
+
         // proxies are taken from env vars: http_proxy and https_proxy
         let http_proxy = std::env::var("http_proxy");
         let https_proxy = std::env::var("https_proxy");
@@ -71,7 +85,7 @@ impl etradeTaxReturnHelper::Residency for PL {
                     .ok_or("Error traversing date")?;
 
                 let exchange_rate_url: String = base_exchange_rate_url.to_string()
-                    + format!("usd/{}", converted_date.format("%Y-%m-%d")).as_str()
+                    + format!("{}/{}", source_currency,converted_date.format("%Y-%m-%d")).as_str()
                     + "/?format=json";
 
                 let body = client.get(&(exchange_rate_url)).send();
@@ -165,6 +179,31 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_get_exchange_rates_pl() -> Result<(), String> {
+
+        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        dates.insert("07/14/81".to_owned(), None);
+        dates.insert("08/14/81".to_owned(), None);
+        dates.insert("09/14/81".to_owned(), None);
+
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(crate::pl::PL {});
+        rd.get_exchange_rates(&mut dates,etradeTaxReturnHelper::Currency::PLN(0.0)).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+
+        
+        let mut expected_result: std::collections::HashMap<String, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+        expected_result.insert("07/14/81".to_owned(), Some(("N/A".to_owned(),1.0)));
+        expected_result.insert("08/14/81".to_owned(), Some(("N/A".to_owned(),1.0)));
+        expected_result.insert("09/14/81".to_owned(), Some(("N/A".to_owned(),1.0)));
+
+        assert_eq!(dates,expected_result);
+        
+        Ok(())
+    }
+
 
     #[test]
     fn test_present_result_double_taxation_warning_pl() -> Result<(), String> {

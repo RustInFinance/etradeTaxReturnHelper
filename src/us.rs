@@ -3,6 +3,7 @@ impl etradeTaxReturnHelper::Residency for US {
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        from: etradeTaxReturnHelper::Currency
     ) -> Result<(), String> {
         dates.iter_mut().for_each(|(_date, val)| {
             *val = Some(("N/A".to_owned(), 1.0));

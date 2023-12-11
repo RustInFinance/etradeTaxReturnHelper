@@ -14,6 +14,13 @@ use transactions::{
     reconstruct_sold_transactions, verify_dividends_transactions,
 };
 
+#[derive(Debug, PartialEq)]
+pub enum Currency {
+    PLN(f64),
+    EUR(f64),
+    USD(f64),
+}
+
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Transaction {
     pub transaction_date: String,
@@ -75,6 +82,7 @@ pub trait Residency {
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        from: Currency
     ) -> Result<(), String>;
 
     // Default parser (not to be used)
@@ -189,9 +197,9 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_transactions: Vec<(chrono::NaiveDate, csvparser::Currency)> = vec![];
+    let mut parsed_revolut_transactions: Vec<(chrono::NaiveDate, Currency)> = vec![];
 
-    // 1. Parse PDF and XLSX documents to get list of transactions
+    // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
@@ -241,7 +249,7 @@ pub fn run_taxation(
         },
     );
 
-    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+    rd.get_exchange_rates(&mut dates,Currency::USD(0.0)).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);

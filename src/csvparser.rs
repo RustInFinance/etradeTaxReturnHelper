@@ -17,7 +17,6 @@ use nom::{
 };
 use polars::prelude::*;
 
-
 fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     // We need to erase "," before processing it by parser
     log::info!("Entry moneyin line: {cashline}");
@@ -77,21 +76,23 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
     Ok(filtred_df)
 }
 
-fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<chrono::NaiveDate>, &'static str> {
+fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> {
     let completed_date = df
         .column("Completed Date")
         .map_err(|_| "Error: Unable to select Complete Date")?;
-    let mut dates: Vec<chrono::NaiveDate> = vec![];
+    let mut dates: Vec<String> = vec![];
     let possible_dates = completed_date
         .utf8()
         .map_err(|_| "Error: Unable to convert to utf8")?;
-    possible_dates.into_iter().for_each(|x| {
+    possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
             let cd = chrono::NaiveDate::parse_from_str(&d, "%e %b %Y")
-                .expect("Error converting cell to NaiveDate");
-
+                .map_err(|_| "Error converting cell to NaiveDate")?
+                .format("%m/%d/%y")
+                .to_string();
             dates.push(cd);
         }
+        Ok::<(), &str>(())
     });
 
     Ok(dates)
@@ -116,7 +117,7 @@ fn parse_incomes(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
 
 pub fn parse_revolut_transactions(
     csvtoparse: &str,
-) -> Result<Vec<(chrono::NaiveDate, crate::Currency)>, &str> {
+) -> Result<Vec<(String, crate::Currency)>, &str> {
     let df = CsvReader::from_path(csvtoparse)
         .map_err(|_| "Error: opening CSV")?
         .has_header(true)
@@ -135,7 +136,7 @@ pub fn parse_revolut_transactions(
     let incomes = parse_incomes(filtred_df)?;
     log::info!("Incomes: {:?}", incomes);
 
-    let mut transactions: Vec<(chrono::NaiveDate, crate::Currency)> = vec![];
+    let mut transactions: Vec<(String, crate::Currency)> = vec![];
     let mut iter = std::iter::zip(dates, incomes);
     iter.for_each(|(d, m)| {
         transactions.push((d, m));
@@ -152,12 +153,21 @@ mod tests {
         assert_eq!(extract_cash("+€0.07"), Ok(crate::Currency::EUR(0.07)));
         assert_eq!(extract_cash("+€6,000"), Ok(crate::Currency::EUR(6000.00)));
         assert_eq!(extract_cash("+€600"), Ok(crate::Currency::EUR(600.00)));
-        assert_eq!(extract_cash("+€6,000.45"), Ok(crate::Currency::EUR(6000.45)));
+        assert_eq!(
+            extract_cash("+€6,000.45"),
+            Ok(crate::Currency::EUR(6000.45))
+        );
 
         assert_eq!(extract_cash("+1.06 PLN"), Ok(crate::Currency::PLN(1.06)));
-        assert_eq!(extract_cash("+4,000 PLN"), Ok(crate::Currency::PLN(4000.00)));
+        assert_eq!(
+            extract_cash("+4,000 PLN"),
+            Ok(crate::Currency::PLN(4000.00))
+        );
         assert_eq!(extract_cash("+500 PLN"), Ok(crate::Currency::PLN(500.00)));
-        assert_eq!(extract_cash("+4,000.32 PLN"), Ok(crate::Currency::PLN(4000.32)));
+        assert_eq!(
+            extract_cash("+4,000.32 PLN"),
+            Ok(crate::Currency::PLN(4000.32))
+        );
 
         Ok(())
     }
@@ -172,7 +182,10 @@ mod tests {
 
         assert_eq!(
             parse_incomes(df),
-            Ok(vec![crate::Currency::EUR(6000.00), crate::Currency::EUR(3000.00)])
+            Ok(vec![
+                crate::Currency::EUR(6000.00),
+                crate::Currency::EUR(3000.00)
+            ])
         );
 
         Ok(())
@@ -186,10 +199,8 @@ mod tests {
         let df = DataFrame::new(vec![description, completed_dates])
             .map_err(|_| "Error creating DataFrame")?;
 
-        let expected_first_date =
-            chrono::NaiveDate::parse_from_str("25 Aug 2023", "%e %b %Y").unwrap();
-        let expected_second_date =
-            chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap();
+        let expected_first_date = "08/25/23".to_owned();
+        let expected_second_date = "09/01/23".to_owned();
 
         assert_eq!(
             parse_transaction_dates(&df),
@@ -202,390 +213,102 @@ mod tests {
     #[test]
     fn test_parse_revolut_transactions_eur() -> Result<(), String> {
         let expected_result = Ok(vec![
-            (
-                chrono::NaiveDate::parse_from_str("24 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.05),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.07),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("28 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("29 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("31 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("28 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("29 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("28 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("29 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("31 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.24),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.25),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.27),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::EUR(0.26),
-            ),
+            ("08/24/23".to_owned(), crate::Currency::EUR(0.05)),
+            ("08/25/23".to_owned(), crate::Currency::EUR(0.07)),
+            ("08/26/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("08/27/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("08/28/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("08/29/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("08/30/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("08/31/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/01/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/02/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/03/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/04/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/05/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/06/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/07/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/08/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/09/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/10/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/11/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/12/23".to_owned(), crate::Currency::EUR(0.06)),
+            ("09/13/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/14/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/15/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/16/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/17/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("09/18/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/19/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/20/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/21/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/22/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/23/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/24/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/25/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("09/26/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/27/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/28/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/29/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("09/30/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/01/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/02/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/03/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/04/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/05/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/06/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/07/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/08/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/09/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/10/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/11/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/12/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/13/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/14/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/15/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/16/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/17/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/18/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/19/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/20/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/21/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/22/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/23/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/24/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/25/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/26/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/27/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("10/28/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/29/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/30/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("10/31/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("11/01/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/02/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/03/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/04/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("11/05/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/06/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/07/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/08/23".to_owned(), crate::Currency::EUR(0.24)),
+            ("11/09/23".to_owned(), crate::Currency::EUR(0.25)),
+            ("11/10/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/11/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/12/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/13/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/14/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/15/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/16/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/17/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/18/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/19/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/20/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/21/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/22/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/23/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/24/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/25/23".to_owned(), crate::Currency::EUR(0.26)),
+            ("11/26/23".to_owned(), crate::Currency::EUR(0.27)),
+            ("11/27/23".to_owned(), crate::Currency::EUR(0.26)),
         ]);
 
         assert_eq!(
@@ -599,370 +322,97 @@ mod tests {
     #[test]
     fn test_parse_revolut_transactions_pln() -> Result<(), String> {
         let expected_result = Ok(vec![
-            (
-                chrono::NaiveDate::parse_from_str("29 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.44),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.45),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("31 Aug 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.44),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.45),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.44),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.44),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.45),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.77),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.77),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.77),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.78),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.77),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.01),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("28 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("29 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Sep 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.01),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.0),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.05),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.05),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.05),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("28 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("29 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("30 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("31 Oct 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("1 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("2 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("3 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.06),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("4 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("5 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.11),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("6 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("7 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("8 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.11),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("9 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("10 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("11 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("12 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.11),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("13 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("14 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("15 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("16 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.11),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("17 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("18 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("19 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("20 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("21 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(1.12),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("22 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.82),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("23 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.83),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("24 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.83),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("25 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.83),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("26 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.83),
-            ),
-            (
-                chrono::NaiveDate::parse_from_str("27 Nov 2023", "%e %b %Y").unwrap(),
-                crate::Currency::PLN(0.83),
-            ),
+            ("08/29/23".to_owned(), crate::Currency::PLN(0.44)),
+            ("08/30/23".to_owned(), crate::Currency::PLN(0.45)),
+            ("08/31/23".to_owned(), crate::Currency::PLN(0.44)),
+            ("09/01/23".to_owned(), crate::Currency::PLN(0.45)),
+            ("09/02/23".to_owned(), crate::Currency::PLN(0.44)),
+            ("09/03/23".to_owned(), crate::Currency::PLN(0.44)),
+            ("09/04/23".to_owned(), crate::Currency::PLN(0.45)),
+            ("09/05/23".to_owned(), crate::Currency::PLN(0.77)),
+            ("09/06/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/07/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/08/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/09/23".to_owned(), crate::Currency::PLN(0.77)),
+            ("09/10/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/11/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/12/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/13/23".to_owned(), crate::Currency::PLN(0.77)),
+            ("09/14/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/15/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/16/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/17/23".to_owned(), crate::Currency::PLN(0.78)),
+            ("09/18/23".to_owned(), crate::Currency::PLN(0.77)),
+            ("09/19/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/20/23".to_owned(), crate::Currency::PLN(1.01)),
+            ("09/21/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/22/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/23/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/24/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/25/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/26/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/27/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/28/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/29/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("09/30/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("10/01/23".to_owned(), crate::Currency::PLN(1.01)),
+            ("10/02/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("10/03/23".to_owned(), crate::Currency::PLN(1.0)),
+            ("10/04/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/05/23".to_owned(), crate::Currency::PLN(1.05)),
+            ("10/06/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/07/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/08/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/09/23".to_owned(), crate::Currency::PLN(1.05)),
+            ("10/10/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/11/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/12/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/13/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/14/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/15/23".to_owned(), crate::Currency::PLN(1.05)),
+            ("10/16/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/17/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/18/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/19/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/20/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/21/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/22/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/23/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/24/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/25/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/26/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/27/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/28/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/29/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/30/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("10/31/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("11/01/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("11/02/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("11/03/23".to_owned(), crate::Currency::PLN(1.06)),
+            ("11/04/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/05/23".to_owned(), crate::Currency::PLN(1.11)),
+            ("11/06/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/07/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/08/23".to_owned(), crate::Currency::PLN(1.11)),
+            ("11/09/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/10/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/11/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/12/23".to_owned(), crate::Currency::PLN(1.11)),
+            ("11/13/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/14/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/15/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/16/23".to_owned(), crate::Currency::PLN(1.11)),
+            ("11/17/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/18/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/19/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/20/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/21/23".to_owned(), crate::Currency::PLN(1.12)),
+            ("11/22/23".to_owned(), crate::Currency::PLN(0.82)),
+            ("11/23/23".to_owned(), crate::Currency::PLN(0.83)),
+            ("11/24/23".to_owned(), crate::Currency::PLN(0.83)),
+            ("11/25/23".to_owned(), crate::Currency::PLN(0.83)),
+            ("11/26/23".to_owned(), crate::Currency::PLN(0.83)),
+            ("11/27/23".to_owned(), crate::Currency::PLN(0.83)),
         ]);
         assert_eq!(
             parse_revolut_transactions("revolut_data/Revolut_30cze2023_27lis2023.csv"),

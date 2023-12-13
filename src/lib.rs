@@ -21,6 +21,14 @@ pub enum Currency {
     USD(f64),
 }
 
+///
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Exchange {
+    EUR(String),
+    PLN(String),
+    USD(String),
+}
+
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Transaction {
     pub transaction_date: String,
@@ -71,7 +79,6 @@ impl SoldTransaction {
 }
 
 pub trait Residency {
-    //    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String>;
     fn present_result(
         &self,
         gross_div: f32,
@@ -81,8 +88,7 @@ pub trait Residency {
     ) -> (Vec<String>, Option<String>);
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
-        from: Currency
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
     ) -> Result<(), String>;
 
     // Default parser (not to be used)
@@ -92,8 +98,7 @@ pub trait Residency {
 
     fn get_currency_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
-        from: &str,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
         to: &str,
     ) -> Result<(), String> {
         // proxies are taken from env vars: http_proxy and https_proxy
@@ -118,7 +123,13 @@ pub trait Residency {
 
         let base_exchange_rate_url = "https://www.exchange-rates.org/Rate/";
 
-        dates.iter_mut().try_for_each(|(date, val)| {
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+            let (from, date) = match exchange {
+                Exchange::USD(date) => ("usd", date),
+                Exchange::EUR(date) => ("eur", date),
+                Exchange::PLN(date) => ("pln", date),
+            };
+
             let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
                 .map_err(|x| format!("Unable to convert date {x}"))?;
 
@@ -197,7 +208,7 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_transactions: Vec<(chrono::NaiveDate, Currency)> = vec![];
+    let mut parsed_revolut_transactions: Vec<(String, Currency)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -226,30 +237,46 @@ pub fn run_taxation(
     // Gather all trade , settlement and transaction dates into hash map to be passed to
     // get_exchange_rate
     // Hash map : Key(event date) -> (preceeding date, exchange_rate)
-    let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+    let mut dates: std::collections::HashMap<Exchange, Option<(String, f32)>> =
         std::collections::HashMap::new();
     parsed_div_transactions
         .iter()
         .for_each(|(trade_date, _, _)| {
-            if dates.contains_key(trade_date) == false {
-                dates.insert(trade_date.clone(), None);
+            let ex = Exchange::USD(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
         });
     detailed_sold_transactions.iter().for_each(
         |(trade_date, settlement_date, acquisition_date, _, _)| {
-            if dates.contains_key(trade_date) == false {
-                dates.insert(trade_date.clone(), None);
+            let ex = Exchange::USD(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
-            if dates.contains_key(settlement_date) == false {
-                dates.insert(settlement_date.clone(), None);
+            let ex = Exchange::USD(settlement_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
-            if dates.contains_key(acquisition_date) == false {
-                dates.insert(acquisition_date.clone(), None);
+            let ex = Exchange::USD(acquisition_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
         },
     );
+    parsed_revolut_transactions
+        .iter()
+        .for_each(|(trade_date, currency)| {
+            let ex = match currency {
+                Currency::EUR(_) => Exchange::EUR(trade_date.clone()),
+                Currency::PLN(_) => Exchange::PLN(trade_date.clone()),
+                Currency::USD(_) => Exchange::USD(trade_date.clone()),
+            };
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+        });
 
-    rd.get_exchange_rates(&mut dates,Currency::USD(0.0)).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);

@@ -83,13 +83,16 @@ pub fn reconstruct_sold_transactions(
 
 pub fn create_detailed_div_transactions(
     transactions: Vec<(String, f32, f32)>,
-    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Vec<Transaction> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
     transactions
         .iter()
         .for_each(|(transaction_date, gross_us, tax_us)| {
-            let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
+            let (exchange_rate_date, exchange_rate) = dates
+                [&crate::Exchange::USD(transaction_date.clone())]
+                .clone()
+                .unwrap();
 
             let transaction = Transaction {
                 transaction_date: transaction_date.clone(),
@@ -119,15 +122,19 @@ pub fn create_detailed_div_transactions(
 //    pub exchange_rate_acquisition: f32,
 pub fn create_detailed_sold_transactions(
     transactions: Vec<(String, String, String, f32, f32)>,
-    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Vec<SoldTransaction> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions.iter().for_each(
         |(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
-            let (exchange_rate_settlement_date, exchange_rate_settlement) =
-                dates[settlement_date].clone().unwrap();
-            let (exchange_rate_acquisition_date, exchange_rate_acquisition) =
-                dates[acquisition_date].clone().unwrap();
+            let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
+                [&crate::Exchange::USD(settlement_date.clone())]
+                .clone()
+                .unwrap();
+            let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates
+                [&crate::Exchange::USD(acquisition_date.clone())]
+                .clone()
+                .unwrap();
 
             let transaction = SoldTransaction {
                 settlement_date: settlement_date.clone(),
@@ -173,10 +180,17 @@ mod tests {
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
-        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 3.0)));
+
+        dates.insert(
+            crate::Exchange::USD("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 3.0)),
+        );
 
         let transactions = create_detailed_div_transactions(parsed_transactions, &dates);
 
@@ -221,16 +235,41 @@ mod tests {
             ),
         ];
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("01/01/21".to_owned(), Some(("12/30/20".to_owned(), 1.0)));
-        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
-        dates.insert("03/03/21".to_owned(), Some(("03/02/21".to_owned(), 2.5)));
-        dates.insert("06/01/21".to_owned(), Some(("06/03/21".to_owned(), 3.0)));
-        dates.insert("06/03/21".to_owned(), Some(("06/05/21".to_owned(), 4.0)));
-        dates.insert("01/01/21".to_owned(), Some(("02/28/21".to_owned(), 5.0)));
-        dates.insert("01/01/19".to_owned(), Some(("12/30/18".to_owned(), 6.0)));
-        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 7.0)));
+
+        dates.insert(
+            crate::Exchange::USD("01/01/21".to_owned()),
+            Some(("12/30/20".to_owned(), 1.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("03/03/21".to_owned()),
+            Some(("03/02/21".to_owned(), 2.5)),
+        );
+        dates.insert(
+            crate::Exchange::USD("06/01/21".to_owned()),
+            Some(("06/03/21".to_owned(), 3.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("06/03/21".to_owned()),
+            Some(("06/05/21".to_owned(), 4.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("01/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 5.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("01/01/19".to_owned()),
+            Some(("12/30/18".to_owned(), 6.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 7.0)),
+        );
 
         let transactions = create_detailed_sold_transactions(parsed_transactions, &dates);
 

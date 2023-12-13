@@ -2,8 +2,10 @@ pub struct US {}
 impl etradeTaxReturnHelper::Residency for US {
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
-        from: etradeTaxReturnHelper::Currency
+        dates: &mut std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        >,
     ) -> Result<(), String> {
         dates.iter_mut().for_each(|(_date, val)| {
             *val = Some(("N/A".to_owned(), 1.0));

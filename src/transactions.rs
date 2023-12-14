@@ -87,29 +87,30 @@ pub fn create_detailed_revolut_transactions(
 ) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
 
-    /*    transactions
-            .iter()
-            .for_each(|(transaction_date, gross_us, tax_us)| {
-                let (exchange_rate_date, exchange_rate) = dates
-                    [&crate::Exchange::USD(transaction_date.clone())]
-                    .clone()
-                    .unwrap();
+    transactions
+        .iter()
+        .try_for_each(|(transaction_date, gross)| {
+            let (exchange_rate_date, exchange_rate) = dates
+                [&crate::Exchange::USD(transaction_date.clone())]
+                .clone()
+                .unwrap();
 
-                let transaction = Transaction {
-                    transaction_date: transaction_date.clone(),
-                    gross_us: gross_us.clone(),
-                    tax_us: tax_us.clone(),
-                    exchange_rate_date,
-                    exchange_rate,
-                };
+            let transaction = Transaction {
+                transaction_date: transaction_date.clone(),
+                gross: *gross,
+                //Revolut does not take taxes in savings account
+                tax_paid: gross.derive(0.0),
+                exchange_rate_date,
+                exchange_rate,
+            };
 
-                let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("REVOLUT")?;
 
-                println!("{}", msg);
-                log::info!("{}", msg);
-                detailed_transactions.push(transaction);
-            });
-    */
+            println!("{}", msg);
+            log::info!("{}", msg);
+            detailed_transactions.push(transaction);
+            Ok::<(), &str>(())
+        })?;
     Ok(detailed_transactions)
 }
 
@@ -204,6 +205,92 @@ mod tests {
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
         verify_dividends_transactions(&transactions)
+    }
+
+    #[test]
+    fn test_create_detailed_revolut_transactions_eur() -> Result<(), String> {
+        let parsed_transactions = Ok(vec![
+            ("03/01/21".to_owned(), crate::Currency::EUR(0.05)),
+            ("04/11/21".to_owned(), crate::Currency::EUR(0.07)),
+        ]);
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::PLN("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::PLN("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 3.0)),
+        );
+
+        let transactions = create_detailed_revolut_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross: crate::Currency::EUR(0.44),
+                    tax_paid: crate::Currency::EUR(0.0),
+                    exchange_rate_date: "02/28/21".to_string(),
+                    exchange_rate: 2.0,
+                },
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross: crate::Currency::EUR(0.45),
+                    tax_paid: crate::Currency::EUR(0.0),
+                    exchange_rate_date: "04/10/21".to_string(),
+                    exchange_rate: 3.0,
+                },
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_detailed_revolut_transactions_pln() -> Result<(), String> {
+        let parsed_transactions = Ok(vec![
+            ("03/01/21".to_owned(), crate::Currency::PLN(0.44)),
+            ("04/11/21".to_owned(), crate::Currency::PLN(0.45)),
+        ]);
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::PLN("03/01/21".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+        dates.insert(
+            crate::Exchange::PLN("04/11/21".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+
+        let transactions = create_detailed_revolut_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross: crate::Currency::PLN(0.44),
+                    tax_paid: crate::Currency::PLN(0.0),
+                    exchange_rate_date: "N/A".to_string(),
+                    exchange_rate: 1.0,
+                },
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross: crate::Currency::PLN(0.45),
+                    tax_paid: crate::Currency::PLN(0.0),
+                    exchange_rate_date: "N/A".to_string(),
+                    exchange_rate: 1.0,
+                },
+            ])
+        );
+        Ok(())
     }
 
     #[test]

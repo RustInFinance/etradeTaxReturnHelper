@@ -15,7 +15,7 @@ use transactions::{
     verify_dividends_transactions,
 };
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub enum Currency {
     PLN(f64),
     EUR(f64),
@@ -28,6 +28,13 @@ impl Currency {
             Currency::EUR(val) => *val,
             Currency::PLN(val) => *val,
             Currency::USD(val) => *val,
+        }
+    }
+    fn derive(&self, val: f64) -> Currency {
+        match self {
+            Currency::EUR(_) => Currency::EUR(val),
+            Currency::PLN(_) => Currency::PLN(val),
+            Currency::USD(_) => Currency::USD(val),
         }
     }
 }

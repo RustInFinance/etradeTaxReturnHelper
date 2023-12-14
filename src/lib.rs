@@ -326,11 +326,12 @@ pub fn run_taxation(
 
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
+    let (gross_revolut, cost_revolut) = compute_div_taxation(&revolut_transactions);
     Ok((
         gross_div,
         tax_div,
-        gross_sold,
-        cost_sold,
+        gross_sold + gross_revolut, // We put sold and savings income into the same column
+        cost_sold + cost_revolut,
         transactions,
         sold_transactions,
     ))
@@ -375,6 +376,55 @@ mod tests {
         assert_eq!(
             compute_div_taxation(&transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_revolut_savings_taxation_pln() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::PLN(0.44),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::PLN(0.45),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+            },
+        ];
+        assert_eq!(
+            compute_div_taxation(&transactions),
+            (0.44 * 1.0 + 0.45 * 1.0, 0.0)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_revolut_savings_taxation_eur() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::EUR(0.44),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::EUR(0.45),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+            },
+        ];
+        assert_eq!(
+            compute_div_taxation(&transactions),
+            (0.44 * 2.0 + 0.45 * 3.0, 0.0)
         );
         Ok(())
     }

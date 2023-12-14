@@ -10,15 +10,26 @@ type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;
 use transactions::{
-    create_detailed_div_transactions, create_detailed_sold_transactions,
-    reconstruct_sold_transactions, verify_dividends_transactions,
+    create_detailed_div_transactions, create_detailed_revolut_transactions,
+    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    verify_dividends_transactions,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Currency {
     PLN(f64),
     EUR(f64),
     USD(f64),
+}
+
+impl Currency {
+    fn value(&self) -> f64 {
+        match self {
+            Currency::EUR(val) => *val,
+            Currency::PLN(val) => *val,
+            Currency::USD(val) => *val,
+        }
+    }
 }
 
 ///
@@ -32,19 +43,41 @@ pub enum Exchange {
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Transaction {
     pub transaction_date: String,
-    pub gross_us: f32,
-    pub tax_us: f32,
+    pub gross: Currency,
+    pub tax_paid: Currency,
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
 }
 
 impl Transaction {
-    pub fn format_to_print(&self) -> String {
-        format!(
-                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &self.gross_us, &self.tax_us, &self.exchange_rate, &self.exchange_rate_date
+    pub fn format_to_print(&self, prefix: &str) -> Result<String, &'static str> {
+        let msg = match (&self.gross,&self.tax_paid) {
+            (Currency::PLN(gross),Currency::PLN(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: {gross} PLN, tax paid: {tax_paid} PLN",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d")
             )
             .to_owned()
+            },
+            (Currency::USD(gross),Currency::USD(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: ${gross}, tax paid: ${tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
+            )
+            .to_owned()
+            },
+
+            (Currency::EUR(gross),Currency::EUR(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: €{gross}, tax paid: €{tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
+            )
+            .to_owned()
+            },
+            (_,_) => return Err("Error: Gross and Tax paid currency does not match!"),
+        };
+
+        Ok(msg)
     }
 }
 
@@ -175,12 +208,12 @@ fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.gross_us)
+        .map(|x| x.exchange_rate * x.gross.value() as f32)
         .sum();
     // Tax paid in US in PLN
     let tax_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.tax_us)
+        .map(|x| x.exchange_rate * x.tax_paid.value() as f32)
         .sum();
     (gross_us_pl, tax_us_pl)
 }
@@ -279,8 +312,10 @@ pub fn run_taxation(
     rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
-    let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);
-    let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates);
+    let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
+    let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
+    let revolut_transactions =
+        create_detailed_revolut_transactions(parsed_revolut_transactions, &dates)?;
 
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
@@ -302,8 +337,8 @@ mod tests {
         // Init Transactions
         let transactions: Vec<Transaction> = vec![Transaction {
             transaction_date: "N/A".to_string(),
-            gross_us: 100.0,
-            tax_us: 25.0,
+            gross: crate::Currency::USD(100.0),
+            tax_paid: crate::Currency::USD(25.0),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
         }];
@@ -317,15 +352,15 @@ mod tests {
         let transactions: Vec<Transaction> = vec![
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross_us: 100.0,
-                tax_us: 25.0,
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(25.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross_us: 126.0,
-                tax_us: 10.0,
+                gross: crate::Currency::USD(126.0),
+                tax_paid: crate::Currency::USD(10.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
             },

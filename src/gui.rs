@@ -136,7 +136,7 @@ pub mod gui {
             let mut transactions_strings: Vec<String> = vec![];
             div_transactions
                 .iter()
-                .for_each(|x| transactions_strings.push(x.format_to_print()));
+                .for_each(|x| transactions_strings.push(x.format_to_print("DIV").expect_and_log("Error: Formatting DIV transaction failed")));
             sold_transactions
                 .iter()
                 .for_each(|x| transactions_strings.push(x.format_to_print()));

@@ -11,7 +11,6 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Finish refactoring
 // TODO: Add Tax computation for revolut transactions
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency

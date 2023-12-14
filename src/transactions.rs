@@ -81,14 +81,46 @@ pub fn reconstruct_sold_transactions(
     Ok(detailed_sold_transactions)
 }
 
+pub fn create_detailed_revolut_transactions(
+    transactions: Vec<(String, crate::Currency)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<Transaction>, &str> {
+    let mut detailed_transactions: Vec<Transaction> = Vec::new();
+
+    /*    transactions
+            .iter()
+            .for_each(|(transaction_date, gross_us, tax_us)| {
+                let (exchange_rate_date, exchange_rate) = dates
+                    [&crate::Exchange::USD(transaction_date.clone())]
+                    .clone()
+                    .unwrap();
+
+                let transaction = Transaction {
+                    transaction_date: transaction_date.clone(),
+                    gross_us: gross_us.clone(),
+                    tax_us: tax_us.clone(),
+                    exchange_rate_date,
+                    exchange_rate,
+                };
+
+                let msg = transaction.format_to_print();
+
+                println!("{}", msg);
+                log::info!("{}", msg);
+                detailed_transactions.push(transaction);
+            });
+    */
+    Ok(detailed_transactions)
+}
+
 pub fn create_detailed_div_transactions(
     transactions: Vec<(String, f32, f32)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
-) -> Vec<Transaction> {
+) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
     transactions
         .iter()
-        .for_each(|(transaction_date, gross_us, tax_us)| {
+        .try_for_each(|(transaction_date, gross_us, tax_us)| {
             let (exchange_rate_date, exchange_rate) = dates
                 [&crate::Exchange::USD(transaction_date.clone())]
                 .clone()
@@ -96,19 +128,20 @@ pub fn create_detailed_div_transactions(
 
             let transaction = Transaction {
                 transaction_date: transaction_date.clone(),
-                gross_us: gross_us.clone(),
-                tax_us: tax_us.clone(),
+                gross: crate::Currency::USD(*gross_us as f64),
+                tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
             };
 
-            let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("DIV")?;
 
             println!("{}", msg);
             log::info!("{}", msg);
             detailed_transactions.push(transaction);
+            Ok::<(), &str>(())
         });
-    detailed_transactions
+    Ok(detailed_transactions)
 }
 
 //    pub trade_date: String,
@@ -123,7 +156,7 @@ pub fn create_detailed_div_transactions(
 pub fn create_detailed_sold_transactions(
     transactions: Vec<(String, String, String, f32, f32)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
-) -> Vec<SoldTransaction> {
+) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions.iter().for_each(
         |(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
@@ -156,7 +189,7 @@ pub fn create_detailed_sold_transactions(
             detailed_transactions.push(transaction);
         },
     );
-    detailed_transactions
+    Ok(detailed_transactions)
 }
 
 #[cfg(test)]
@@ -196,22 +229,22 @@ mod tests {
 
         assert_eq!(
             transactions,
-            vec![
+            Ok(vec![
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
-                    gross_us: 100.0,
-                    tax_us: 25.0,
+                    gross: crate::Currency::USD(100.0),
+                    tax_paid: crate::Currency::USD(25.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
-                    gross_us: 126.0,
-                    tax_us: 10.0,
+                    gross: crate::Currency::USD(126.0),
+                    tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
                 },
-            ]
+            ])
         );
         Ok(())
     }
@@ -275,7 +308,7 @@ mod tests {
 
         assert_eq!(
             transactions,
-            vec![
+            Ok(vec![
                 SoldTransaction {
                     trade_date: "03/01/21".to_string(),
                     settlement_date: "03/03/21".to_string(),
@@ -298,7 +331,7 @@ mod tests {
                     exchange_rate_acquisition_date: "12/30/18".to_string(),
                     exchange_rate_acquisition: 6.0,
                 },
-            ]
+            ])
         );
         Ok(())
     }

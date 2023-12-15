@@ -93,7 +93,7 @@ fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> 
             dates.push(cd);
         }
         Ok::<(), &str>(())
-    });
+    })?;
 
     Ok(dates)
 }
@@ -137,7 +137,7 @@ pub fn parse_revolut_transactions(
     log::info!("Incomes: {:?}", incomes);
 
     let mut transactions: Vec<(String, crate::Currency)> = vec![];
-    let mut iter = std::iter::zip(dates, incomes);
+    let iter = std::iter::zip(dates, incomes);
     iter.for_each(|(d, m)| {
         transactions.push((d, m));
     });

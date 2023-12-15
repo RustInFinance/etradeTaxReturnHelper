@@ -37,6 +37,14 @@ impl Currency {
             Currency::USD(_) => Currency::USD(val),
         }
     }
+
+    pub fn derive_exchange(&self, date: String) -> Exchange {
+        match self {
+            Currency::EUR(_) => Exchange::EUR(date),
+            Currency::PLN(_) => Exchange::PLN(date),
+            Currency::USD(_) => Exchange::USD(date),
+        }
+    }
 }
 
 ///

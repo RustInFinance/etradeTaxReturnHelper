@@ -91,7 +91,8 @@ pub fn create_detailed_revolut_transactions(
         .iter()
         .try_for_each(|(transaction_date, gross)| {
             let (exchange_rate_date, exchange_rate) = dates
-                [&crate::Exchange::USD(transaction_date.clone())]
+                //[&crate::Exchange::USD(transaction_date.clone())]
+                [&gross.derive_exchange(transaction_date.clone())]
                 .clone()
                 .unwrap();
 
@@ -141,7 +142,7 @@ pub fn create_detailed_div_transactions(
             log::info!("{}", msg);
             detailed_transactions.push(transaction);
             Ok::<(), &str>(())
-        });
+        })?;
     Ok(detailed_transactions)
 }
 
@@ -209,20 +210,20 @@ mod tests {
 
     #[test]
     fn test_create_detailed_revolut_transactions_eur() -> Result<(), String> {
-        let parsed_transactions = Ok(vec![
+        let parsed_transactions = vec![
             ("03/01/21".to_owned(), crate::Currency::EUR(0.05)),
             ("04/11/21".to_owned(), crate::Currency::EUR(0.07)),
-        ]);
+        ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
 
         dates.insert(
-            crate::Exchange::PLN("03/01/21".to_owned()),
+            crate::Exchange::EUR("03/01/21".to_owned()),
             Some(("02/28/21".to_owned(), 2.0)),
         );
         dates.insert(
-            crate::Exchange::PLN("04/11/21".to_owned()),
+            crate::Exchange::EUR("04/11/21".to_owned()),
             Some(("04/10/21".to_owned(), 3.0)),
         );
 
@@ -233,14 +234,14 @@ mod tests {
             Ok(vec![
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
-                    gross: crate::Currency::EUR(0.44),
+                    gross: crate::Currency::EUR(0.05),
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
-                    gross: crate::Currency::EUR(0.45),
+                    gross: crate::Currency::EUR(0.07),
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
@@ -252,10 +253,10 @@ mod tests {
 
     #[test]
     fn test_create_detailed_revolut_transactions_pln() -> Result<(), String> {
-        let parsed_transactions = Ok(vec![
+        let parsed_transactions = vec![
             ("03/01/21".to_owned(), crate::Currency::PLN(0.44)),
             ("04/11/21".to_owned(), crate::Currency::PLN(0.45)),
-        ]);
+        ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();

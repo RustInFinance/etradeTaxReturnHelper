@@ -67,7 +67,7 @@ impl etradeTaxReturnHelper::Residency for PL {
             let (from, date) = match exchange {
                 etradeTaxReturnHelper::Exchange::USD(date) => ("usd", date),
                 etradeTaxReturnHelper::Exchange::EUR(date) => ("eur", date),
-                etradeTaxReturnHelper::Exchange::PLN(date) => {
+                etradeTaxReturnHelper::Exchange::PLN(_) => {
                     *val = Some(("N/A".to_owned(), 1.0));
                     return Ok::<(), String>(());
                 } // For PLN to PLN follow fast path

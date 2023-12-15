@@ -11,7 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Add Tax computation for revolut transactions
+//TODO: TEST if this works, clean cosmetic
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
@@ -108,7 +108,7 @@ mod tests {
             None,
         );
 
-        rd.get_exchange_rates(&mut dates);
+        rd.get_exchange_rates(&mut dates)?;
 
         let (exchange_rate_date, exchange_rate) = dates
             [&etradeTaxReturnHelper::Exchange::USD("02/21/23".to_owned())]
@@ -136,7 +136,7 @@ mod tests {
             None,
         );
 
-        rd.get_exchange_rates(&mut dates);
+        rd.get_exchange_rates(&mut dates)?;
 
         let (exchange_rate_date, exchange_rate) = dates
             [&etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned())]
@@ -164,7 +164,7 @@ mod tests {
             None,
         );
 
-        rd.get_exchange_rates(&mut dates);
+        rd.get_exchange_rates(&mut dates)?;
 
         let (exchange_rate_date, exchange_rate) = dates
             [&etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned())]

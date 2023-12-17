@@ -154,7 +154,7 @@ pub mod gui {
         load_button.set_callback(move |_| {
             let mut chooser = dialog::FileChooser::new(
                 ".",
-                "*.{pdf,xlsx}",
+                "*.{pdf,xlsx,csv}",
                 dialog::FileChooserType::Multi,
                 "Choose e-trade documents with transactions (PDF and/or XLSX)",
             );

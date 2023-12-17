@@ -252,7 +252,18 @@ pub fn format_sold_transactions_to_string() {}
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
-) -> Result<(f32, f32, f32, f32, Vec<Transaction>, Vec<Transaction>, Vec<SoldTransaction>), String> {
+) -> Result<
+    (
+        f32,
+        f32,
+        f32,
+        f32,
+        Vec<Transaction>,
+        Vec<Transaction>,
+        Vec<SoldTransaction>,
+    ),
+    String,
+> {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];

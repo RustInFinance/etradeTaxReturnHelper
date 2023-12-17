@@ -315,7 +315,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _,_, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (2930.206, 439.54138, 395.45355, 91.156715)

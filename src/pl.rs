@@ -32,7 +32,10 @@ struct ExchangeRate {
 impl etradeTaxReturnHelper::Residency for PL {
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        >,
     ) -> Result<(), String> {
         // proxies are taken from env vars: http_proxy and https_proxy
         let http_proxy = std::env::var("http_proxy");
@@ -60,7 +63,16 @@ impl etradeTaxReturnHelper::Residency for PL {
 
         let base_exchange_rate_url = "https://api.nbp.pl/api/exchangerates/rates/a/";
 
-        dates.iter_mut().try_for_each(|(date, val)| {
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+            let (from, date) = match exchange {
+                etradeTaxReturnHelper::Exchange::USD(date) => ("usd", date),
+                etradeTaxReturnHelper::Exchange::EUR(date) => ("eur", date),
+                etradeTaxReturnHelper::Exchange::PLN(_) => {
+                    *val = Some(("N/A".to_owned(), 1.0));
+                    return Ok::<(), String>(());
+                } // For PLN to PLN follow fast path
+            };
+
             let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").unwrap();
 
             // Try to get exchange rate going backwards with dates till success
@@ -71,7 +83,7 @@ impl etradeTaxReturnHelper::Residency for PL {
                     .ok_or("Error traversing date")?;
 
                 let exchange_rate_url: String = base_exchange_rate_url.to_string()
-                    + &format!("usd/{}", converted_date.format("%Y-%m-%d"))
+                    + format!("{}/{}", from, converted_date.format("%Y-%m-%d")).as_str()
                     + "/?format=json";
 
                 let body = client.get(&(exchange_rate_url)).send();
@@ -162,6 +174,50 @@ mod tests {
             .iter()
             .zip(&ref_results)
             .for_each(|(a, b)| assert_eq!(a, b));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_exchange_rates_pl() -> Result<(), String> {
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::PLN("07/14/81".to_owned()),
+            None,
+        );
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::PLN("08/14/81".to_owned()),
+            None,
+        );
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::PLN("09/14/81".to_owned()),
+            None,
+        );
+
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(crate::pl::PL {});
+        rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+
+        let mut expected_result: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        expected_result.insert(
+            etradeTaxReturnHelper::Exchange::PLN("07/14/81".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+        expected_result.insert(
+            etradeTaxReturnHelper::Exchange::PLN("08/14/81".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+        expected_result.insert(
+            etradeTaxReturnHelper::Exchange::PLN("09/14/81".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+
+        assert_eq!(dates, expected_result);
 
         Ok(())
     }

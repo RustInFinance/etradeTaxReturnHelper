@@ -5,9 +5,12 @@ pub struct DE {}
 impl etradeTaxReturnHelper::Residency for DE {
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        >,
     ) -> Result<(), String> {
-        self.get_currency_exchange_rates(dates, "USD", "EUR")
+        self.get_currency_exchange_rates(dates, "EUR")
     }
 
     fn parse_exchange_rates(&self, body: &str) -> Result<(f32, String), String> {

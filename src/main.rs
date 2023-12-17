@@ -11,8 +11,13 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: investemnt info of revolut
+// TODO:  async to get currency
+// TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
+// TODO: Change run_taxation for_Each into try_for_Ech if possible
+// TODO: taxation of EUR instruments in US
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {
     myapp
@@ -71,7 +76,7 @@ fn main() {
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let (gross_div, tax_div, gross_sold, cost_sold) = match run_taxation(&rd, pdfnames) {
-        Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+        Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
             (gross_div, tax_div, gross_sold, cost_sold)
         }
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
@@ -94,12 +99,23 @@ mod tests {
     fn test_exchange_rate_de() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(de::DE {});
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
-            std::collections::HashMap::new();
-        dates.insert("02/21/23".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
 
-        let (exchange_rate_date, exchange_rate) = dates.remove("02/21/23").unwrap().unwrap();
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::USD("02/21/23".to_owned()),
+            None,
+        );
+
+        rd.get_exchange_rates(&mut dates)?;
+
+        let (exchange_rate_date, exchange_rate) = dates
+            [&etradeTaxReturnHelper::Exchange::USD("02/21/23".to_owned())]
+            .clone()
+            .unwrap();
+
         assert_eq!(
             (exchange_rate_date, exchange_rate),
             ("2023-02-20".to_owned(), 0.93561)
@@ -111,11 +127,23 @@ mod tests {
     fn test_exchange_rate_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
-            std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
-        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned()),
+            None,
+        );
+
+        rd.get_exchange_rates(&mut dates)?;
+
+        let (exchange_rate_date, exchange_rate) = dates
+            [&etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned())]
+            .clone()
+            .unwrap();
+
         assert_eq!(
             (exchange_rate_date, exchange_rate),
             ("2021-02-26".to_owned(), 3.7247)
@@ -126,11 +154,24 @@ mod tests {
     #[test]
     fn test_exchange_rate_us() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(us::US {});
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
-            std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(), None);
-        rd.get_exchange_rates(&mut dates).unwrap();
-        let (exchange_rate_date, exchange_rate) = dates.remove("03/01/21").unwrap().unwrap();
+
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned()),
+            None,
+        );
+
+        rd.get_exchange_rates(&mut dates)?;
+
+        let (exchange_rate_date, exchange_rate) = dates
+            [&etradeTaxReturnHelper::Exchange::USD("03/01/21".to_owned())]
+            .clone()
+            .unwrap();
+
         assert_eq!((exchange_rate_date, exchange_rate), ("N/A".to_owned(), 1.0));
         Ok(())
     }
@@ -243,7 +284,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (14062.57, 2109.3772, 395.45355, 91.156715)
@@ -274,7 +315,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (2930.206, 439.54138, 395.45355, 91.156715)
@@ -301,7 +342,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (3272.3125, 490.82773, 0.0, 0.0),

@@ -81,31 +81,69 @@ pub fn reconstruct_sold_transactions(
     Ok(detailed_sold_transactions)
 }
 
-pub fn create_detailed_div_transactions(
-    transactions: Vec<(String, f32, f32)>,
-    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
-) -> Vec<Transaction> {
+pub fn create_detailed_revolut_transactions(
+    transactions: Vec<(String, crate::Currency)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
+
     transactions
         .iter()
-        .for_each(|(transaction_date, gross_us, tax_us)| {
-            let (exchange_rate_date, exchange_rate) = dates[transaction_date].clone().unwrap();
+        .try_for_each(|(transaction_date, gross)| {
+            let (exchange_rate_date, exchange_rate) = dates
+                //[&crate::Exchange::USD(transaction_date.clone())]
+                [&gross.derive_exchange(transaction_date.clone())]
+                .clone()
+                .unwrap();
 
             let transaction = Transaction {
                 transaction_date: transaction_date.clone(),
-                gross_us: gross_us.clone(),
-                tax_us: tax_us.clone(),
+                gross: *gross,
+                //Revolut does not take taxes in savings account
+                tax_paid: gross.derive(0.0),
                 exchange_rate_date,
                 exchange_rate,
             };
 
-            let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("REVOLUT")?;
 
             println!("{}", msg);
             log::info!("{}", msg);
             detailed_transactions.push(transaction);
-        });
-    detailed_transactions
+            Ok::<(), &str>(())
+        })?;
+    Ok(detailed_transactions)
+}
+
+pub fn create_detailed_div_transactions(
+    transactions: Vec<(String, f32, f32)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<Transaction>, &str> {
+    let mut detailed_transactions: Vec<Transaction> = Vec::new();
+    transactions
+        .iter()
+        .try_for_each(|(transaction_date, gross_us, tax_us)| {
+            let (exchange_rate_date, exchange_rate) = dates
+                [&crate::Exchange::USD(transaction_date.clone())]
+                .clone()
+                .unwrap();
+
+            let transaction = Transaction {
+                transaction_date: transaction_date.clone(),
+                gross: crate::Currency::USD(*gross_us as f64),
+                tax_paid: crate::Currency::USD(*tax_us as f64),
+                exchange_rate_date,
+                exchange_rate,
+            };
+
+            let msg = transaction.format_to_print("DIV")?;
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+            detailed_transactions.push(transaction);
+            Ok::<(), &str>(())
+        })?;
+    Ok(detailed_transactions)
 }
 
 //    pub trade_date: String,
@@ -119,15 +157,19 @@ pub fn create_detailed_div_transactions(
 //    pub exchange_rate_acquisition: f32,
 pub fn create_detailed_sold_transactions(
     transactions: Vec<(String, String, String, f32, f32)>,
-    dates: &std::collections::HashMap<String, Option<(String, f32)>>,
-) -> Vec<SoldTransaction> {
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions.iter().for_each(
         |(trade_date, settlement_date, acquisition_date, income, cost_basis)| {
-            let (exchange_rate_settlement_date, exchange_rate_settlement) =
-                dates[settlement_date].clone().unwrap();
-            let (exchange_rate_acquisition_date, exchange_rate_acquisition) =
-                dates[acquisition_date].clone().unwrap();
+            let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
+                [&crate::Exchange::USD(settlement_date.clone())]
+                .clone()
+                .unwrap();
+            let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates
+                [&crate::Exchange::USD(acquisition_date.clone())]
+                .clone()
+                .unwrap();
 
             let transaction = SoldTransaction {
                 settlement_date: settlement_date.clone(),
@@ -149,7 +191,7 @@ pub fn create_detailed_sold_transactions(
             detailed_transactions.push(transaction);
         },
     );
-    detailed_transactions
+    Ok(detailed_transactions)
 }
 
 #[cfg(test)]
@@ -167,37 +209,130 @@ mod tests {
     }
 
     #[test]
+    fn test_create_detailed_revolut_transactions_eur() -> Result<(), String> {
+        let parsed_transactions = vec![
+            ("03/01/21".to_owned(), crate::Currency::EUR(0.05)),
+            ("04/11/21".to_owned(), crate::Currency::EUR(0.07)),
+        ];
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::EUR("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::EUR("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 3.0)),
+        );
+
+        let transactions = create_detailed_revolut_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross: crate::Currency::EUR(0.05),
+                    tax_paid: crate::Currency::EUR(0.0),
+                    exchange_rate_date: "02/28/21".to_string(),
+                    exchange_rate: 2.0,
+                },
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross: crate::Currency::EUR(0.07),
+                    tax_paid: crate::Currency::EUR(0.0),
+                    exchange_rate_date: "04/10/21".to_string(),
+                    exchange_rate: 3.0,
+                },
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_detailed_revolut_transactions_pln() -> Result<(), String> {
+        let parsed_transactions = vec![
+            ("03/01/21".to_owned(), crate::Currency::PLN(0.44)),
+            ("04/11/21".to_owned(), crate::Currency::PLN(0.45)),
+        ];
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::PLN("03/01/21".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+        dates.insert(
+            crate::Exchange::PLN("04/11/21".to_owned()),
+            Some(("N/A".to_owned(), 1.0)),
+        );
+
+        let transactions = create_detailed_revolut_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross: crate::Currency::PLN(0.44),
+                    tax_paid: crate::Currency::PLN(0.0),
+                    exchange_rate_date: "N/A".to_string(),
+                    exchange_rate: 1.0,
+                },
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross: crate::Currency::PLN(0.45),
+                    tax_paid: crate::Currency::PLN(0.0),
+                    exchange_rate_date: "N/A".to_string(),
+                    exchange_rate: 1.0,
+                },
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_create_detailed_div_transactions() -> Result<(), String> {
         let parsed_transactions: Vec<(String, f32, f32)> = vec![
             ("04/11/21".to_string(), 100.0, 25.0),
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
-        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 3.0)));
+
+        dates.insert(
+            crate::Exchange::USD("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 3.0)),
+        );
 
         let transactions = create_detailed_div_transactions(parsed_transactions, &dates);
 
         assert_eq!(
             transactions,
-            vec![
+            Ok(vec![
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
-                    gross_us: 100.0,
-                    tax_us: 25.0,
+                    gross: crate::Currency::USD(100.0),
+                    tax_paid: crate::Currency::USD(25.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
-                    gross_us: 126.0,
-                    tax_us: 10.0,
+                    gross: crate::Currency::USD(126.0),
+                    tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
                 },
-            ]
+            ])
         );
         Ok(())
     }
@@ -221,22 +356,47 @@ mod tests {
             ),
         ];
 
-        let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
-        dates.insert("01/01/21".to_owned(), Some(("12/30/20".to_owned(), 1.0)));
-        dates.insert("03/01/21".to_owned(), Some(("02/28/21".to_owned(), 2.0)));
-        dates.insert("03/03/21".to_owned(), Some(("03/02/21".to_owned(), 2.5)));
-        dates.insert("06/01/21".to_owned(), Some(("06/03/21".to_owned(), 3.0)));
-        dates.insert("06/03/21".to_owned(), Some(("06/05/21".to_owned(), 4.0)));
-        dates.insert("01/01/21".to_owned(), Some(("02/28/21".to_owned(), 5.0)));
-        dates.insert("01/01/19".to_owned(), Some(("12/30/18".to_owned(), 6.0)));
-        dates.insert("04/11/21".to_owned(), Some(("04/10/21".to_owned(), 7.0)));
+
+        dates.insert(
+            crate::Exchange::USD("01/01/21".to_owned()),
+            Some(("12/30/20".to_owned(), 1.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("03/03/21".to_owned()),
+            Some(("03/02/21".to_owned(), 2.5)),
+        );
+        dates.insert(
+            crate::Exchange::USD("06/01/21".to_owned()),
+            Some(("06/03/21".to_owned(), 3.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("06/03/21".to_owned()),
+            Some(("06/05/21".to_owned(), 4.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("01/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 5.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("01/01/19".to_owned()),
+            Some(("12/30/18".to_owned(), 6.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 7.0)),
+        );
 
         let transactions = create_detailed_sold_transactions(parsed_transactions, &dates);
 
         assert_eq!(
             transactions,
-            vec![
+            Ok(vec![
                 SoldTransaction {
                     trade_date: "03/01/21".to_string(),
                     settlement_date: "03/03/21".to_string(),
@@ -259,7 +419,7 @@ mod tests {
                     exchange_rate_acquisition_date: "12/30/18".to_string(),
                     exchange_rate_acquisition: 6.0,
                 },
-            ]
+            ])
         );
         Ok(())
     }

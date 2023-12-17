@@ -1,3 +1,4 @@
+mod csvparser;
 mod logging;
 mod pdfparser;
 mod transactions;
@@ -9,26 +10,89 @@ type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;
 use transactions::{
-    create_detailed_div_transactions, create_detailed_sold_transactions,
-    reconstruct_sold_transactions, verify_dividends_transactions,
+    create_detailed_div_transactions, create_detailed_revolut_transactions,
+    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    verify_dividends_transactions,
 };
+
+#[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
+pub enum Currency {
+    PLN(f64),
+    EUR(f64),
+    USD(f64),
+}
+
+impl Currency {
+    fn value(&self) -> f64 {
+        match self {
+            Currency::EUR(val) => *val,
+            Currency::PLN(val) => *val,
+            Currency::USD(val) => *val,
+        }
+    }
+    fn derive(&self, val: f64) -> Currency {
+        match self {
+            Currency::EUR(_) => Currency::EUR(val),
+            Currency::PLN(_) => Currency::PLN(val),
+            Currency::USD(_) => Currency::USD(val),
+        }
+    }
+
+    pub fn derive_exchange(&self, date: String) -> Exchange {
+        match self {
+            Currency::EUR(_) => Exchange::EUR(date),
+            Currency::PLN(_) => Exchange::PLN(date),
+            Currency::USD(_) => Exchange::USD(date),
+        }
+    }
+}
+
+///
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Exchange {
+    EUR(String),
+    PLN(String),
+    USD(String),
+}
 
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct Transaction {
     pub transaction_date: String,
-    pub gross_us: f32,
-    pub tax_us: f32,
+    pub gross: Currency,
+    pub tax_paid: Currency,
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
 }
 
 impl Transaction {
-    pub fn format_to_print(&self) -> String {
-        format!(
-                " DIV TRANSACTION date: {}, gross: ${}, tax_us: ${}, exchange_rate: {} , exchange_rate_date: {}",
-                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), &self.gross_us, &self.tax_us, &self.exchange_rate, &self.exchange_rate_date
+    pub fn format_to_print(&self, prefix: &str) -> Result<String, &'static str> {
+        let msg = match (&self.gross,&self.tax_paid) {
+            (Currency::PLN(gross),Currency::PLN(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: {gross} PLN, tax paid: {tax_paid} PLN",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d")
             )
             .to_owned()
+            },
+            (Currency::USD(gross),Currency::USD(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: ${gross}, tax paid: ${tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
+            )
+            .to_owned()
+            },
+
+            (Currency::EUR(gross),Currency::EUR(tax_paid)) => {
+
+                format!("{prefix} TRANSACTION date: {}, gross: €{gross}, tax paid: €{tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
+            )
+            .to_owned()
+            },
+            (_,_) => return Err("Error: Gross and Tax paid currency does not match!"),
+        };
+
+        Ok(msg)
     }
 }
 
@@ -63,7 +127,6 @@ impl SoldTransaction {
 }
 
 pub trait Residency {
-    //    fn get_exchange_rate(&self, transaction_date: &str) -> Result<(String, f32), String>;
     fn present_result(
         &self,
         gross_div: f32,
@@ -73,7 +136,7 @@ pub trait Residency {
     ) -> (Vec<String>, Option<String>);
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
     ) -> Result<(), String>;
 
     // Default parser (not to be used)
@@ -83,8 +146,7 @@ pub trait Residency {
 
     fn get_currency_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<String, Option<(String, f32)>>,
-        from: &str,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
         to: &str,
     ) -> Result<(), String> {
         // proxies are taken from env vars: http_proxy and https_proxy
@@ -109,7 +171,13 @@ pub trait Residency {
 
         let base_exchange_rate_url = "https://www.exchange-rates.org/Rate/";
 
-        dates.iter_mut().try_for_each(|(date, val)| {
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+            let (from, date) = match exchange {
+                Exchange::USD(date) => ("usd", date),
+                Exchange::EUR(date) => ("eur", date),
+                Exchange::PLN(date) => ("pln", date),
+            };
+
             let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
                 .map_err(|x| format!("Unable to convert date {x}"))?;
 
@@ -117,9 +185,9 @@ pub trait Residency {
                 .checked_sub_signed(chrono::Duration::days(1))
                 .ok_or("Error traversing date")?;
 
-            let exchange_rate_url: String = base_exchange_rate_url.to_string()
-                + &format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y"))
-                + "/?format=json";
+            let fms =
+                format!("{}/{}/{}", from, to, converted_date.format("%m-%d-%Y")) + "/?format=json";
+            let exchange_rate_url: String = base_exchange_rate_url.to_string() + fms.as_str();
 
             let body = client.get(&(exchange_rate_url)).send();
             let actual_body = body.map_err(|_| {
@@ -155,12 +223,12 @@ fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.gross_us)
+        .map(|x| x.exchange_rate * x.gross.value() as f32)
         .sum();
     // Tax paid in US in PLN
     let tax_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.tax_us)
+        .map(|x| x.exchange_rate * x.tax_paid.value() as f32)
         .sum();
     (gross_us_pl, tax_us_pl)
 }
@@ -184,23 +252,38 @@ pub fn format_sold_transactions_to_string() {}
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
-) -> Result<(f32, f32, f32, f32, Vec<Transaction>, Vec<SoldTransaction>), String> {
+) -> Result<
+    (
+        f32,
+        f32,
+        f32,
+        f32,
+        Vec<Transaction>,
+        Vec<Transaction>,
+        Vec<SoldTransaction>,
+    ),
+    String,
+> {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut parsed_revolut_transactions: Vec<(String, Currency)> = vec![];
 
-    // 1. Parse PDF and XLSX documents to get list of transactions
-    names.iter().for_each(|x| {
+    // 1. Parse PDF,XLSX and CSV documents to get list of transactions
+    names.iter().try_for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x);
+            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x)?;
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
+        } else if x.contains(".xlsx") {
+            parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else {
-            parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x));
+            parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
         }
-    });
+        Ok::<(), &str>(())
+    })?;
     // 2. Verify Transactions
     verify_dividends_transactions(&parsed_div_transactions)?;
     log::info!("Dividends transactions are consistent");
@@ -213,43 +296,63 @@ pub fn run_taxation(
     // Gather all trade , settlement and transaction dates into hash map to be passed to
     // get_exchange_rate
     // Hash map : Key(event date) -> (preceeding date, exchange_rate)
-    let mut dates: std::collections::HashMap<String, Option<(String, f32)>> =
+    let mut dates: std::collections::HashMap<Exchange, Option<(String, f32)>> =
         std::collections::HashMap::new();
     parsed_div_transactions
         .iter()
         .for_each(|(trade_date, _, _)| {
-            if dates.contains_key(trade_date) == false {
-                dates.insert(trade_date.clone(), None);
+            let ex = Exchange::USD(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
         });
     detailed_sold_transactions.iter().for_each(
         |(trade_date, settlement_date, acquisition_date, _, _)| {
-            if dates.contains_key(trade_date) == false {
-                dates.insert(trade_date.clone(), None);
+            let ex = Exchange::USD(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
-            if dates.contains_key(settlement_date) == false {
-                dates.insert(settlement_date.clone(), None);
+            let ex = Exchange::USD(settlement_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
-            if dates.contains_key(acquisition_date) == false {
-                dates.insert(acquisition_date.clone(), None);
+            let ex = Exchange::USD(acquisition_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
             }
         },
     );
+    parsed_revolut_transactions
+        .iter()
+        .for_each(|(trade_date, currency)| {
+            let ex = match currency {
+                Currency::EUR(_) => Exchange::EUR(trade_date.clone()),
+                Currency::PLN(_) => Exchange::PLN(trade_date.clone()),
+                Currency::USD(_) => Exchange::USD(trade_date.clone()),
+            };
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+        });
 
-    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+&x)?;
+    rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
-    let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates);
-    let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates);
+    let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
+    let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
+    let revolut_transactions =
+        create_detailed_revolut_transactions(parsed_revolut_transactions, &dates)?;
 
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
+    let (gross_revolut, cost_revolut) = compute_div_taxation(&revolut_transactions);
     Ok((
         gross_div,
         tax_div,
-        gross_sold,
-        cost_sold,
+        gross_sold + gross_revolut, // We put sold and savings income into the same column
+        cost_sold + cost_revolut,
         transactions,
+        revolut_transactions,
         sold_transactions,
     ))
 }
@@ -262,8 +365,8 @@ mod tests {
         // Init Transactions
         let transactions: Vec<Transaction> = vec![Transaction {
             transaction_date: "N/A".to_string(),
-            gross_us: 100.0,
-            tax_us: 25.0,
+            gross: crate::Currency::USD(100.0),
+            tax_paid: crate::Currency::USD(25.0),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
         }];
@@ -277,15 +380,15 @@ mod tests {
         let transactions: Vec<Transaction> = vec![
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross_us: 100.0,
-                tax_us: 25.0,
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(25.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross_us: 126.0,
-                tax_us: 10.0,
+                gross: crate::Currency::USD(126.0),
+                tax_paid: crate::Currency::USD(10.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
             },
@@ -293,6 +396,55 @@ mod tests {
         assert_eq!(
             compute_div_taxation(&transactions),
             (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_revolut_savings_taxation_pln() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::PLN(0.44),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::PLN(0.45),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+            },
+        ];
+        assert_eq!(
+            compute_div_taxation(&transactions),
+            (0.44 * 1.0 + 0.45 * 1.0, 0.0)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_revolut_savings_taxation_eur() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::EUR(0.44),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::EUR(0.45),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+            },
+        ];
+        assert_eq!(
+            compute_div_taxation(&transactions),
+            (0.44 * 2.0 + 0.45 * 3.0, 0.0)
         );
         Ok(())
     }

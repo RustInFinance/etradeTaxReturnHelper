@@ -9,9 +9,11 @@ pub use crate::logging::ResultExt;
 /// aqusition cost of sold stock (aquisition_cost)
 /// adjusted aquisition cost of sold stock (cost_basis)
 /// income from sold stock (total_proceeds)
-pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f32, f32)> {
-    let mut excel: Xlsx<_> = open_workbook(xlsxtoparse)
-        .expect_and_log(&format!("Error opening XLSX file: {}", xlsxtoparse));
+pub fn parse_gains_and_losses(
+    xlsxtoparse: &str,
+) -> Result<Vec<(String, String, f32, f32, f32)>, &str> {
+    let mut excel: Xlsx<_> =
+        open_workbook(xlsxtoparse).map_err(|_| "Error opening XLSX file: {}")?;
     let name = excel
         .sheet_names()
         .first()
@@ -88,7 +90,7 @@ pub fn parse_gains_and_losses(xlsxtoparse: &str) -> Vec<(String, String, f32, f3
         }
     }
     log::info!("G&L Transactions: {:#?}", transactions);
-    transactions
+    Ok(transactions)
 }
 
 #[cfg(test)]
@@ -99,7 +101,7 @@ mod tests {
     fn test_parse_gain_and_losses() -> Result<(), String> {
         assert_eq!(
             parse_gains_and_losses("data/G&L_Collapsed.xlsx"),
-            (vec![
+            Ok((vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -114,11 +116,11 @@ mod tests {
                     29.28195,
                     43.67
                 )
-            ])
+            ]))
         );
         assert_eq!(
             parse_gains_and_losses("data/G&L_Expanded.xlsx"),
-            (vec![
+            Ok((vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -133,7 +135,7 @@ mod tests {
                     29.28195,
                     43.67
                 )
-            ])
+            ]))
         );
 
         Ok(())

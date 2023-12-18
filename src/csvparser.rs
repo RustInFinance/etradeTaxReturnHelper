@@ -160,6 +160,23 @@ fn parse_incomes(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
     Ok(incomes)
 }
 
+fn parse_cashflow(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
+    let mut cashflow: Vec<crate::Currency> = vec![];
+    let total_amount = df
+        .column("Total Amount")
+        .map_err(|_| "Error: Unable to select Total Amount")?;
+    let possible_cashflow = total_amount
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+    possible_cashflow.into_iter().try_for_each(|x| {
+        if let Some(d) = x {
+            cashflow.push(extract_cash(d)?);
+        }
+        Ok::<(), &str>(())
+    })?;
+    Ok(cashflow)
+}
+
 pub fn parse_revolut_transactions(
     csvtoparse: &str,
 ) -> Result<Vec<(String, crate::Currency)>, &str> {
@@ -199,6 +216,8 @@ pub fn parse_revolut_transactions(
         log::info!("Detected Investment account statement: {csvtoparse}");
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
+        let dates = parse_investment_transaction_dates(&filtred_df)?;
+        log::info!("Investment/Fees Dates: {:?}", dates);
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}");
     }
@@ -231,6 +250,27 @@ mod tests {
 
         Ok(())
     }
+
+    
+    #[test]
+    fn test_parse_cashflow() -> Result<(), String> {
+        let moneyin = Series::new("Total Amount", vec!["$2.94", "-$0.51"]);
+        let description = Series::new("Description", vec!["DIVIDEND", "CUSTODY FEE"]);
+
+        let df =
+            DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(
+            parse_cashflow(df),
+            Ok(vec![
+                crate::Currency::USD(2.94),
+                crate::Currency::USD(-0.51)
+            ])
+        );
+
+        Ok(())
+    }
+
 
     #[test]
     fn test_parse_incomes() -> Result<(), String> {

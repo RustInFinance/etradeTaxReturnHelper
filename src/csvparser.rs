@@ -34,6 +34,29 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     }
 }
 
+fn extract_investment_gains_and_costs_transactions(
+    df: &DataFrame,
+) -> Result<DataFrame, &'static str> {
+    let mut df_transactions = df
+        .select(&["Date", "Type", "Total Amount"])
+        .map_err(|_| "Error: Unable to select description")?;
+
+    let intrest_rate_mask = df_transactions
+        .column("Type")
+        .map_err(|_| "Error: Unable to get Type")?
+        .equal("DIVIDEND")
+        .expect("Error creating mask")
+        | df_transactions
+            .column("Type")
+            .map_err(|_| "Error: Unable to get Type")?
+            .equal("CUSTODY FEE")
+            .expect("Error creating mask");
+
+    let filtred_df = df.filter(&intrest_rate_mask).expect("Error filtering");
+
+    Ok(filtred_df)
+}
+
 fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
     // 1. Get rows with transactions
     let mut df_transactions = df
@@ -74,6 +97,28 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
     // I need to get (Currecy, Transaction Data and amount)
 
     Ok(filtred_df)
+}
+
+fn parse_investment_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> {
+    let date = df
+        .column("Date")
+        .map_err(|_| "Error: Unable to select Complete Date")?;
+    let mut dates: Vec<String> = vec![];
+    let possible_dates = date
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+    possible_dates.into_iter().try_for_each(|x| {
+        if let Some(d) = x {
+            let cd = chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%dT%H:%M:%S%.fZ")
+                .map_err(|_| "Error converting cell to NaiveDate")?
+                .format("%m/%d/%y")
+                .to_string();
+            dates.push(cd);
+        }
+        Ok::<(), &str>(())
+    })?;
+
+    Ok(dates)
 }
 
 fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> {
@@ -126,22 +171,37 @@ pub fn parse_revolut_transactions(
 
     log::info!("CSV DataFrame: {df}");
 
-    let filtred_df = extract_intrest_rate_transactions(&df)?;
-
-    log::info!("DF: {filtred_df}");
-
-    let dates = parse_transaction_dates(&filtred_df)?;
-    log::info!("Dates: {:?}", dates);
-
-    let incomes = parse_incomes(filtred_df)?;
-    log::info!("Incomes: {:?}", incomes);
+    // TODO: If there is interest rate transactions then proceed with this path
 
     let mut transactions: Vec<(String, crate::Currency)> = vec![];
-    let iter = std::iter::zip(dates, incomes);
-    iter.for_each(|(d, m)| {
-        transactions.push((d, m));
-    });
 
+    if df
+        .select(&["Completed Date", "Description", "Money in"])
+        .is_ok()
+    {
+        log::info!("Detected Savings account statement: {csvtoparse}");
+
+        let filtred_df = extract_intrest_rate_transactions(&df)?;
+
+        log::info!("Filtered data of Interest: {filtred_df}");
+
+        let dates = parse_transaction_dates(&filtred_df)?;
+        log::info!("Dates: {:?}", dates);
+
+        let incomes = parse_incomes(filtred_df)?;
+        log::info!("Incomes: {:?}", incomes);
+
+        let iter = std::iter::zip(dates, incomes);
+        iter.for_each(|(d, m)| {
+            transactions.push((d, m));
+        });
+    } else if df.select(&["Type", "Price per share"]).is_ok() {
+        log::info!("Detected Investment account statement: {csvtoparse}");
+        let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
+        log::info!("Filtered Data of interest: {filtred_df}");
+    } else {
+        return Err("ERROR: Unsupported CSV type of document: {csvtoparse}");
+    }
     Ok(transactions)
 }
 
@@ -204,6 +264,28 @@ mod tests {
 
         assert_eq!(
             parse_transaction_dates(&df),
+            Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_investment_transaction_dates() -> Result<(), String> {
+        let completed_dates = Series::new(
+            "Date",
+            vec!["2023-12-08T14:30:08.150Z", "2023-09-09T05:35:43.253726Z"],
+        );
+        let description = Series::new("Type", vec!["DIVIDEND", "CUSTODY FEE"]);
+
+        let df = DataFrame::new(vec![description, completed_dates])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        let expected_first_date = "12/08/23".to_owned();
+        let expected_second_date = "09/09/23".to_owned();
+
+        assert_eq!(
+            parse_investment_transaction_dates(&df),
             Ok(vec![expected_first_date, expected_second_date])
         );
 

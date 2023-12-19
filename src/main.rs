@@ -11,7 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: investemnt info of revolut
+// TODO: Finish parse_revolut_transactions
 // TODO:  async to get currency
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency

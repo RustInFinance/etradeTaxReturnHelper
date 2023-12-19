@@ -149,11 +149,10 @@ fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> 
     Ok(dates)
 }
 
-// TODO: merge parse_incomes and parse_cashflow by adding next argument
-fn parse_incomes(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
+fn parse_incomes(df: DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'static str> {
     let mut incomes: Vec<crate::Currency> = vec![];
     let moneyin = df
-        .column("Money in")
+        .column(col)
         .map_err(|_| "Error: Unable to select Money In")?;
     let possible_incomes = moneyin
         .utf8()
@@ -165,23 +164,6 @@ fn parse_incomes(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
         Ok::<(), &str>(())
     })?;
     Ok(incomes)
-}
-
-fn parse_cashflow(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
-    let mut cashflow: Vec<crate::Currency> = vec![];
-    let total_amount = df
-        .column("Total Amount")
-        .map_err(|_| "Error: Unable to select Total Amount")?;
-    let possible_cashflow = total_amount
-        .utf8()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
-    possible_cashflow.into_iter().try_for_each(|x| {
-        if let Some(d) = x {
-            cashflow.push(extract_cash(d)?);
-        }
-        Ok::<(), &str>(())
-    })?;
-    Ok(cashflow)
 }
 
 pub fn parse_revolut_transactions(
@@ -212,7 +194,7 @@ pub fn parse_revolut_transactions(
         let dates = parse_transaction_dates(&filtred_df)?;
         log::info!("Dates: {:?}", dates);
 
-        let incomes = parse_incomes(filtred_df)?;
+        let incomes = parse_incomes(filtred_df, "Money in")?;
         log::info!("Incomes: {:?}", incomes);
 
         let iter = std::iter::zip(dates, incomes);
@@ -225,6 +207,8 @@ pub fn parse_revolut_transactions(
         log::info!("Filtered Data of interest: {filtred_df}");
         let dates = parse_investment_transaction_dates(&filtred_df)?;
         log::info!("Investment/Fees Dates: {:?}", dates);
+        let incomes = parse_incomes(filtred_df, "Total Amount")?;
+        log::info!("Incomes: {:?}", incomes);
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}");
     }
@@ -261,25 +245,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_cashflow() -> Result<(), String> {
-        let moneyin = Series::new("Total Amount", vec!["$2.94", "-$0.51"]);
-        let description = Series::new("Description", vec!["DIVIDEND", "CUSTODY FEE"]);
-
-        let df =
-            DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
-
-        assert_eq!(
-            parse_cashflow(df),
-            Ok(vec![
-                crate::Currency::USD(2.94),
-                crate::Currency::USD(-0.51)
-            ])
-        );
-
-        Ok(())
-    }
-
-    #[test]
     fn test_parse_incomes() -> Result<(), String> {
         let moneyin = Series::new("Money in", vec!["+€6,000", "+€3,000"]);
         let description = Series::new("Description", vec!["odsetki", "odsetki"]);
@@ -288,10 +253,29 @@ mod tests {
             DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
 
         assert_eq!(
-            parse_incomes(df),
+            parse_incomes(df, "Money in"),
             Ok(vec![
                 crate::Currency::EUR(6000.00),
                 crate::Currency::EUR(3000.00)
+            ])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_investment_incomes() -> Result<(), String> {
+        let moneyin = Series::new("Total Amount", vec!["$2.94", "-$0.51"]);
+        let description = Series::new("Description", vec!["DIVIDEND", "CUSTODY FEE"]);
+
+        let df =
+            DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(
+            parse_incomes(df, "Total Amount"),
+            Ok(vec![
+                crate::Currency::USD(2.94),
+                crate::Currency::USD(-0.51)
             ])
         );
 

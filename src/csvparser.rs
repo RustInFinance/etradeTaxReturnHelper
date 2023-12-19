@@ -177,10 +177,10 @@ pub fn parse_revolut_transactions(
 
     log::info!("CSV DataFrame: {df}");
 
-    // TODO: If there is interest rate transactions then proceed with this path
-
     let mut transactions: Vec<(String, crate::Currency)> = vec![];
 
+    let dates: Vec<String>;
+    let incomes: Vec<crate::Currency>;
     if df
         .select(&["Completed Date", "Description", "Money in"])
         .is_ok()
@@ -191,27 +191,27 @@ pub fn parse_revolut_transactions(
 
         log::info!("Filtered data of Interest: {filtred_df}");
 
-        let dates = parse_transaction_dates(&filtred_df)?;
+        dates = parse_transaction_dates(&filtred_df)?;
         log::info!("Dates: {:?}", dates);
 
-        let incomes = parse_incomes(filtred_df, "Money in")?;
+        incomes = parse_incomes(filtred_df, "Money in")?;
         log::info!("Incomes: {:?}", incomes);
-
-        let iter = std::iter::zip(dates, incomes);
-        iter.for_each(|(d, m)| {
-            transactions.push((d, m));
-        });
     } else if df.select(&["Type", "Price per share"]).is_ok() {
         log::info!("Detected Investment account statement: {csvtoparse}");
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
-        let dates = parse_investment_transaction_dates(&filtred_df)?;
+        dates = parse_investment_transaction_dates(&filtred_df)?;
         log::info!("Investment/Fees Dates: {:?}", dates);
-        let incomes = parse_incomes(filtred_df, "Total Amount")?;
+        incomes = parse_incomes(filtred_df, "Total Amount")?;
         log::info!("Incomes: {:?}", incomes);
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}");
     }
+
+    let iter = std::iter::zip(dates, incomes);
+    iter.for_each(|(d, m)| {
+        transactions.push((d, m));
+    });
     Ok(transactions)
 }
 
@@ -532,6 +532,20 @@ mod tests {
             expected_result
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_investment_transactions_usd() -> Result<(), String> {
+        let expected_result = Ok(vec![
+            ("11/02/23".to_owned(), crate::Currency::USD(-0.02)),
+            ("12/01/23".to_owned(), crate::Currency::USD(-0.51)),
+            ("12/14/23".to_owned(), crate::Currency::USD(2.94)),
+        ]);
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/revolut_div.csv"),
+            expected_result
+        );
         Ok(())
     }
 }

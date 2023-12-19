@@ -1,15 +1,11 @@
 pub use crate::logging::ResultExt;
 use nom::{
     branch::alt,
-    bytes::complete::is_a,
     bytes::complete::tag,
     bytes::complete::take,
-    bytes::complete::take_till,
-    bytes::complete::take_until,
-    bytes::complete::take_while,
     character::{complete::alphanumeric1, is_digit},
-    combinator::peek,
     error::Error,
+    multi::many_m_n,
     number::complete::double,
     sequence::delimited,
     sequence::tuple,
@@ -19,17 +15,27 @@ use polars::prelude::*;
 
 fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     // We need to erase "," before processing it by parser
-    log::info!("Entry moneyin line: {cashline}");
+    log::info!("Entry moneyin/total amount line: {cashline}");
     let cashline_string: String = cashline.to_string().replace(",", "");
-    log::info!("Processed moneyin line: {cashline_string}");
+    log::info!("Processed moneyin/total amount line: {cashline_string}");
     let mut euro_parser = tuple((tag("+€"), double::<&str, Error<_>>));
+    let mut usd_parser = tuple((many_m_n(0, 1, tag("-")), tag("$"), double::<&str, Error<_>>));
     let mut pln_parser = tuple((tag("+"), double::<&str, Error<_>>, take(1usize), tag("PLN")));
 
     match euro_parser(cashline_string.as_str()) {
         Ok((_, (_, value))) => return Ok(crate::Currency::EUR(value)),
         Err(_) => match pln_parser(cashline_string.as_str()) {
             Ok((_, (_, value, _, _))) => return Ok(crate::Currency::PLN(value)),
-            Err(_) => return Err("Error converting: {cashline_string}"),
+            Err(_) => match usd_parser(cashline_string.as_str()) {
+                Ok((_, (sign, _, value))) => {
+                    if sign.len() == 1 {
+                        return Ok(crate::Currency::USD(-value));
+                    } else {
+                        return Ok(crate::Currency::USD(value));
+                    }
+                }
+                Err(_) => return Err("Error converting: {cashline_string}"),
+            },
         },
     }
 }
@@ -143,6 +149,7 @@ fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> 
     Ok(dates)
 }
 
+// TODO: merge parse_incomes and parse_cashflow by adding next argument
 fn parse_incomes(df: DataFrame) -> Result<Vec<crate::Currency>, &'static str> {
     let mut incomes: Vec<crate::Currency> = vec![];
     let moneyin = df
@@ -248,10 +255,11 @@ mod tests {
             Ok(crate::Currency::PLN(4000.32))
         );
 
+        assert_eq!(extract_cash("$2.94"), Ok(crate::Currency::USD(2.94)));
+        assert_eq!(extract_cash("-$0.51"), Ok(crate::Currency::USD(-0.51)));
         Ok(())
     }
 
-    
     #[test]
     fn test_parse_cashflow() -> Result<(), String> {
         let moneyin = Series::new("Total Amount", vec!["$2.94", "-$0.51"]);
@@ -270,7 +278,6 @@ mod tests {
 
         Ok(())
     }
-
 
     #[test]
     fn test_parse_incomes() -> Result<(), String> {

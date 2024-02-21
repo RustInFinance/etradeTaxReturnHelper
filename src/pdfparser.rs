@@ -307,17 +307,9 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
     Ok(statement_type)
 }
 
-///  This function parses given PDF document
-///  and returns result of parsing which is a tuple of
-///  found Dividends paid transactions (div_transactions),
-///  Sold stock transactions (sold_transactions)
-///  information on transactions in case of parsing trade document (trades)
-///  Dividends paid transaction is:
-///        transaction date, gross_us, tax_us,
-///  Sold stock transaction is :
-///     (trade_date, settlement_date, quantity, price, amount_sold)
-pub fn parse_brokerage_statement(
-    pdftoparse: &str,
+/// Parse borkerage statement document type
+fn parse_brokerage_statement<'a, I>(
+    pages_iter: I,
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
@@ -325,42 +317,21 @@ pub fn parse_brokerage_statement(
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
-> {
-    //2. parsing each pdf
-    let mypdffile = File::<Vec<u8>>::open(pdftoparse)
-        .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
-
+>
+where
+    I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
+{
+    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingTransactionEntry;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
         std::collections::VecDeque::new();
     let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
     // Queue for transaction dates. Pop last one or last two as trade and settlement dates
     let mut transaction_dates: Vec<String> = vec![];
-    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
-    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
 
-    log::info!("Parsing: {} of {} pages", pdftoparse, mypdffile.num_pages());
-
-    let mut pdffile_iter = mypdffile.pages();
-
-    let first_page = pdffile_iter
-        .next()
-        .unwrap()
-        .map_err(|_| "Unable to get first page of PDF file".to_string())?;
-
-    let document_type = recognize_statement(first_page)?;
-
-    match document_type {
-        StatementType::BrokerageStatement => {
-            log::info!("Processing brokerage statement PDF");
-        }
-        StatementType::AccountStatement => {
-            log::info!("Processing Account statement PDF");
-        }
-    }
-
-    for page in pdffile_iter {
+    for page in pages_iter {
         let page = page.unwrap();
         let contents = page.contents.as_ref().unwrap();
         for op in contents.operations.iter() {
@@ -511,6 +482,54 @@ pub fn parse_brokerage_statement(
     Ok((div_transactions, sold_transactions, trades))
 }
 
+///  This function parses given PDF document
+///  and returns result of parsing which is a tuple of
+///  found Dividends paid transactions (div_transactions),
+///  Sold stock transactions (sold_transactions)
+///  information on transactions in case of parsing trade document (trades)
+///  Dividends paid transaction is:
+///        transaction date, gross_us, tax_us,
+///  Sold stock transaction is :
+///     (trade_date, settlement_date, quantity, price, amount_sold)
+pub fn parse_statement(
+    pdftoparse: &str,
+) -> Result<
+    (
+        Vec<(String, f32, f32)>,
+        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
+    ),
+    String,
+> {
+    //2. parsing each pdf
+    let mypdffile = File::<Vec<u8>>::open(pdftoparse)
+        .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
+
+    log::info!("Parsing: {} of {} pages", pdftoparse, mypdffile.num_pages());
+
+    let mut pdffile_iter = mypdffile.pages();
+
+    let first_page = pdffile_iter
+        .next()
+        .unwrap()
+        .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+
+    let document_type = recognize_statement(first_page)?;
+
+    let (div_transactions, sold_transactions, trades) = match document_type {
+        StatementType::BrokerageStatement => {
+            log::info!("Processing brokerage statement PDF");
+            parse_brokerage_statement(pdffile_iter)?
+        }
+        StatementType::AccountStatement => {
+            log::info!("Processing Account statement PDF");
+            todo!("Not implemented yet!");
+        }
+    };
+
+    Ok((div_transactions, sold_transactions, trades))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,7 +606,7 @@ mod tests {
     #[ignore]
     fn test_account_statement() -> Result<(), String> {
         assert_eq!(
-            parse_brokerage_statement("data/MS_ClientStatements_6557_202312.pdf"),
+            parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![
                     ("12/01/23".to_owned(), 386.50, 57.98),
@@ -602,9 +621,9 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_parse_brokerage_statement() -> Result<(), String> {
+    fn test_parse_statement() -> Result<(), String> {
         assert_eq!(
-            parse_brokerage_statement("data/example-divs.pdf"),
+            parse_statement("data/example-divs.pdf"),
             (Ok((
                 vec![("03/01/22".to_owned(), 698.25, 104.74)],
                 vec![],
@@ -612,7 +631,7 @@ mod tests {
             )))
         );
         assert_eq!(
-            parse_brokerage_statement("data/example-sold-wire.pdf"),
+            parse_statement("data/example-sold-wire.pdf"),
             Ok((
                 vec![],
                 vec![(
@@ -628,7 +647,7 @@ mod tests {
 
         //TODO(jczaja): Renable reinvest dividends case as soon as you get some PDFs
         //assert_eq!(
-        //    parse_brokerage_statement("data/example3.pdf"),
+        //    parse_statement("data/example3.pdf"),
         //    (
         //        vec![
         //            ("06/01/21".to_owned(), 0.17, 0.03),
@@ -640,7 +659,7 @@ mod tests {
         //);
 
         //assert_eq!(
-        //    parse_brokerage_statement("data/example5.pdf"),
+        //    parse_statement("data/example5.pdf"),
         //    (
         //        vec![],
         //        vec![],

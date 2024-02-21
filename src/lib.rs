@@ -274,7 +274,7 @@ pub fn run_taxation(
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x)?;
+            let (mut div_t, mut sold_t, _) = pdfparser::parse_statement(x)?;
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
         } else if x.contains(".xlsx") {

@@ -12,10 +12,12 @@ enum StatementType {
 enum TransactionType {
     Dividends,
     Sold,
+    Tax,
     Trade,
 }
 
 enum ParserState {
+    SearchingCashFlowBlock,
     SearchingTransactionEntry,
     ProcessingTransaction(TransactionType),
 }
@@ -341,11 +343,15 @@ where
                     if op.operands.len() > 0 {
                         //transaction_date = op.operands[0];
                         let a = &op.operands[0];
+                        log::info!("Detected PDF object: {a}");
                         match a {
                             Primitive::Array(c) => {
                                 for e in c {
                                     if let Primitive::String(actual_string) = e {
                                         match state {
+                                            ParserState::SearchingCashFlowBlock => {
+                                                log::error!("Brokerage documents do not have cashflow  block!")
+                                            }
                                             ParserState::SearchingTransactionEntry => {
                                                 let rust_string =
                                                     actual_string.clone().into_string().unwrap();
@@ -406,6 +412,7 @@ where
                                                             let mut transaction =
                                                                 processed_sequence.iter();
                                                             match transaction_type {
+                                                                TransactionType::Tax => { return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());},
                                                                 TransactionType::Dividends => {
                                                                     let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
                                                                     let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
@@ -482,6 +489,103 @@ where
     Ok((div_transactions, sold_transactions, trades))
 }
 
+fn check_if_transaction(candidate_string: &str, dates: &mut Vec<String>) -> ParserState {
+
+    let mut state = ParserState::SearchingTransactionEntry;
+
+    log::info!("Searching for transaction through: \"{candidate_string}\"");
+
+    if candidate_string == "DIVIDEND" || candidate_string == "QUALIFIED DIVIDEND"{
+//        create_dividend_parsing_sequence(&mut sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Dividends);
+    } else if candidate_string == "SOLD" {
+//        create_sold_parsing_sequence(&mut sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Sold);
+    } else if candidate_string == "TAX WITHHOLDING" {
+ //       create_trade_parsing_sequence(&mut sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Tax);
+    } else {
+        //if this is date then store it
+        if chrono::NaiveDate::parse_from_str(&candidate_string, "%m/%e").is_ok() {
+            dates.push(candidate_string.to_owned());
+        }
+    }
+
+    state
+}
+
+/// Parse borkerage statement document type
+fn parse_account_statement<'a, I>(
+    pages_iter: I,
+) -> Result<
+    (
+        Vec<(String, f32, f32)>,
+        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
+    ),
+    String,
+>
+where
+    I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
+{
+    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
+    let mut state = ParserState::SearchingCashFlowBlock;
+    let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
+        std::collections::VecDeque::new();
+    let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+    // Queue for transaction dates. Pop last one or last two as trade and settlement dates
+    let mut transaction_dates: Vec<String> = vec![];
+
+    for page in pages_iter {
+        let page = page.unwrap();
+        let contents = page.contents.as_ref().unwrap();
+        for op in contents.operations.iter() {
+            match op.operator.as_ref() {
+                "Tj" => {
+                    // Text show
+                    if op.operands.len() > 0 {
+                        //transaction_date = op.operands[0];
+                        let a = &op.operands[0];
+                        log::info!("Parsing account statement: Detected PDF object: {a}");
+                        match a {
+                            Primitive::String(actual_string) => {
+                                let raw_string = actual_string.clone().into_string();
+                                let rust_string = if let Ok(r) = raw_string {
+                                    r.trim().to_uppercase()
+                                } else {
+                                    "".to_owned()
+                                };
+                                match state {
+                                    ParserState::SearchingCashFlowBlock => {
+                                        // When we find "CASH FLOW ACTIVITY BY DATE" then
+                                        // it is a starting point of transactions we are
+                                        // interested in
+                                        if rust_string == "CASH FLOW ACTIVITY BY DATE" {
+                                            state = ParserState::SearchingTransactionEntry;
+                                        }
+                                    }
+                                    ParserState::SearchingTransactionEntry => {
+                                        state = check_if_transaction(
+                                            &rust_string,
+                                            &mut transaction_dates,
+                                        );
+                                    }
+                                    ParserState::ProcessingTransaction(_) => {}
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok((div_transactions, sold_transactions, trades))
+}
 ///  This function parses given PDF document
 ///  and returns result of parsing which is a tuple of
 ///  found Dividends paid transactions (div_transactions),
@@ -523,7 +627,7 @@ pub fn parse_statement(
         }
         StatementType::AccountStatement => {
             log::info!("Processing Account statement PDF");
-            todo!("Not implemented yet!");
+            parse_account_statement(pdffile_iter)?
         }
     };
 
@@ -610,7 +714,7 @@ mod tests {
             (Ok((
                 vec![
                     ("12/01/23".to_owned(), 386.50, 57.98),
-                    ("12/01/23".to_owned(), 698.25, 104.74)
+                    ("12/01/23".to_owned(), 1.22, 0.00)
                 ],
                 vec![],
                 vec![]
@@ -621,7 +725,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_parse_statement() -> Result<(), String> {
+    fn test_parse_brokerage_statement() -> Result<(), String> {
         assert_eq!(
             parse_statement("data/example-divs.pdf"),
             (Ok((

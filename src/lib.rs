@@ -282,7 +282,7 @@ pub fn run_taxation(
         } else {
             parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
         }
-        Ok::<(), &str>(())
+        Ok::<(), String>(())
     })?;
     // 2. Verify Transactions
     verify_dividends_transactions(&parsed_div_transactions)?;

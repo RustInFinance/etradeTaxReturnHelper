@@ -1,7 +1,13 @@
 use pdf::file::File;
+use pdf::object::PageRc;
 use pdf::primitive::Primitive;
 
 pub use crate::logging::ResultExt;
+
+enum StatementType {
+    BrokerageStatement,
+    AccountStatement,
+}
 
 enum TransactionType {
     Dividends,
@@ -255,6 +261,52 @@ fn yield_sold_transaction(
     Some((trade_date, settlement_date, quantity, price, amount_sold))
 }
 
+/// Recognize whether PDF document is of Brokerage Statement type (old e-trade type of PDF
+/// document) or maybe Single account statment (newer e-trade/morgan stanley type of document)
+fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
+    log::info!("Starting to recognize PDF document type");
+    let contents = page
+        .contents
+        .as_ref()
+        .ok_or("Unable to get content of first PDF page")?;
+
+    let mut statement_type = StatementType::BrokerageStatement;
+    contents.operations.iter().try_for_each(|op| {
+        match op.operator.as_ref() {
+            "Tj" => {
+                // Text show
+                if op.operands.len() > 0 {
+                    //transaction_date = op.operands[0];
+                    let a = &op.operands[0];
+                    log::info!("Detected PDF object: {a}");
+                    match a {
+                        Primitive::String(actual_string) => {
+                            let raw_string = actual_string.clone().into_string();
+                            let rust_string = if let Ok(r) = raw_string {
+                                r.trim().to_uppercase()
+                            } else {
+                                "".to_owned()
+                            };
+
+                            if rust_string == "CLIENT STATEMENT" {
+                                statement_type = StatementType::AccountStatement;
+                                log::info!("PDF parser recognized Account Statement document by finding: \"{rust_string}\"");
+                                return Ok(());
+                            }
+                        },
+
+                        _ => (),
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok::<(),String>(())
+    })?;
+
+    Ok(statement_type)
+}
+
 ///  This function parses given PDF document
 ///  and returns result of parsing which is a tuple of
 ///  found Dividends paid transactions (div_transactions),
@@ -272,11 +324,11 @@ pub fn parse_brokerage_statement(
         Vec<(String, String, i32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
-    &str,
+    String,
 > {
     //2. parsing each pdf
     let mypdffile = File::<Vec<u8>>::open(pdftoparse)
-        .expect_and_log(&format!("Error opening and parsing file: {}", pdftoparse));
+        .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
 
     let mut state = ParserState::SearchingTransactionEntry;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -289,7 +341,26 @@ pub fn parse_brokerage_statement(
     let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
 
     log::info!("Parsing: {} of {} pages", pdftoparse, mypdffile.num_pages());
-    for page in mypdffile.pages() {
+
+    let mut pdffile_iter = mypdffile.pages();
+
+    let first_page = pdffile_iter
+        .next()
+        .unwrap()
+        .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+
+    let document_type = recognize_statement(first_page)?;
+
+    match document_type {
+        StatementType::BrokerageStatement => {
+            log::info!("Processing brokerage statement PDF");
+        }
+        StatementType::AccountStatement => {
+            log::info!("Processing Account statement PDF");
+        }
+    }
+
+    for page in pdffile_iter {
         let page = page.unwrap();
         let contents = page.contents.as_ref().unwrap();
         for op in contents.operations.iter() {
@@ -509,6 +580,22 @@ mod tests {
         assert_eq!(
             yield_sold_transaction(&mut processed_sequence.iter(), &mut transaction_dates),
             None
+        );
+        Ok(())
+    }
+    #[test]
+    #[ignore]
+    fn test_account_statement() -> Result<(), String> {
+        assert_eq!(
+            parse_brokerage_statement("data/MS_ClientStatements_6557_202312.pdf"),
+            (Ok((
+                vec![
+                    ("12/01/23".to_owned(), 386.50, 57.98),
+                    ("12/01/23".to_owned(), 698.25, 104.74)
+                ],
+                vec![],
+                vec![]
+            )))
         );
         Ok(())
     }

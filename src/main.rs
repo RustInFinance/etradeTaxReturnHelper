@@ -11,8 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Finish parse_revolut_transactions
-// TODO: Add UT for parsing investment document
+// TODO: Dividends of revolut should combined with dividends not sold
+// TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results
 // TODO:  async to get currency
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency

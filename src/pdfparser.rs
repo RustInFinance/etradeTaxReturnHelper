@@ -9,6 +9,7 @@ enum StatementType {
     AccountStatement,
 }
 
+#[derive(Clone)]
 enum TransactionType {
     Dividends,
     Sold,
@@ -130,6 +131,50 @@ fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Bo
         patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
     })); // INTC, DLB
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
+}
+
+fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["Tax Withholding".to_owned()],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["INTEL CORP".to_owned()],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["(".to_owned()],
+    }));
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![")".to_owned()],
+    }));
+}
+
+fn create_dividend_fund_parsing_sequence(
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["TREASURY LIQUIDITY FUND".to_owned()],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["$".to_owned()],
+    }));
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
+}
+
+fn create_qualified_dividend_parsing_sequence(
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["INTEL CORP".to_owned()],
+    }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
 }
 
@@ -309,6 +354,96 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
     Ok(statement_type)
 }
 
+fn process_transaction(
+    div_transactions: &mut Vec<(String, f32, f32)>,
+    sold_transactions: &mut Vec<(String, String, i32, f32, f32)>,
+    actual_string: &pdf::primitive::PdfString,
+    transaction_dates: &mut Vec<String>,
+    processed_sequence: &mut Vec<Box<dyn Entry>>,
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+    transaction_type: TransactionType,
+) -> Result<ParserState, String> {
+    let mut state = ParserState::ProcessingTransaction(transaction_type.clone());
+    let possible_obj = sequence.pop_front();
+    match possible_obj {
+        // Move executed parser objects into Vector
+        // attach only i32 and f32 elements to
+        // processed queue
+        Some(mut obj) => {
+            obj.parse(actual_string);
+            // attach to sequence the same string parser if pattern is not met
+            if obj.getstring().is_some() {
+                if obj.is_pattern() == false {
+                    sequence.push_front(obj);
+                }
+            } else {
+                processed_sequence.push(obj);
+            }
+            // If sequence of expected entries is
+            // empty then extract data from
+            // processeed elements
+            if sequence.is_empty() {
+                state = ParserState::SearchingTransactionEntry;
+                let mut transaction = processed_sequence.iter();
+                match transaction_type {
+                    TransactionType::Tax => {
+                        // Ok we assume here that taxation of transaction appears later in document
+                        // than actual transaction that is a subject to taxation
+                        let tax_us = transaction
+                            .next()
+                            .unwrap()
+                            .getf32()
+                            .ok_or("Processing of Tax transaction went wrong")?;
+
+                        // Here we just go through registered transactions and pick the one where
+                        // income is higher than tax and apply tax value
+                        let subject_to_tax = div_transactions
+                            .iter_mut()
+                            .find(|x| x.1 > tax_us)
+                            .ok_or("Error: Unable to find transaction that was taxed")?;
+                        subject_to_tax.2 = tax_us;
+                    }
+                    TransactionType::Dividends => {
+                        let gross_us = transaction
+                            .next()
+                            .unwrap()
+                            .getf32()
+                            .ok_or("Processing of Dividend transaction went wrong")?;
+
+                        div_transactions.push((
+                            transaction_dates
+                                .pop()
+                                .ok_or("Error: missing transaction dates when parsing")?,
+                            gross_us,
+                            0.0, // No tax info yet. It will be added later in Tax section
+                        ));
+                    }
+                    TransactionType::Sold => {
+                        if let Some(trans_details) =
+                            yield_sold_transaction(&mut transaction, transaction_dates)
+                        {
+                            sold_transactions.push(trans_details);
+                        }
+                    }
+                    TransactionType::Trade => {
+                        return Err("TransactionType::Trade should not appear during account statement processing!".to_string());
+                    }
+                }
+                processed_sequence.clear();
+            } else {
+                state = ParserState::ProcessingTransaction(transaction_type);
+            }
+        }
+
+        // In nothing more to be done then just extract
+        // parsed data from paser objects
+        None => {
+            state = ParserState::ProcessingTransaction(transaction_type);
+        }
+    }
+    Ok(state)
+}
+
 /// Parse borkerage statement document type
 fn parse_brokerage_statement<'a, I>(
     pages_iter: I,
@@ -412,7 +547,9 @@ where
                                                             let mut transaction =
                                                                 processed_sequence.iter();
                                                             match transaction_type {
-                                                                TransactionType::Tax => { return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());},
+                                                                TransactionType::Tax => {
+                                                                    return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());
+                                                                }
                                                                 TransactionType::Dividends => {
                                                                     let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
                                                                     let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
@@ -489,25 +626,33 @@ where
     Ok((div_transactions, sold_transactions, trades))
 }
 
-fn check_if_transaction(candidate_string: &str, dates: &mut Vec<String>) -> ParserState {
-
+// TODO: Make UT
+fn check_if_transaction(
+    candidate_string: &str,
+    dates: &mut Vec<String>,
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) -> ParserState {
     let mut state = ParserState::SearchingTransactionEntry;
 
     log::info!("Searching for transaction through: \"{candidate_string}\"");
 
-    if candidate_string == "DIVIDEND" || candidate_string == "QUALIFIED DIVIDEND"{
-//        create_dividend_parsing_sequence(&mut sequence);
+    if candidate_string == "DIVIDEND" {
+        create_dividend_fund_parsing_sequence(sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Dividends);
+    } else if candidate_string == "QUALIFIED DIVIDEND" {
+        create_qualified_dividend_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Dividends);
     } else if candidate_string == "SOLD" {
-//        create_sold_parsing_sequence(&mut sequence);
+        //        create_sold_parsing_sequence(&mut sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Sold);
     } else if candidate_string == "TAX WITHHOLDING" {
- //       create_trade_parsing_sequence(&mut sequence);
+        create_tax_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Tax);
     } else {
-        //if this is date then store it
-        if chrono::NaiveDate::parse_from_str(&candidate_string, "%m/%e").is_ok() {
-            dates.push(candidate_string.to_owned());
+        let datemonth_pattern =
+            regex::Regex::new(r"^(0?[1-9]|1[012])/(0?[1-9]|[12][0-9]|3[01])$").unwrap();
+        if datemonth_pattern.is_match(candidate_string) {
+            dates.push(candidate_string.to_owned() + "/2023"); // TODO get year from PDF
         }
     }
 
@@ -570,9 +715,20 @@ where
                                         state = check_if_transaction(
                                             &rust_string,
                                             &mut transaction_dates,
+                                            &mut sequence,
                                         );
                                     }
-                                    ParserState::ProcessingTransaction(_) => {}
+                                    ParserState::ProcessingTransaction(transaction_type) => {
+                                        state = process_transaction(
+                                            &mut div_transactions,
+                                            &mut sold_transactions,
+                                            &actual_string,
+                                            &mut transaction_dates,
+                                            &mut processed_sequence,
+                                            &mut sequence,
+                                            transaction_type,
+                                        )?
+                                    }
                                 }
                             }
                             _ => (),

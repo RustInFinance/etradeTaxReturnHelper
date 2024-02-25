@@ -499,7 +499,7 @@ where
                     if op.operands.len() > 0 {
                         //transaction_date = op.operands[0];
                         let a = &op.operands[0];
-                        log::info!("Detected PDF object: {a}");
+                        log::trace!("Detected PDF object: {a}");
                         match a {
                             Primitive::Array(c) => {
                                 for e in c {

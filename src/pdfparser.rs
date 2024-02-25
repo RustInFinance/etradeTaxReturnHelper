@@ -9,7 +9,7 @@ enum StatementType {
     AccountStatement,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum TransactionType {
     Dividends,
     Sold,
@@ -17,6 +17,7 @@ enum TransactionType {
     Trade,
 }
 
+#[derive(Debug, PartialEq)]
 enum ParserState {
     SearchingCashFlowBlock,
     SearchingTransactionEntry,
@@ -952,6 +953,32 @@ mod tests {
                 vec![]
             )))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_check_if_transaction() -> Result<(), String> {
+        let rust_string = "DIVIDEND";
+        let mut transaction_dates = vec![];
+        let mut sequence = std::collections::VecDeque::new();
+
+        assert_eq!(
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
+            ParserState::ProcessingTransaction(TransactionType::Dividends)
+        );
+
+        let rust_string = "QUALIFIED DIVIDEND";
+        assert_eq!(
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
+            ParserState::ProcessingTransaction(TransactionType::Dividends)
+        );
+
+        let rust_string = "CASH";
+        assert_eq!(
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
+            ParserState::SearchingTransactionEntry
+        );
+
         Ok(())
     }
 

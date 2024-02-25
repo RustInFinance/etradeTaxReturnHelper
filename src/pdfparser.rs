@@ -9,7 +9,7 @@ enum StatementType {
     AccountStatement,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 enum TransactionType {
     Dividends,
     Sold,
@@ -62,7 +62,7 @@ impl Entry for F32Entry {
             .replace(")", "")
             .parse::<f32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
-        log::info!("Parsed f32 value: {}",self.val);
+        log::info!("Parsed f32 value: {}", self.val);
     }
     fn getf32(&self) -> Option<f32> {
         Some(self.val)
@@ -82,7 +82,7 @@ impl Entry for I32Entry {
         self.val = mystr
             .parse::<i32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
-        log::info!("Parsed i32 value: {}",self.val);
+        log::info!("Parsed i32 value: {}", self.val);
     }
     fn geti32(&self) -> Option<i32> {
         Some(self.val)
@@ -102,7 +102,7 @@ impl Entry for DateEntry {
 
         if chrono::NaiveDate::parse_from_str(&mystr, "%m/%d/%y").is_ok() {
             self.val = mystr;
-            log::info!("Parsed date value: {}",self.val);
+            log::info!("Parsed date value: {}", self.val);
         }
     }
     fn getdate(&self) -> Option<String> {
@@ -121,7 +121,7 @@ impl Entry for StringEntry {
             .clone()
             .into_string()
             .expect(&format!("Error parsing : {:#?} to f32", pstr));
-        log::info!("Parsed String value: {}",self.val);
+        log::info!("Parsed String value: {}", self.val);
     }
     fn getstring(&self) -> Option<String> {
         Some(self.val.clone())
@@ -739,7 +739,7 @@ where
                                         );
                                     }
                                     ParserState::ProcessingTransaction(transaction_type) => {
-                                       state = process_transaction(
+                                        state = process_transaction(
                                             &mut div_transactions,
                                             &mut sold_transactions,
                                             &actual_string,
@@ -881,8 +881,11 @@ mod tests {
 
     #[test]
     fn test_transaction_validation_more_dates() -> Result<(), String> {
-        let mut transaction_dates: Vec<String> =
-            vec!["11/28/22".to_string(), "11/29/22".to_string(), "12/01/22".to_string()];
+        let mut transaction_dates: Vec<String> = vec![
+            "11/28/22".to_string(),
+            "11/29/22".to_string(),
+            "12/01/22".to_string(),
+        ];
         let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
             std::collections::VecDeque::new();
         create_sold_parsing_sequence(&mut sequence);
@@ -923,7 +926,13 @@ mod tests {
                     ("12/1/2023".to_owned(), 1.22, 0.00),
                     ("12/1/2023".to_owned(), 386.50, 57.98),
                 ],
-                vec![("12/21/2023".to_owned(), "12/26/2023".to_owned(), 82.0, 46.45, 3808.86)],
+                vec![(
+                    "12/21/2023".to_owned(),
+                    "12/26/2023".to_owned(),
+                    82.0,
+                    46.45,
+                    3808.86
+                )],
                 vec![]
             )))
         );

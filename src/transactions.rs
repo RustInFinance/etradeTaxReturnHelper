@@ -529,7 +529,7 @@ mod tests {
         let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![(
             "11/07/22".to_string(), // trade date
             "11/09/22".to_string(), // settlement date
-            173.0,                    // quantity
+            173.0,                  // quantity
             28.2035,                // price
             4877.36,                // amount sold
         )];

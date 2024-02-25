@@ -60,6 +60,7 @@ impl Entry for F32Entry {
             .replace(",", "")
             .replace("(", "")
             .replace(")", "")
+            .replace("$", "")
             .parse::<f32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
         log::info!("Parsed f32 value: {}", self.val);
@@ -157,7 +158,7 @@ fn create_dividend_fund_parsing_sequence(
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["$".to_owned()],
+        patterns: vec!["DIV PAYMENT".to_owned()],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
 }
@@ -385,8 +386,8 @@ fn process_transaction(
             obj.parse(actual_string);
             // attach to sequence the same string parser if pattern is not met
             match obj.getstring() {
-                Some(_) => {
-                    if obj.is_pattern() == false {
+                Some(token) => {
+                    if obj.is_pattern() == false && token != "$" {
                         sequence.push_front(obj);
                     }
                 }
@@ -724,37 +725,40 @@ where
                             Primitive::String(actual_string) => {
                                 let raw_string = actual_string.clone().into_string();
                                 let rust_string = if let Ok(r) = raw_string {
-                                    r.trim().to_uppercase()
+                                    r.trim().to_uppercase().replace("$", "")
                                 } else {
                                     "".to_owned()
                                 };
-                                match state {
-                                    ParserState::SearchingCashFlowBlock => {
-                                        // When we find "CASH FLOW ACTIVITY BY DATE" then
-                                        // it is a starting point of transactions we are
-                                        // interested in
-                                        if rust_string == "CASH FLOW ACTIVITY BY DATE" {
-                                            state = ParserState::SearchingTransactionEntry;
-                                            log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
+
+                                if rust_string != "" {
+                                    match state {
+                                        ParserState::SearchingCashFlowBlock => {
+                                            // When we find "CASH FLOW ACTIVITY BY DATE" then
+                                            // it is a starting point of transactions we are
+                                            // interested in
+                                            if rust_string == "CASH FLOW ACTIVITY BY DATE" {
+                                                state = ParserState::SearchingTransactionEntry;
+                                                log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
+                                            }
                                         }
-                                    }
-                                    ParserState::SearchingTransactionEntry => {
-                                        state = check_if_transaction(
-                                            &rust_string,
-                                            &mut transaction_dates,
-                                            &mut sequence,
-                                        );
-                                    }
-                                    ParserState::ProcessingTransaction(transaction_type) => {
-                                        state = process_transaction(
-                                            &mut div_transactions,
-                                            &mut sold_transactions,
-                                            &actual_string,
-                                            &mut transaction_dates,
-                                            &mut processed_sequence,
-                                            &mut sequence,
-                                            transaction_type,
-                                        )?
+                                        ParserState::SearchingTransactionEntry => {
+                                            state = check_if_transaction(
+                                                &rust_string,
+                                                &mut transaction_dates,
+                                                &mut sequence,
+                                            );
+                                        }
+                                        ParserState::ProcessingTransaction(transaction_type) => {
+                                            state = process_transaction(
+                                                &mut div_transactions,
+                                                &mut sold_transactions,
+                                                &actual_string,
+                                                &mut transaction_dates,
+                                                &mut processed_sequence,
+                                                &mut sequence,
+                                                transaction_type,
+                                            )?
+                                        }
                                     }
                                 }
                             }
@@ -851,6 +855,11 @@ mod tests {
         let mut f = F32Entry { val: 0.0 };
         f.parse(&pdf::primitive::PdfString::new(data));
         assert_eq!(f.getf32(), Some(57.98));
+
+        let data: Vec<u8> = vec!['$' as u8, '1' as u8, '.' as u8, '2' as u8, '2' as u8];
+        let mut f = F32Entry { val: 0.0 };
+        f.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(f.getf32(), Some(1.22));
 
         let data: Vec<u8> = vec![
             '8' as u8, '2' as u8, '.' as u8, '0' as u8, '0' as u8, '0' as u8,

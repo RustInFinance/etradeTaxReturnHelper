@@ -11,8 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Finish parsing cash flow activity block
 // TODO: get year from account statement document
+// TODO: UT for check_if
 // TODO: Make a parsing of incomplete date
 // TODO: Dividends of revolut should combined with dividends not sold
 // TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results

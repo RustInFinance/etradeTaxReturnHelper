@@ -410,7 +410,7 @@ fn process_transaction(
                             .find(|x| x.1 > tax_us)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
-                        subject_to_tax.2 -= tax_us;
+                        subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
                     }
                     TransactionType::Dividends => {

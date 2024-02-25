@@ -62,6 +62,7 @@ impl Entry for F32Entry {
             .replace(")", "")
             .parse::<f32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
+        log::info!("Parsed f32 value: {}",self.val);
     }
     fn getf32(&self) -> Option<f32> {
         Some(self.val)
@@ -81,6 +82,7 @@ impl Entry for I32Entry {
         self.val = mystr
             .parse::<i32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
+        log::info!("Parsed i32 value: {}",self.val);
     }
     fn geti32(&self) -> Option<i32> {
         Some(self.val)
@@ -100,6 +102,7 @@ impl Entry for DateEntry {
 
         if chrono::NaiveDate::parse_from_str(&mystr, "%m/%d/%y").is_ok() {
             self.val = mystr;
+            log::info!("Parsed date value: {}",self.val);
         }
     }
     fn getdate(&self) -> Option<String> {
@@ -118,6 +121,7 @@ impl Entry for StringEntry {
             .clone()
             .into_string()
             .expect(&format!("Error parsing : {:#?} to f32", pstr));
+        log::info!("Parsed String value: {}",self.val);
     }
     fn getstring(&self) -> Option<String> {
         Some(self.val.clone())
@@ -141,15 +145,7 @@ fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn
         val: String::new(),
         patterns: vec!["INTEL CORP".to_owned()],
     }));
-    sequence.push_back(Box::new(StringEntry {
-        val: String::new(),
-        patterns: vec!["(".to_owned()],
-    }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
-    sequence.push_back(Box::new(StringEntry {
-        val: String::new(),
-        patterns: vec![")".to_owned()],
-    }));
 }
 
 fn create_dividend_fund_parsing_sequence(

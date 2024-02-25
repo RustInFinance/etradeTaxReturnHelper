@@ -9,7 +9,7 @@ enum StatementType {
     AccountStatement,
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 enum TransactionType {
     Dividends,
     Sold,
@@ -58,6 +58,8 @@ impl Entry for F32Entry {
         self.val = mystr
             .trim()
             .replace(",", "")
+            .replace("(", "")
+            .replace(")", "")
             .parse::<f32>()
             .expect(&format!("Error parsing : {} to f32", mystr));
     }
@@ -137,10 +139,6 @@ fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Bo
 fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["Tax Withholding".to_owned()],
-    }));
-    sequence.push_back(Box::new(StringEntry {
-        val: String::new(),
         patterns: vec!["INTEL CORP".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
@@ -179,6 +177,20 @@ fn create_qualified_dividend_parsing_sequence(
 }
 
 fn create_sold_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
+    sequence.push_back(Box::new(I32Entry { val: 0 })); // Quantity
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
+}
+
+fn create_sold_2_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["INTEL CORP".to_owned()],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["ACTED AS AGENT".to_owned()],
+    }));
     sequence.push_back(Box::new(I32Entry { val: 0 })); // Quantity
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
@@ -401,7 +413,9 @@ fn process_transaction(
                             .iter_mut()
                             .find(|x| x.1 > tax_us)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
-                        subject_to_tax.2 = tax_us;
+                        log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
+                        subject_to_tax.2 -= tax_us;
+                        log::info!("Completed parsing Tax transaction");
                     }
                     TransactionType::Dividends => {
                         let gross_us = transaction
@@ -417,6 +431,7 @@ fn process_transaction(
                             gross_us,
                             0.0, // No tax info yet. It will be added later in Tax section
                         ));
+                        log::info!("Completed parsing Dividend transaction");
                     }
                     TransactionType::Sold => {
                         if let Some(trans_details) =
@@ -424,6 +439,7 @@ fn process_transaction(
                         {
                             sold_transactions.push(trans_details);
                         }
+                        log::info!("Completed parsing Sold transaction");
                     }
                     TransactionType::Trade => {
                         return Err("TransactionType::Trade should not appear during account statement processing!".to_string());
@@ -639,15 +655,19 @@ fn check_if_transaction(
     if candidate_string == "DIVIDEND" {
         create_dividend_fund_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Dividends);
+        log::info!("Starting to parse Dividend Fund transaction");
     } else if candidate_string == "QUALIFIED DIVIDEND" {
         create_qualified_dividend_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Dividends);
+        log::info!("Starting to parse Qualified Dividend transaction");
     } else if candidate_string == "SOLD" {
-        //        create_sold_parsing_sequence(&mut sequence);
+        create_sold_2_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Sold);
+        log::info!("Starting to parse Sold transaction");
     } else if candidate_string == "TAX WITHHOLDING" {
         create_tax_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Tax);
+        log::info!("Starting to parse Tax transaction");
     } else {
         let datemonth_pattern =
             regex::Regex::new(r"^(0?[1-9]|1[012])/(0?[1-9]|[12][0-9]|3[01])$").unwrap();
@@ -655,7 +675,6 @@ fn check_if_transaction(
             dates.push(candidate_string.to_owned() + "/2023"); // TODO get year from PDF
         }
     }
-
     state
 }
 
@@ -693,7 +712,7 @@ where
                     if op.operands.len() > 0 {
                         //transaction_date = op.operands[0];
                         let a = &op.operands[0];
-                        log::info!("Parsing account statement: Detected PDF object: {a}");
+                        log::trace!("Parsing account statement: Detected PDF object: {a}");
                         match a {
                             Primitive::String(actual_string) => {
                                 let raw_string = actual_string.clone().into_string();
@@ -709,6 +728,7 @@ where
                                         // interested in
                                         if rust_string == "CASH FLOW ACTIVITY BY DATE" {
                                             state = ParserState::SearchingTransactionEntry;
+                                            log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
                                         }
                                     }
                                     ParserState::SearchingTransactionEntry => {
@@ -719,7 +739,7 @@ where
                                         );
                                     }
                                     ParserState::ProcessingTransaction(transaction_type) => {
-                                        state = process_transaction(
+                                       state = process_transaction(
                                             &mut div_transactions,
                                             &mut sold_transactions,
                                             &actual_string,
@@ -817,6 +837,13 @@ mod tests {
         let mut f = F32Entry { val: 0.0 };
         f.parse(&pdf::primitive::PdfString::new(data));
         assert_eq!(f.getf32(), Some(4877.36));
+
+        let data: Vec<u8> = vec![
+            '(' as u8, '5' as u8, '7' as u8, '.' as u8, '9' as u8, '8' as u8, ')' as u8,
+        ];
+        let mut f = F32Entry { val: 0.0 };
+        f.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(f.getf32(), Some(57.98));
 
         // company code
         let data: Vec<u8> = vec!['D' as u8, 'L' as u8, 'B' as u8];

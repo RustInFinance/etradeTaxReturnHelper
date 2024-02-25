@@ -384,13 +384,16 @@ fn process_transaction(
         Some(mut obj) => {
             obj.parse(actual_string);
             // attach to sequence the same string parser if pattern is not met
-            if obj.getstring().is_some() {
-                if obj.is_pattern() == false {
-                    sequence.push_front(obj);
+            match obj.getstring() {
+                Some(_) => {
+                    if obj.is_pattern() == false {
+                        sequence.push_front(obj);
+                    }
                 }
-            } else {
-                processed_sequence.push(obj);
+
+                None => processed_sequence.push(obj),
             }
+
             // If sequence of expected entries is
             // empty then extract data from
             // processeed elements
@@ -668,11 +671,15 @@ fn check_if_transaction(
         create_tax_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Tax);
         log::info!("Starting to parse Tax transaction");
+    } else if candidate_string == "NET CREDITS/(DEBITS)" {
+        // "NET CREDITS/(DEBITS)" is marking the end of CASH FLOW ACTIVITIES block
+        state = ParserState::SearchingCashFlowBlock;
+        log::info!("Finished parsing transactions");
     } else {
         let datemonth_pattern =
             regex::Regex::new(r"^(0?[1-9]|1[012])/(0?[1-9]|[12][0-9]|3[01])$").unwrap();
         if datemonth_pattern.is_match(candidate_string) {
-            dates.push(candidate_string.to_owned() + "/2023"); // TODO get year from PDF
+            dates.push(candidate_string.to_owned() + "/23"); // TODO get year from PDF
         }
     }
     state
@@ -694,7 +701,7 @@ where
 {
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
+    let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingCashFlowBlock;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
         std::collections::VecDeque::new();
@@ -923,12 +930,12 @@ mod tests {
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![
-                    ("12/1/2023".to_owned(), 1.22, 0.00),
-                    ("12/1/2023".to_owned(), 386.50, 57.98),
+                    ("12/1/23".to_owned(), 1.22, 0.00),
+                    ("12/1/23".to_owned(), 386.50, 57.98),
                 ],
                 vec![(
-                    "12/21/2023".to_owned(),
-                    "12/26/2023".to_owned(),
+                    "12/21/23".to_owned(),
+                    "12/26/23".to_owned(),
                     82.0,
                     46.45,
                     3808.86

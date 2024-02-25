@@ -38,7 +38,7 @@ pub fn verify_dividends_transactions(
 /// we ignore those and use net income rather than principal
 /// Actual Tax is to be paid from settlement_date
 pub fn reconstruct_sold_transactions(
-    sold_transactions: &Vec<(String, String, i32, f32, f32)>,
+    sold_transactions: &Vec<(String, String, f32, f32, f32)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
 ) -> Result<Vec<(String, String, String, f32, f32)>, String> {
     // Ok What do I need.
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_dividiends_only() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
@@ -459,18 +459,18 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![
             (
                 "06/01/21".to_string(),
                 "06/03/21".to_string(),
-                1,
+                1.0,
                 25.0,
                 24.8,
             ),
             (
                 "03/01/21".to_string(),
                 "03/03/21".to_string(),
-                2,
+                2.0,
                 10.0,
                 19.8,
             ),
@@ -526,10 +526,10 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_sold_transaction_reconstruction_second_fail() {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![(
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![(
             "11/07/22".to_string(), // trade date
             "11/09/22".to_string(), // settlement date
-            173,                    // quantity
+            173.0,                    // quantity
             28.2035,                // price
             4877.36,                // amount sold
         )];
@@ -563,18 +563,18 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_multistock() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![
             (
                 "12/21/22".to_string(),
                 "12/23/22".to_string(),
-                163,
+                163.0,
                 26.5900,
                 4332.44,
             ),
             (
                 "12/19/22".to_string(),
                 "12/21/22".to_string(),
-                252,
+                252.0,
                 26.5900,
                 6698.00,
             ),
@@ -652,18 +652,18 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_no_gains_fail() {
-        let parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![
             (
                 "06/01/21".to_string(),
                 "06/03/21".to_string(),
-                1,
+                1.0,
                 25.0,
                 24.8,
             ),
             (
                 "03/01/21".to_string(),
                 "03/03/21".to_string(),
-                2,
+                2.0,
                 10.0,
                 19.8,
             ),

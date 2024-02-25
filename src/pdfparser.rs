@@ -173,7 +173,7 @@ fn create_qualified_dividend_parsing_sequence(
 }
 
 fn create_sold_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
-    sequence.push_back(Box::new(I32Entry { val: 0 })); // Quantity
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Quantity
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
 }
@@ -187,7 +187,11 @@ fn create_sold_2_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<
         val: String::new(),
         patterns: vec!["ACTED AS AGENT".to_owned()],
     }));
-    sequence.push_back(Box::new(I32Entry { val: 0 })); // Quantity
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["UNSOLICITED TRADE".to_owned()],
+    }));
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Quantity
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
 }
@@ -272,11 +276,11 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
 fn yield_sold_transaction(
     transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
     transaction_dates: &mut Vec<String>,
-) -> Option<(String, String, i32, f32, f32)> {
+) -> Option<(String, String, f32, f32, f32)> {
     let quantity = transaction
         .next()
         .unwrap()
-        .geti32()
+        .getf32()
         .expect_and_log("Processing of Sold transaction went wrong");
     let price = transaction
         .next()
@@ -287,11 +291,22 @@ fn yield_sold_transaction(
         .next()
         .unwrap()
         .getf32()
-        .expect_and_log("Prasing of Sold transaction went wrong");
+        .expect_and_log("Parsing of Sold transaction went wrong");
     // Last transaction date is settlement date
     // next to last is trade date
     let (trade_date, settlement_date) = match transaction_dates.len() {
-        2 => {
+        1 => {
+            log::info!("Detected unsettled sold transaction. Skipping");
+            return None;
+        }
+        0 => {
+            log::error!(
+                "Error parsing transaction & settlement dates. Number of parsed dates: {}",
+                transaction_dates.len()
+            );
+            panic!("Error processing sold transaction. Exitting!")
+        }
+        _ => {
             let settlement_date = transaction_dates
                 .pop()
                 .expect("Error: missing trade date when parsing");
@@ -299,17 +314,6 @@ fn yield_sold_transaction(
                 .pop()
                 .expect("Error: missing settlement_date when parsing");
             (trade_date, settlement_date)
-        }
-        1 => {
-            log::info!("Detected unsettled sold transaction. Skipping");
-            return None;
-        }
-        _ => {
-            log::error!(
-                "Error parsing transaction & settlement dates. Number of parsed dates: {}",
-                transaction_dates.len()
-            );
-            panic!("Error processing sold transaction. Exitting!")
         }
     };
 
@@ -364,7 +368,7 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 
 fn process_transaction(
     div_transactions: &mut Vec<(String, f32, f32)>,
-    sold_transactions: &mut Vec<(String, String, i32, f32, f32)>,
+    sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
     actual_string: &pdf::primitive::PdfString,
     transaction_dates: &mut Vec<String>,
     processed_sequence: &mut Vec<Box<dyn Entry>>,
@@ -462,7 +466,7 @@ fn parse_brokerage_statement<'a, I>(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -471,7 +475,7 @@ where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingTransactionEntry;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -680,7 +684,7 @@ fn parse_account_statement<'a, I>(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -689,7 +693,7 @@ where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingCashFlowBlock;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -772,7 +776,7 @@ pub fn parse_statement(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, String, i32, f32, f32)>,
+        Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -841,6 +845,13 @@ mod tests {
         f.parse(&pdf::primitive::PdfString::new(data));
         assert_eq!(f.getf32(), Some(57.98));
 
+        let data: Vec<u8> = vec![
+            '8' as u8, '2' as u8, '.' as u8, '0' as u8, '0' as u8, '0' as u8,
+        ];
+        let mut f = F32Entry { val: 0.0 };
+        f.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(f.getf32(), Some(82.00));
+
         // company code
         let data: Vec<u8> = vec!['D' as u8, 'L' as u8, 'B' as u8];
         let mut s = StringEntry {
@@ -859,7 +870,24 @@ mod tests {
             std::collections::VecDeque::new();
         create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
-        processed_sequence.push(Box::new(I32Entry { val: 42 })); //quantity
+        processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
+        processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
+        processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
+
+        yield_sold_transaction(&mut processed_sequence.iter(), &mut transaction_dates)
+            .ok_or("Parsing error".to_string())?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_transaction_validation_more_dates() -> Result<(), String> {
+        let mut transaction_dates: Vec<String> =
+            vec!["11/28/22".to_string(), "11/29/22".to_string(), "12/01/22".to_string()];
+        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
+            std::collections::VecDeque::new();
+        create_sold_parsing_sequence(&mut sequence);
+        let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
 
@@ -875,7 +903,7 @@ mod tests {
             std::collections::VecDeque::new();
         create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
-        processed_sequence.push(Box::new(I32Entry { val: 42 })); //quantity
+        processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
 
@@ -892,10 +920,10 @@ mod tests {
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![
-                    ("12/01/23".to_owned(), 386.50, 57.98),
-                    ("12/01/23".to_owned(), 1.22, 0.00)
+                    ("12/1/2023".to_owned(), 1.22, 0.00),
+                    ("12/1/2023".to_owned(), 386.50, 57.98),
                 ],
-                vec![],
+                vec![("12/21/2023".to_owned(), "12/26/2023".to_owned(), 82.0, 46.45, 3808.86)],
                 vec![]
             )))
         );
@@ -920,7 +948,7 @@ mod tests {
                 vec![(
                     "05/02/22".to_owned(),
                     "05/04/22".to_owned(),
-                    -1,
+                    -1.0,
                     43.69,
                     43.67
                 )],

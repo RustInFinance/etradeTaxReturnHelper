@@ -11,7 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Understand sequence parsing and adapt for dividend fund and dividend and sold
+// TODO: Finish parsing cash flow activity block
 // TODO: get year from account statement document
 // TODO: Make a parsing of incomplete date
 // TODO: Dividends of revolut should combined with dividends not sold

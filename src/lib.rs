@@ -265,7 +265,7 @@ pub fn run_taxation(
     String,
 > {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_revolut_transactions: Vec<(String, Currency)> = vec![];
 

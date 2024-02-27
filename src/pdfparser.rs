@@ -647,7 +647,6 @@ where
     Ok((div_transactions, sold_transactions, trades))
 }
 
-// TODO: Make UT
 fn check_if_transaction(
     candidate_string: &str,
     dates: &mut Vec<String>,
@@ -687,6 +686,19 @@ fn check_if_transaction(
     state
 }
 
+/// Get las two digits of year from pattern like: "FOR THE PERIOD DECEMBER 1-31, 2023"
+fn yield_year(rust_string: &str) -> Option<String> {
+    let period_pattern = regex::Regex::new(r"\b20\d{2}\b").unwrap();
+    match period_pattern.find(rust_string) {
+        Some(x) => {
+            let year_str = x.as_str();
+            let last_two_digits = &year_str[year_str.len() - 2..];
+            Some(last_two_digits.to_string())
+        }
+        None => None,
+    }
+}
+
 /// Parse borkerage statement document type
 fn parse_account_statement<'a, I>(
     pages_iter: I,
@@ -710,6 +722,7 @@ where
     let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
     // Queue for transaction dates. Pop last one or last two as trade and settlement dates
     let mut transaction_dates: Vec<String> = vec![];
+    let mut year: Option<String> = None;
 
     for page in pages_iter {
         let page = page.unwrap();
@@ -730,7 +743,7 @@ where
                                 } else {
                                     "".to_owned()
                                 };
-
+                                // Ignore empty tokens
                                 if rust_string != "" {
                                     match state {
                                         ParserState::SearchingCashFlowBlock => {
@@ -740,6 +753,13 @@ where
                                             if rust_string == "CASH FLOW ACTIVITY BY DATE" {
                                                 state = ParserState::SearchingTransactionEntry;
                                                 log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
+                                            } else if rust_string.contains("FOR THE PERIOD")
+                                                && year.is_none()
+                                            {
+                                                // If we find \
+                                                // If we find "For the Period..." then we try to
+                                                // get year (last two digits out of it)
+                                                year = yield_year(&rust_string);
                                             }
                                         }
                                         ParserState::SearchingTransactionEntry => {
@@ -933,28 +953,6 @@ mod tests {
         );
         Ok(())
     }
-    #[test]
-    #[ignore]
-    fn test_account_statement() -> Result<(), String> {
-        assert_eq!(
-            parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
-            (Ok((
-                vec![
-                    ("12/1/23".to_owned(), 1.22, 0.00),
-                    ("12/1/23".to_owned(), 386.50, 57.98),
-                ],
-                vec![(
-                    "12/21/23".to_owned(),
-                    "12/26/23".to_owned(),
-                    82.0,
-                    46.45,
-                    3808.86
-                )],
-                vec![]
-            )))
-        );
-        Ok(())
-    }
 
     #[test]
     fn test_check_if_transaction() -> Result<(), String> {
@@ -979,6 +977,36 @@ mod tests {
             ParserState::SearchingTransactionEntry
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_yield_year() -> Result<(), String> {
+        let rust_string = "FOR THE PERIOD DECEMBER 1-31, 2023";
+        assert_eq!(yield_year(&rust_string), Some("23".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_account_statement() -> Result<(), String> {
+        assert_eq!(
+            parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
+            (Ok((
+                vec![
+                    ("12/1/23".to_owned(), 1.22, 0.00),
+                    ("12/1/23".to_owned(), 386.50, 57.98),
+                ],
+                vec![(
+                    "12/21/23".to_owned(),
+                    "12/26/23".to_owned(),
+                    82.0,
+                    46.45,
+                    3808.86
+                )],
+                vec![]
+            )))
+        );
         Ok(())
     }
 

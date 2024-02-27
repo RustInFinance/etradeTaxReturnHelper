@@ -11,7 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: get year from account statement document
+// TODO: Use year from PDF in check_if_transaction
 // TODO: UT for check_if
 // TODO: Make a parsing of incomplete date
 // TODO: Dividends of revolut should combined with dividends not sold

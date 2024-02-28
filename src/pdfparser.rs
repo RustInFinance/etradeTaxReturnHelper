@@ -651,13 +651,14 @@ fn check_if_transaction(
     candidate_string: &str,
     dates: &mut Vec<String>,
     sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
-    year : Option<String>,
-) -> Result<ParserState,String> {
+    year: Option<String>,
+) -> Result<ParserState, String> {
     let mut state = ParserState::SearchingTransactionEntry;
 
     log::info!("Searching for transaction through: \"{candidate_string}\"");
 
-    let actual_year = year.ok_or("Missing year that should be parsed before transactions".to_owned())?;
+    let actual_year =
+        year.ok_or("Missing year that should be parsed before transactions".to_owned())?;
 
     if candidate_string == "DIVIDEND" {
         create_dividend_fund_parsing_sequence(sequence);
@@ -683,7 +684,7 @@ fn check_if_transaction(
         let datemonth_pattern =
             regex::Regex::new(r"^(0?[1-9]|1[012])/(0?[1-9]|[12][0-9]|3[01])$").unwrap();
         if datemonth_pattern.is_match(candidate_string) {
-            dates.push(candidate_string.to_owned() + "/" + actual_year.as_str() );
+            dates.push(candidate_string.to_owned() + "/" + actual_year.as_str());
         }
     }
     Ok(state)
@@ -750,7 +751,6 @@ where
                                 if rust_string != "" {
                                     match state {
                                         ParserState::SearchingCashFlowBlock => {
-
                                             // Pattern to match "(AS OF <date in a format like 12/31/23>)"
                                             let date_pattern = regex::Regex::new(r"\(AS OF (\d{1,2}\/\d{1,2}\/\d{2})\)").map_err(|_| "Unable to create regular expression to capture fiscal year")?;
 
@@ -769,7 +769,6 @@ where
                                             }
                                         }
                                         ParserState::SearchingTransactionEntry => {
-
                                             state = check_if_transaction(
                                                 &rust_string,
                                                 &mut transaction_dates,
@@ -969,25 +968,44 @@ mod tests {
         let mut sequence = std::collections::VecDeque::new();
 
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence, Some("23".to_owned())),
-            Ok(ParserState::ProcessingTransaction(TransactionType::Dividends))
+            check_if_transaction(
+                &rust_string,
+                &mut transaction_dates,
+                &mut sequence,
+                Some("23".to_owned())
+            ),
+            Ok(ParserState::ProcessingTransaction(
+                TransactionType::Dividends
+            ))
         );
 
         let rust_string = "QUALIFIED DIVIDEND";
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence,Some("23".to_owned())),
-            Ok(ParserState::ProcessingTransaction(TransactionType::Dividends))
+            check_if_transaction(
+                &rust_string,
+                &mut transaction_dates,
+                &mut sequence,
+                Some("23".to_owned())
+            ),
+            Ok(ParserState::ProcessingTransaction(
+                TransactionType::Dividends
+            ))
         );
 
         let rust_string = "QUALIFIED DIVIDEND";
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence,None),
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence, None),
             Err("Missing year that should be parsed before transactions".to_owned())
         );
 
         let rust_string = "CASH";
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence, Some("23".to_owned())),
+            check_if_transaction(
+                &rust_string,
+                &mut transaction_dates,
+                &mut sequence,
+                Some("23".to_owned())
+            ),
             Ok(ParserState::SearchingTransactionEntry)
         );
 

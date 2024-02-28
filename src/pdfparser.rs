@@ -651,10 +651,13 @@ fn check_if_transaction(
     candidate_string: &str,
     dates: &mut Vec<String>,
     sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
-) -> ParserState {
+    year : Option<String>,
+) -> Result<ParserState,String> {
     let mut state = ParserState::SearchingTransactionEntry;
 
     log::info!("Searching for transaction through: \"{candidate_string}\"");
+
+    let actual_year = year.ok_or("Missing year that should be parsed before transactions".to_owned())?;
 
     if candidate_string == "DIVIDEND" {
         create_dividend_fund_parsing_sequence(sequence);
@@ -680,10 +683,10 @@ fn check_if_transaction(
         let datemonth_pattern =
             regex::Regex::new(r"^(0?[1-9]|1[012])/(0?[1-9]|[12][0-9]|3[01])$").unwrap();
         if datemonth_pattern.is_match(candidate_string) {
-            dates.push(candidate_string.to_owned() + "/23"); // TODO get year from PDF
+            dates.push(candidate_string.to_owned() + "/" + actual_year.as_str() );
         }
     }
-    state
+    Ok(state)
 }
 
 /// Get las two digits of year from pattern like: "FOR THE PERIOD DECEMBER 1-31, 2023"
@@ -763,11 +766,13 @@ where
                                             }
                                         }
                                         ParserState::SearchingTransactionEntry => {
+
                                             state = check_if_transaction(
                                                 &rust_string,
                                                 &mut transaction_dates,
                                                 &mut sequence,
-                                            );
+                                                year.clone(),
+                                            )?;
                                         }
                                         ParserState::ProcessingTransaction(transaction_type) => {
                                             state = process_transaction(
@@ -961,20 +966,26 @@ mod tests {
         let mut sequence = std::collections::VecDeque::new();
 
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
-            ParserState::ProcessingTransaction(TransactionType::Dividends)
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence, Some("23".to_owned())),
+            Ok(ParserState::ProcessingTransaction(TransactionType::Dividends))
         );
 
         let rust_string = "QUALIFIED DIVIDEND";
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
-            ParserState::ProcessingTransaction(TransactionType::Dividends)
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence,Some("23".to_owned())),
+            Ok(ParserState::ProcessingTransaction(TransactionType::Dividends))
+        );
+
+        let rust_string = "QUALIFIED DIVIDEND";
+        assert_eq!(
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence,None),
+            Err("Missing year that should be parsed before transactions".to_owned())
         );
 
         let rust_string = "CASH";
         assert_eq!(
-            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence),
-            ParserState::SearchingTransactionEntry
+            check_if_transaction(&rust_string, &mut transaction_dates, &mut sequence, Some("23".to_owned())),
+            Ok(ParserState::SearchingTransactionEntry)
         );
 
         Ok(())

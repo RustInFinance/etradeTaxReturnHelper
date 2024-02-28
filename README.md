@@ -9,7 +9,7 @@ Project that parse e-trade PDF account statements and Gain and Losses documents 
     3. Download all `ACCOUNT STATEMENT` documents
 3. Run: 
     1. `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf"> <Gain and Loss XLSX document>`
-    2. Alternatively you can run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):
+    2. Alternatively you can just run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):
        ![gui](/Pictures/GUI.png)
 
 ### FAQ

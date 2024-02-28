@@ -1,9 +1,9 @@
 # etradeTaxReturnHelper
-Project that parse e-trade PDF brokerage statements and Gain and Losses documents and compute total gross gain and tax paid in US that are needed for tax return forms out of US.
+Project that parse e-trade PDF account statements and Gain and Losses documents and compute total gross gain and tax paid in US that are needed for tax return forms out of US.
 
 ### Data for Tax form from capital gains (PIT-38 in Poland)
 1. Install this program: `cargo install etradeTaxReturnHelper`
-2. Download PDF documents from a year you are filling your tax return form for example: `Brokerage Statement <xxx>.pdf`:
+2. Download PDF documents from a year you are filling your tax return form for example: `Brokerage Statement <xxx>.pdf` and `MS_ClientStatements_<xxx>.pdf`:
     1. Login to e-trade, navigate to [Documents/Brokerage Statements](https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt)
     2. Select date period
     3. Download all `ACCOUNT STATEMENT` documents
@@ -17,6 +17,8 @@ Project that parse e-trade PDF brokerage statements and Gain and Losses document
             `cargo install etradeTaxReturnHelper`
     3. For Linux where there is no X server or no priviligies to install system dependencies then you could try to install non-GUI version:
            `cargo install  etradeTaxReturnHelper --no-default-features`
+2. Does it work for other financial institutions apart from etrade ?
+   There is support for saving accounts statements of Revolut bank (CSV files) , as Revolut does not pay tax on customer behalf and tax from capital gain of saving account should be paid by customer. 
 
 2. How does it work?
     Here is a [demo(PL)](https://www.youtube.com/watch?v=Juw3KJ1JdcA)

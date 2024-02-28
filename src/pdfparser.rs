@@ -689,13 +689,13 @@ fn check_if_transaction(
     Ok(state)
 }
 
-/// Get las two digits of year from pattern like: "FOR THE PERIOD DECEMBER 1-31, 2023"
+/// Get las two digits of year from pattern like:  "(AS OF 12/31/23)"
 fn yield_year(rust_string: &str) -> Option<String> {
-    let period_pattern = regex::Regex::new(r"\b20\d{2}\b").unwrap();
+    let period_pattern = regex::Regex::new(r"\d{2}\)").unwrap();
     match period_pattern.find(rust_string) {
         Some(x) => {
             let year_str = x.as_str();
-            let last_two_digits = &year_str[year_str.len() - 2..];
+            let last_two_digits = &year_str[..year_str.len() - 1];
             Some(last_two_digits.to_string())
         }
         None => None,
@@ -750,17 +750,20 @@ where
                                 if rust_string != "" {
                                     match state {
                                         ParserState::SearchingCashFlowBlock => {
+
+                                            // Pattern to match "(AS OF <date in a format like 12/31/23>)"
+                                            let date_pattern = regex::Regex::new(r"\(AS OF (\d{1,2}\/\d{1,2}\/\d{2})\)").map_err(|_| "Unable to create regular expression to capture fiscal year")?;
+
                                             // When we find "CASH FLOW ACTIVITY BY DATE" then
                                             // it is a starting point of transactions we are
                                             // interested in
                                             if rust_string == "CASH FLOW ACTIVITY BY DATE" {
                                                 state = ParserState::SearchingTransactionEntry;
                                                 log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
-                                            } else if rust_string.contains("FOR THE PERIOD")
+                                            } else if date_pattern.is_match(rust_string.as_str())
                                                 && year.is_none()
                                             {
-                                                // If we find \
-                                                // If we find "For the Period..." then we try to
+                                                // If we find (AS OF <date e.g. 12/01/2023>))
                                                 // get year (last two digits out of it)
                                                 year = yield_year(&rust_string);
                                             }
@@ -993,7 +996,7 @@ mod tests {
 
     #[test]
     fn test_yield_year() -> Result<(), String> {
-        let rust_string = "FOR THE PERIOD DECEMBER 1-31, 2023";
+        let rust_string = "(AS OF 12/31/23)";
         assert_eq!(yield_year(&rust_string), Some("23".to_owned()));
         Ok(())
     }

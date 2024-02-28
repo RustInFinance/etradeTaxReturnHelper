@@ -11,8 +11,9 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Finish parse_revolut_transactions
-// TODO: Add UT for parsing investment document
+// TODO: Make a parsing of incomplete date
+// TODO: Dividends of revolut should combined with dividends not sold
+// TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results
 // TODO:  async to get currency
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
@@ -320,6 +321,42 @@ mod tests {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (2930.206, 439.54138, 395.45355, 91.156715)
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_sold_dividends_taxation_2023() -> Result<(), clap::Error> {
+        // Get all brokerage with dividends only
+        let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202302.pdf",
+            "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202303.pdf",
+            "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202306.pdf",
+            "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202308.pdf",
+            "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202309.pdf",
+            "etrade_data_2023/MS_ClientStatements_6557_202309.pdf",
+            "etrade_data_2023/MS_ClientStatements_6557_202311.pdf",
+            "etrade_data_2023/MS_ClientStatements_6557_202312.pdf",
+            "etrade_data_2023/G&L_Collapsed-2023.xlsx",
+        ])?;
+        let pdfnames = matches
+            .values_of("financial documents")
+            .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (8369.726, 1253.2899, 14983.293, 7701.9253)
                 );
                 Ok(())
             }

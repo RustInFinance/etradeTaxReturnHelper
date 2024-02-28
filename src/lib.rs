@@ -265,7 +265,7 @@ pub fn run_taxation(
     String,
 > {
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, i32, f32, f32)> = vec![];
+    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_revolut_transactions: Vec<(String, Currency)> = vec![];
 
@@ -274,15 +274,17 @@ pub fn run_taxation(
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut div_t, mut sold_t, _) = pdfparser::parse_brokerage_statement(x)?;
+            let (mut div_t, mut sold_t, _) = pdfparser::parse_statement(x)?;
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
         } else if x.contains(".xlsx") {
             parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
-        } else {
+        } else if x.contains(".csv") {
             parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
+        } else {
+            return Err(format!("Error: Unable to open a file: {x}"));
         }
-        Ok::<(), &str>(())
+        Ok::<(), String>(())
     })?;
     // 2. Verify Transactions
     verify_dividends_transactions(&parsed_div_transactions)?;

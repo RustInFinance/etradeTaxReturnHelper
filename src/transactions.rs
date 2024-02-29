@@ -4,6 +4,35 @@ use chrono::Datelike;
 pub use crate::logging::ResultExt;
 use crate::{SoldTransaction, Transaction};
 
+/// Check if all interests rate transactions come from the same year
+pub fn verify_interests_transactions(
+    interests_transactions: &Vec<(String, f32)>,
+) -> Result<(), String> {
+    let mut trans = interests_transactions.iter();
+    let (transaction_date, _) = match trans.next() {
+        Some((x, a)) => (x, a),
+        None => {
+            log::info!("No interests transactions");
+            return Ok(());
+        }
+    };
+
+    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+        .unwrap()
+        .year();
+    let mut verification: Result<(), String> = Ok(());
+    trans.for_each(|(tr_date, _)| {
+        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+            .unwrap()
+            .year();
+        if tr_year != transaction_year {
+            let msg: &str = "Error:  Brokerage statements are related to different years!";
+            verification = Err(msg.to_owned());
+        }
+    });
+    verification
+}
+
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions(
     div_transactions: &Vec<(String, f32, f32)>,
@@ -115,6 +144,37 @@ pub fn create_detailed_revolut_transactions(
     Ok(detailed_transactions)
 }
 
+pub fn create_detailed_interests_transactions(
+    transactions: Vec<(String, f32)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<Transaction>, &str> {
+    let mut detailed_transactions: Vec<Transaction> = Vec::new();
+    transactions
+        .iter()
+        .try_for_each(|(transaction_date, gross_us)| {
+            let (exchange_rate_date, exchange_rate) = dates
+                [&crate::Exchange::USD(transaction_date.clone())]
+                .clone()
+                .unwrap();
+
+            let transaction = Transaction {
+                transaction_date: transaction_date.clone(),
+                gross: crate::Currency::USD(*gross_us as f64),
+                tax_paid: crate::Currency::USD(0.0 as f64),
+                exchange_rate_date,
+                exchange_rate,
+            };
+
+            let msg = transaction.format_to_print("INTERESTS")?;
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+            detailed_transactions.push(transaction);
+            Ok::<(), &str>(())
+        })?;
+    Ok(detailed_transactions)
+}
+
 pub fn create_detailed_div_transactions(
     transactions: Vec<(String, f32, f32)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
@@ -198,6 +258,15 @@ pub fn create_detailed_sold_transactions(
 mod tests {
 
     use super::*;
+
+    #[test]
+    fn test_interests_verification_ok() -> Result<(), String> {
+        let transactions: Vec<(String, f32)> = vec![
+            ("06/01/21".to_string(), 100.0),
+            ("03/01/21".to_string(), 126.0),
+        ];
+        verify_interests_transactions(&transactions)
+    }
 
     #[test]
     fn test_dividends_verification_ok() -> Result<(), String> {
@@ -288,6 +357,49 @@ mod tests {
                     tax_paid: crate::Currency::PLN(0.0),
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
+                },
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_detailed_interests_transactions() -> Result<(), String> {
+        let parsed_transactions: Vec<(String, f32)> = vec![
+            ("04/11/21".to_string(), 100.0),
+            ("03/01/21".to_string(), 126.0),
+        ];
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::USD("03/01/21".to_owned()),
+            Some(("02/28/21".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("04/11/21".to_owned()),
+            Some(("04/10/21".to_owned(), 3.0)),
+        );
+
+        let transactions = create_detailed_interests_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                Transaction {
+                    transaction_date: "04/11/21".to_string(),
+                    gross: crate::Currency::USD(100.0),
+                    tax_paid: crate::Currency::USD(0.0),
+                    exchange_rate_date: "04/10/21".to_string(),
+                    exchange_rate: 3.0,
+                },
+                Transaction {
+                    transaction_date: "03/01/21".to_string(),
+                    gross: crate::Currency::USD(126.0),
+                    tax_paid: crate::Currency::USD(0.0),
+                    exchange_rate_date: "02/28/21".to_string(),
+                    exchange_rate: 2.0,
                 },
             ])
         );

@@ -10,9 +10,9 @@ type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;
 use transactions::{
-    create_detailed_div_transactions, create_detailed_revolut_transactions,
-    create_detailed_sold_transactions, reconstruct_sold_transactions,
-    verify_dividends_transactions,
+    create_detailed_div_transactions, create_detailed_interests_transactions,
+    create_detailed_revolut_transactions, create_detailed_sold_transactions,
+    reconstruct_sold_transactions, verify_dividends_transactions, verify_interests_transactions,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -260,10 +260,12 @@ pub fn run_taxation(
         f32,
         Vec<Transaction>,
         Vec<Transaction>,
+        Vec<Transaction>,
         Vec<SoldTransaction>,
     ),
     String,
 > {
+    let mut parsed_interests_transactions: Vec<(String, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
@@ -274,7 +276,8 @@ pub fn run_taxation(
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut div_t, mut sold_t, _) = pdfparser::parse_statement(x)?;
+            let (mut int_t, mut div_t, mut sold_t, _) = pdfparser::parse_statement(x)?;
+            parsed_interests_transactions.append(&mut int_t);
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
         } else if x.contains(".xlsx") {
@@ -287,6 +290,8 @@ pub fn run_taxation(
         Ok::<(), String>(())
     })?;
     // 2. Verify Transactions
+    verify_interests_transactions(&parsed_interests_transactions)?;
+    log::info!("Interests transactions are consistent");
     verify_dividends_transactions(&parsed_div_transactions)?;
     log::info!("Dividends transactions are consistent");
 
@@ -300,6 +305,14 @@ pub fn run_taxation(
     // Hash map : Key(event date) -> (preceeding date, exchange_rate)
     let mut dates: std::collections::HashMap<Exchange, Option<(String, f32)>> =
         std::collections::HashMap::new();
+    parsed_interests_transactions
+        .iter()
+        .for_each(|(trade_date, _)| {
+            let ex = Exchange::USD(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+        });
     parsed_div_transactions
         .iter()
         .for_each(|(trade_date, _, _)| {
@@ -340,19 +353,22 @@ pub fn run_taxation(
     rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
     // Make a detailed_div_transactions
+    let interests = create_detailed_interests_transactions(parsed_interests_transactions, &dates)?;
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
     let revolut_transactions =
         create_detailed_revolut_transactions(parsed_revolut_transactions, &dates)?;
 
+    let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
     let (gross_revolut, cost_revolut) = compute_div_taxation(&revolut_transactions);
     Ok((
         gross_div,
         tax_div,
-        gross_sold + gross_revolut, // We put sold and savings income into the same column
+        gross_interests + gross_sold + gross_revolut, // We put sold and savings income into the same column
         cost_sold + cost_revolut,
+        interests,
         transactions,
         revolut_transactions,
         sold_transactions,

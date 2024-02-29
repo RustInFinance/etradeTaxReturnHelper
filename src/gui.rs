@@ -117,11 +117,11 @@ pub mod gui {
             tbuffer.set_text("");
             nbuffer.set_text("Running...");
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-            let (gross_div, tax_div, gross_sold, cost_sold, div_transactions, revolut_transactions, sold_transactions) =
+            let (gross_div, tax_div, gross_sold, cost_sold, interests_transactions, div_transactions, revolut_transactions, sold_transactions) =
                 match run_taxation(&rd, file_names) {
-                    Ok((gd, td, gs, cs, dts, rts, sts)) => {
+                    Ok((gd, td, gs, cs, its, dts, rts, sts)) => {
                         nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
-                        (gd, td, gs, cs, dts, rts, sts)
+                        (gd, td, gs, cs, its, dts, rts, sts)
                     }
                     Err(err) => {
                         nbuffer.set_text(&err);
@@ -134,6 +134,9 @@ pub mod gui {
                 nbuffer.set_text(&warn_msg);
             }
             let mut transactions_strings: Vec<String> = vec![];
+            interests_transactions
+                .iter()
+                .for_each(|x| transactions_strings.push(x.format_to_print("INTERESTS").expect_and_log("Error: Formatting INTERESTS transaction failed")));
             div_transactions
                 .iter()
                 .for_each(|x| transactions_strings.push(x.format_to_print("DIV").expect_and_log("Error: Formatting DIV transaction failed")));

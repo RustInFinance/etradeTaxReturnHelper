@@ -11,6 +11,7 @@ enum StatementType {
 
 #[derive(Clone, Debug, PartialEq)]
 enum TransactionType {
+    Interests,
     Dividends,
     Sold,
     Tax,
@@ -150,7 +151,7 @@ fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
 }
 
-fn create_dividend_fund_parsing_sequence(
+fn create_interests_fund_parsing_sequence(
     sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
 ) {
     sequence.push_back(Box::new(StringEntry {
@@ -369,6 +370,7 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 }
 
 fn process_transaction(
+    interests_transactions: &mut Vec<(String, f32)>,
     div_transactions: &mut Vec<(String, f32, f32)>,
     sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
     actual_string: &pdf::primitive::PdfString,
@@ -422,6 +424,21 @@ fn process_transaction(
                         subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
                     }
+                    TransactionType::Interests => {
+                        let gross_us = transaction
+                            .next()
+                            .unwrap()
+                            .getf32()
+                            .ok_or("Processing of Interests transaction went wrong")?;
+
+                        interests_transactions.push((
+                            transaction_dates
+                                .pop()
+                                .ok_or("Error: missing transaction dates when parsing")?,
+                            gross_us,
+                        ));
+                        log::info!("Completed parsing Dividend transaction");
+                    }
                     TransactionType::Dividends => {
                         let gross_us = transaction
                             .next()
@@ -470,6 +487,7 @@ fn parse_brokerage_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
+        Vec<(String, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -571,6 +589,9 @@ where
                                                                 TransactionType::Tax => {
                                                                     return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());
                                                                 }
+                                                                TransactionType::Interests => {
+                                                                    return Err("TransactionType::Interest rate should not appear during brokerage statement processing!".to_string());
+                                                                }
                                                                 TransactionType::Dividends => {
                                                                     let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
                                                                     let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
@@ -644,7 +665,7 @@ where
             }
         }
     }
-    Ok((div_transactions, sold_transactions, trades))
+    Ok((vec![], div_transactions, sold_transactions, trades))
 }
 
 fn check_if_transaction(
@@ -661,9 +682,9 @@ fn check_if_transaction(
         year.ok_or("Missing year that should be parsed before transactions".to_owned())?;
 
     if candidate_string == "DIVIDEND" {
-        create_dividend_fund_parsing_sequence(sequence);
-        state = ParserState::ProcessingTransaction(TransactionType::Dividends);
-        log::info!("Starting to parse Dividend Fund transaction");
+        create_interests_fund_parsing_sequence(sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Interests);
+        log::info!("Starting to parse Interests Fund transaction");
     } else if candidate_string == "QUALIFIED DIVIDEND" {
         create_qualified_dividend_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Dividends);
@@ -708,6 +729,7 @@ fn parse_account_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
+        Vec<(String, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -717,6 +739,7 @@ fn parse_account_statement<'a, I>(
 where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
+    let mut interests_transactions: Vec<(String, f32)> = vec![];
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
@@ -778,6 +801,7 @@ where
                                         }
                                         ParserState::ProcessingTransaction(transaction_type) => {
                                             state = process_transaction(
+                                                &mut interests_transactions,
                                                 &mut div_transactions,
                                                 &mut sold_transactions,
                                                 &actual_string,
@@ -799,10 +823,16 @@ where
         }
     }
 
-    Ok((div_transactions, sold_transactions, trades))
+    Ok((
+        interests_transactions,
+        div_transactions,
+        sold_transactions,
+        trades,
+    ))
 }
 ///  This function parses given PDF document
 ///  and returns result of parsing which is a tuple of
+///  interest rate transactions
 ///  found Dividends paid transactions (div_transactions),
 ///  Sold stock transactions (sold_transactions)
 ///  information on transactions in case of parsing trade document (trades)
@@ -814,6 +844,7 @@ pub fn parse_statement(
     pdftoparse: &str,
 ) -> Result<
     (
+        Vec<(String, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -835,7 +866,8 @@ pub fn parse_statement(
 
     let document_type = recognize_statement(first_page)?;
 
-    let (div_transactions, sold_transactions, trades) = match document_type {
+    let (interests_transactions, div_transactions, sold_transactions, trades) = match document_type
+    {
         StatementType::BrokerageStatement => {
             log::info!("Processing brokerage statement PDF");
             parse_brokerage_statement(pdffile_iter)?
@@ -846,7 +878,12 @@ pub fn parse_statement(
         }
     };
 
-    Ok((div_transactions, sold_transactions, trades))
+    Ok((
+        interests_transactions,
+        div_transactions,
+        sold_transactions,
+        trades,
+    ))
 }
 
 #[cfg(test)]
@@ -975,7 +1012,7 @@ mod tests {
                 Some("23".to_owned())
             ),
             Ok(ParserState::ProcessingTransaction(
-                TransactionType::Dividends
+                TransactionType::Interests
             ))
         );
 
@@ -1025,10 +1062,8 @@ mod tests {
         assert_eq!(
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
-                vec![
-                    ("12/1/23".to_owned(), 1.22, 0.00),
-                    ("12/1/23".to_owned(), 386.50, 57.98),
-                ],
+                vec![("12/1/23".to_owned(), 1.22)],
+                vec![("12/1/23".to_owned(), 386.50, 57.98),],
                 vec![(
                     "12/21/23".to_owned(),
                     "12/26/23".to_owned(),
@@ -1048,6 +1083,7 @@ mod tests {
         assert_eq!(
             parse_statement("data/example-divs.pdf"),
             (Ok((
+                vec![],
                 vec![("03/01/22".to_owned(), 698.25, 104.74)],
                 vec![],
                 vec![]
@@ -1056,6 +1092,7 @@ mod tests {
         assert_eq!(
             parse_statement("data/example-sold-wire.pdf"),
             Ok((
+                vec![],
                 vec![],
                 vec![(
                     "05/02/22".to_owned(),

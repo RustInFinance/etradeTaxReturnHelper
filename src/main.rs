@@ -11,6 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: make UT working and test GUI
 // TODO: Make a parsing of incomplete date
 // TODO: Dividends of revolut should combined with dividends not sold
 // TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results
@@ -78,7 +79,7 @@ fn main() {
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let (gross_div, tax_div, gross_sold, cost_sold) = match run_taxation(&rd, pdfnames) {
-        Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+        Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
             (gross_div, tax_div, gross_sold, cost_sold)
         }
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
@@ -286,7 +287,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (14062.57, 2109.3772, 395.45355, 91.156715)
@@ -317,7 +318,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (2930.206, 439.54138, 395.45355, 91.156715)
@@ -330,7 +331,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_sold_dividends_taxation_2023() -> Result<(), clap::Error> {
+    fn test_sold_dividends_interests_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
         let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
@@ -353,10 +354,10 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
-                    (8369.726, 1253.2899, 14983.293, 7701.9253)
+                    (8355.114, 1253.2899, 14997.904, 7701.9253)
                 );
                 Ok(())
             }
@@ -380,7 +381,7 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _)) => {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (3272.3125, 490.82773, 0.0, 0.0),

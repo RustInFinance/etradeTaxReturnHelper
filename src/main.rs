@@ -11,7 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: make UT working and test GUI
+// TODO: When there is no proxy (on intel account) there are problems (UT do not work
+// getting_Exchange_rate)
 // TODO: Make a parsing of incomplete date
 // TODO: Dividends of revolut should combined with dividends not sold
 // TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results

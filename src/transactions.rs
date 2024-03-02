@@ -87,19 +87,22 @@ pub fn reconstruct_sold_transactions(
     for (acquisition_date, tr_date, cost_basis, _, inc) in gains_and_losses {
         // match trade date and gross with principal and trade date of  trade confirmation
 
+        log::info!("Reconstructing G&L sold transaction: trade date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}");
         let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, _income)|{
-            *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").unwrap().format("%m/%d/%y").to_string()
-        }).expect_and_log("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
-            https://us.etrade.com/etx/sp/stockplan#/myAccount/gainsLosses\n\n");
+            *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").expect_and_log(&format!("Unable to parse trade date: {tr_date}")).format("%m/%d/%y").to_string()
+        }).expect_and_log(&format!("\n\nERROR: Sold transaction:\n (trade_date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}) detected,\n but corressponding data from PDF document is missing. You can download account statements PDF documents at:\n
+            https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n"));
 
         detailed_sold_transactions.push((
             chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
-                .unwrap()
+                .expect(&format!("Unable to parse trade date: {tr_date}"))
                 .format("%m/%d/%y")
                 .to_string(),
             settlement_date.clone(),
             chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%Y")
-                .unwrap()
+                .expect(&format!(
+                    "Unable to parse acquisition_date: {acquisition_date}"
+                ))
                 .format("%m/%d/%y")
                 .to_string(),
             *inc,

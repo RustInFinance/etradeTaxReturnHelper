@@ -364,9 +364,9 @@ pub fn run_taxation(
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
     let (gross_revolut, cost_revolut) = compute_div_taxation(&revolut_transactions);
     Ok((
-        gross_div,
+        gross_interests + gross_div,
         tax_div,
-        gross_interests + gross_sold + gross_revolut, // We put sold and savings income into the same column
+        gross_sold + gross_revolut, // We put sold and savings income into the same column
         cost_sold + cost_revolut,
         interests,
         transactions,

@@ -358,7 +358,7 @@ mod tests {
             Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
-                    (8355.114, 1253.2899, 14997.904, 7701.9253)
+                    (8369.726, 1253.2899, 14983.293, 7701.9253),
                 );
                 Ok(())
             }

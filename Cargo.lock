@@ -571,7 +571,7 @@ checksum = "b90ca2580b73ab6a1f724b76ca11ab632df820fd6040c336200d2c1df7b3c82c"
 
 [[package]]
 name = "etradeTaxReturnHelper"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "calamine",
  "chrono",

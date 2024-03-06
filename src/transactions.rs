@@ -88,9 +88,14 @@ pub fn reconstruct_sold_transactions(
         // match trade date and gross with principal and trade date of  trade confirmation
 
         log::info!("Reconstructing G&L sold transaction: trade date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}");
-        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, _income)|{
-            *trade_dt == chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y").expect_and_log(&format!("Unable to parse trade date: {tr_date}")).format("%m/%d/%y").to_string()
-        }).expect_and_log(&format!("\n\nERROR: Sold transaction:\n (trade_date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}) detected,\n but corressponding data from PDF document is missing. You can download account statements PDF documents at:\n
+        let trade_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
+            .expect_and_log(&format!("Unable to parse trade date: {tr_date}"));
+
+        let (_, settlement_date, _, _, _) = sold_transactions.iter().find(|(trade_dt, _, _, _, income)|{
+            log::info!("Candidate Sold transaction from PDF: trade_date: {trade_dt} income: {income}");
+            let trade_date_pdf = chrono::NaiveDate::parse_from_str(&trade_dt, "%m/%d/%y").expect_and_log(&format!("Unable to parse trade date: {trade_dt}"));
+            trade_date ==  trade_date_pdf
+        }).expect_and_log(&format!("\n\nERROR: Sold transaction in Gain&Losses:\n (trade_date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}) exist,\n but corressponding data from PDF document is missing. You can download account statements PDF documents at:\n
             https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n"));
 
         detailed_sold_transactions.push((
@@ -639,6 +644,60 @@ mod tests {
     }
 
     #[test]
+    fn test_sold_transaction_reconstruction_single_digits_ok() -> Result<(), String> {
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![
+            ("6/1/21".to_string(), "6/3/21".to_string(), 1.0, 25.0, 24.8),
+            ("3/1/21".to_string(), "3/3/21".to_string(), 2.0, 10.0, 19.8),
+        ];
+
+        let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
+            (
+                "01/01/2019".to_string(),
+                "06/01/2021".to_string(),
+                10.0,
+                10.0,
+                24.8,
+            ),
+            (
+                "01/01/2021".to_string(),
+                "03/01/2021".to_string(),
+                20.0,
+                20.0,
+                19.8,
+            ),
+        ];
+
+        let detailed_sold_transactions =
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)?;
+
+        // 1. trade date
+        // 2. settlement date
+        // 3. date of purchase
+        // 4. net income
+        // 5. cost cost basis
+        assert_eq!(
+            detailed_sold_transactions,
+            vec![
+                (
+                    "06/01/21".to_string(),
+                    "6/3/21".to_string(),
+                    "01/01/19".to_string(),
+                    24.8,
+                    10.0
+                ),
+                (
+                    "03/01/21".to_string(),
+                    "3/3/21".to_string(),
+                    "01/01/21".to_string(),
+                    19.8,
+                    20.0
+                ),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
     #[should_panic]
     fn test_sold_transaction_reconstruction_second_fail() {
         let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![(
@@ -697,29 +756,29 @@ mod tests {
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
             (
-                "08/19/21".to_string(),
-                "12/19/22".to_string(),
+                "08/19/2021".to_string(),
+                "12/19/2022".to_string(),
                 4336.4874,
                 4758.6971,
                 2711.0954,
             ),
             (
-                "05/03/21".to_string(),
-                "12/21/22".to_string(),
+                "05/03/2021".to_string(),
+                "12/21/2022".to_string(),
                 0.0,
                 3876.918,
                 2046.61285,
             ),
             (
-                "08/19/22".to_string(),
-                "12/19/22".to_string(),
+                "08/19/2022".to_string(),
+                "12/19/2022".to_string(),
                 5045.6257,
                 5936.0274,
                 3986.9048,
             ),
             (
-                "05/02/22".to_string(),
-                "12/21/22".to_string(),
+                "05/02/2022".to_string(),
+                "12/21/2022".to_string(),
                 0.0,
                 4013.65,
                 2285.82733,

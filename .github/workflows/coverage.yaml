@@ -25,7 +25,7 @@ jobs:
           args: grcov
 
       - name: Build project
-      - uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1
         with:
           command: build
         env:

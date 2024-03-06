@@ -27,14 +27,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: grcov
-
-      - name: Build project
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-        env:
-          RUSTFLAGS: "-C instrument-coverage"
+          args: grcov       
 
       - name: Run tests for coverage
         uses: actions-rs/cargo@v1
@@ -42,6 +35,7 @@ jobs:
           command: test
         env:
           LLVM_PROFILE_FILE: profile-%p-%m.profraw
+          RUSTFLAGS: "-C instrument-coverage"
 
       - name: Generate coverage html report
         run: grcov . -s . --binary-path ./target/debug -t html --branch --ignore-not-existing --ignore "/*" -o ./coverage/
@@ -54,7 +48,7 @@ jobs:
 
 
       - name: Generate coverage lcov report
-        run: grcov . -s . --binary-path ./target/debug -t md --branch --ignore-not-existing --ignore "/*" -o coverage.md
+        run: grcov . -s . --binary-path ./target/debug -t markdown --branch --ignore-not-existing --ignore "/*" -o coverage.md
 
       - name: Check coverage percentage
         run: |

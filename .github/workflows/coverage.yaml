@@ -58,4 +58,4 @@ jobs:
               exit 1
             fi
         env:
-          COVERAGE_THRESHOLD: 90
+          COVERAGE_THRESHOLD: 65

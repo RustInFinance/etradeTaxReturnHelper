@@ -46,7 +46,6 @@ jobs:
           name: coverage-html-report
           path: coverage/
 
-
       - name: Generate coverage lcov report
         run: grcov . -s . --binary-path ./target/debug -t markdown --branch --ignore-not-existing --ignore "/*" -o coverage.md
 

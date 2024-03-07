@@ -1,0 +1,61 @@
+name: Code Coverage
+
+on: [pull_request]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: llvm-tools-preview
+
+      - name: Install grcov
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: grcov       
+
+      - name: Run tests for coverage
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+        env:
+          LLVM_PROFILE_FILE: profile-%p-%m.profraw
+          RUSTFLAGS: "-C instrument-coverage"
+
+      - name: Generate coverage html report
+        run: grcov . -s . --binary-path ./target/debug -t html --branch --ignore-not-existing --ignore "/*" -o ./coverage/
+
+      - name: Upload coverage html report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-report
+          path: coverage/
+
+      - name: Generate coverage lcov report
+        run: grcov . -s . --binary-path ./target/debug -t markdown --branch --ignore-not-existing --ignore "/*" -o coverage.md
+
+      - name: Check coverage percentage
+        run: |
+            COVERAGE_PERCENTAGE=$(tail -n 1 coverage.md | grep -oP '(\d+(\.\d+)?)(?=%)')
+            echo "Coverage percentage is $COVERAGE_PERCENTAGE%"
+            if (( $(echo "$COVERAGE_PERCENTAGE < $COVERAGE_THRESHOLD" | bc -l) )); then
+              echo "Code coverage is below $COVERAGE_THRESHOLD%. Failing the workflow."
+              exit 1
+            fi
+        env:
+          COVERAGE_THRESHOLD: 65

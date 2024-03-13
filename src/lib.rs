@@ -69,14 +69,14 @@ impl Transaction {
         let msg = match (&self.gross,&self.tax_paid) {
             (Currency::PLN(gross),Currency::PLN(tax_paid)) => {
 
-                format!("{prefix} TRANSACTION date: {}, gross: {gross} PLN, tax paid: {tax_paid} PLN",
+                format!("{prefix} TRANSACTION date: {}, gross: {gross:.2} PLN, tax paid: {tax_paid:.2} PLN",
                 chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d")
             )
             .to_owned()
             },
             (Currency::USD(gross),Currency::USD(tax_paid)) => {
 
-                format!("{prefix} TRANSACTION date: {}, gross: ${gross}, tax paid: ${tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                format!("{prefix} TRANSACTION date: {}, gross: ${gross:.2}, tax paid: ${tax_paid:.2}, exchange_rate: {} , exchange_rate_date: {}",
                 chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
             )
             .to_owned()
@@ -84,7 +84,7 @@ impl Transaction {
 
             (Currency::EUR(gross),Currency::EUR(tax_paid)) => {
 
-                format!("{prefix} TRANSACTION date: {}, gross: €{gross}, tax paid: €{tax_paid}, exchange_rate: {} , exchange_rate_date: {}",
+                format!("{prefix} TRANSACTION date: {}, gross: €{gross:.2}, tax paid: €{tax_paid:.2}, exchange_rate: {} , exchange_rate_date: {}",
                 chrono::NaiveDate::parse_from_str(&self.transaction_date, "%m/%d/%y").map_err(|_| "Error: unable to format date")?.format("%Y-%m-%d"), &self.exchange_rate,&self.exchange_rate_date
             )
             .to_owned()

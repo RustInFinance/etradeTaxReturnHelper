@@ -146,7 +146,7 @@ fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Bo
 fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["INTEL CORP".to_owned()],
+        patterns: vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
 }
@@ -184,7 +184,7 @@ fn create_sold_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dy
 fn create_sold_2_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["INTEL CORP".to_owned()],
+        patterns: vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()],
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),

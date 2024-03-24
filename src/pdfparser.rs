@@ -1105,6 +1105,31 @@ mod tests {
             ))
         );
 
+        assert_eq!(
+            parse_statement("data/example-sold-amd.pdf"),
+            Ok((
+                vec![],
+                vec![],
+                vec![
+                    (
+                        "11/10/23".to_owned(),
+                        "11/14/23".to_owned(),
+                        72.0,
+                        118.13,
+                        8505.29
+                    ),
+                    (
+                        "11/22/23".to_owned(),
+                        "11/27/23".to_owned(),
+                        162.0,
+                        122.4511,
+                        19836.92
+                    ),
+                ],
+                vec![]
+            ))
+        );
+
         //TODO(jczaja): Renable reinvest dividends case as soon as you get some PDFs
         //assert_eq!(
         //    parse_statement("data/example3.pdf"),

@@ -114,7 +114,7 @@ mod tests {
         );
 
         let rd: DE = DE {};
-        rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+        rd.get_currency_exchange_rates(&mut dates,"EUR").map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
         let mut expected_result: std::collections::HashMap<
             etradeTaxReturnHelper::Exchange,

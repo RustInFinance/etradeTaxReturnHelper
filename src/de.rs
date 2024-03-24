@@ -74,6 +74,8 @@ impl etradeTaxReturnHelper::Residency for DE {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use etradeTaxReturnHelper::Residency;
+
     #[test]
     fn test_present_result_de() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(DE {});
@@ -96,6 +98,34 @@ mod tests {
             .iter()
             .zip(&ref_results)
             .for_each(|(a, b)| assert_eq!(a, b));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_exchange_rates_eur() -> Result<(), String> {
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::USD("07/14/23".to_owned()),
+            None,
+        );
+
+        let rd: DE = DE {};
+        rd.get_currency_exchange_rates(&mut dates,"EUR").map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+
+        let mut expected_result: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        expected_result.insert(
+            etradeTaxReturnHelper::Exchange::USD("07/14/23".to_owned()),
+            Some(("2023-07-13".to_owned(), 0.89077)),
+        );
+
+        assert_eq!(dates, expected_result);
 
         Ok(())
     }

@@ -262,6 +262,26 @@ mod tests {
     }
 
     #[test]
+    fn test_unrecognized_file_taxation() -> Result<(), clap::Error> {
+        // Get all brokerage with dividends only
+        let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+        // Check printed values or returned values?
+        let matches = create_cmd_line_pattern(myapp)
+            .get_matches_from_safe(vec!["mytest", "unrecognized_file.txt"])?;
+
+        let pdfnames = matches
+            .values_of("financial documents")
+            .expect_and_log("error getting financial documents names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok(_) => panic!("Expected an error from run_taxation, but got Ok"),
+            Err(_) => Ok(()), // Expected error, test passes
+        }
+    }
+
+    #[test]
     #[ignore]
     fn test_dividends_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only

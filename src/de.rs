@@ -74,6 +74,8 @@ impl etradeTaxReturnHelper::Residency for DE {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use etradeTaxReturnHelper::Residency;
+
     #[test]
     fn test_present_result_de() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(DE {});
@@ -111,7 +113,7 @@ mod tests {
             None,
         );
 
-        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(crate::de::DE {});
+        let rd: DE = DE {};
         rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
         let mut expected_result: std::collections::HashMap<

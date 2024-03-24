@@ -99,4 +99,32 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_get_exchange_rates_eur() -> Result<(), String> {
+        let mut dates: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        dates.insert(
+            etradeTaxReturnHelper::Exchange::USD("07/14/23".to_owned()),
+            None,
+        );
+
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(crate::de::DE {});
+        rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
+
+        let mut expected_result: std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>,
+        > = std::collections::HashMap::new();
+        expected_result.insert(
+            etradeTaxReturnHelper::Exchange::USD("07/14/23".to_owned()),
+            Some(("2023-07-13".to_owned(), 0.89077)),
+        );
+
+        assert_eq!(dates, expected_result);
+
+        Ok(())
+    }
 }

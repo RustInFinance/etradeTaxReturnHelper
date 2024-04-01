@@ -31,6 +31,6 @@ Project that parse e-trade PDF account statements and Gain and Losses documents 
     RUST_LOG=info RUST_BACKTRACE=full etradeTaxReturnHelper <your args e.g. PDF and XLSX files> and share it via issues or via my email (see github profile)
 4. How can I help?
     1. Issues and Pull Requests are welcomed!
-    2. Buy me a coffee at : https://buycoffee.to/jczaja
+    2. Please donate charity organization [Wielka orkiestra swiatecznej pomocy](https://www.wosp.org.pl/fundacja/jak-wspierac-wosp/wesprzyj-online)
     3. If you happen to be an employee of Intel Corporation then you could support this project by
      "giving me **recognition**".

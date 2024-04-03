@@ -129,8 +129,10 @@ impl Entry for StringEntry {
     fn getstring(&self) -> Option<String> {
         Some(self.val.clone())
     }
+    // Either match parsed token against any of patterns or in case no patterns are there
+    // just return match (true)
     fn is_pattern(&self) -> bool {
-        self.patterns.iter().find(|&x| self.val == *x).is_some()
+        self.patterns.len() == 0 || self.patterns.iter().find(|&x| self.val == *x).is_some()
     }
 }
 
@@ -161,6 +163,24 @@ fn create_interests_fund_parsing_sequence(
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
         patterns: vec!["DIV PAYMENT".to_owned()],
+    }));
+    sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
+}
+
+fn create_interest_adjustment_parsing_sequence(
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
 }
@@ -685,6 +705,10 @@ fn check_if_transaction(
         create_interests_fund_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Interests);
         log::info!("Starting to parse Interests Fund transaction");
+    } else if candidate_string == "INTEREST INCOME-ADJ" {
+        create_interest_adjustment_parsing_sequence(sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Interests);
+        log::info!("Starting to parse Interest adjustment transaction");
     } else if candidate_string == "QUALIFIED DIVIDEND" {
         create_qualified_dividend_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Dividends);
@@ -940,6 +964,16 @@ mod tests {
             patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
         };
         s.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(s.is_pattern(), true);
+
+        // unimportant string
+        let data: Vec<u8> = vec!['K' as u8, 'L' as u8, 'M' as u8];
+        let mut s = StringEntry {
+            val: String::new(),
+            patterns: vec![],
+        };
+        s.parse(&pdf::primitive::PdfString::new(data));
+        assert_eq!(s.is_pattern(), true);
         Ok(())
     }
 

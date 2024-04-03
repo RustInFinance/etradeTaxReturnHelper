@@ -16,6 +16,7 @@ use logging::ResultExt;
 // TODO: Make a parsing of incomplete date
 // TODO: When I sold on Dec there was EST cost (0.04). Make sure it is included in your results
 // TODO:  async to get currency
+// TODO: make UT using rounded vlaues of f32
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
@@ -432,6 +433,31 @@ mod tests {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (3272.3125, 490.82773, 0.0, 0.0),
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_interest_adjustment_taxation() -> Result<(), clap::Error> {
+        // Get all brokerage with dividends only
+        let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+        let matches = create_cmd_line_pattern(myapp)
+            .get_matches_from_safe(vec!["mytest", "data/example-interest-adj.pdf"])?;
+        let pdfnames = matches
+            .values_of("financial documents")
+            .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (0.66164804, 0.0, 0.0, 0.0),
                 );
                 Ok(())
             }

@@ -11,6 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: make a support for english revolut
 // TODO: When there is no proxy (on intel account) there are problems (UT do not work
 // getting_Exchange_rate)
 // TODO: Make a parsing of incomplete date

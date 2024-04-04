@@ -76,7 +76,7 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
         .map(|x| {
             let m = match x {
                 AnyValue::Utf8(x) => {
-                    if x.contains("Odsetki brutto") {
+                    if x.contains("Odsetki brutto") || x.contains("Gross interest") {
                         Some("odsetki")
                     } else {
                         None
@@ -529,6 +529,37 @@ mod tests {
         ]);
         assert_eq!(
             parse_revolut_transactions("revolut_data/Revolut_30cze2023_27lis2023.csv"),
+            expected_result
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_transactions_english_statement_pln() -> Result<(), String> {
+        let expected_result = Ok(vec![
+            ("12/12/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/13/23".to_owned(), crate::Currency::PLN(0.20)),
+            ("12/15/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/16/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/17/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/18/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/19/23".to_owned(), crate::Currency::PLN(0.41)),
+            ("12/20/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/21/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/22/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/23/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/24/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/25/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/26/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/27/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/28/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/29/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/30/23".to_owned(), crate::Currency::PLN(0.21)),
+            ("12/31/23".to_owned(), crate::Currency::PLN(0.21)),
+        ]);
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/revolut-savings-eng.csv"),
             expected_result
         );
 

@@ -20,7 +20,6 @@ use logging::ResultExt;
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
-// TODO: Change run_taxation for_Each into try_for_Ech if possible
 // TODO: taxation of EUR instruments in US
 
 fn create_cmd_line_pattern<'a, 'b>(myapp: App<'a, 'b>) -> App<'a, 'b> {

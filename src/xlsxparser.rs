@@ -37,11 +37,11 @@ pub fn parse_gains_and_losses(
             // Find indices of interesting collumns
             if let Some(v) = c.get_string() {
                 match v {
-                    "Date Acquired" => date_acquired_idx = idx,
-                    "Date Sold" => date_sold_idx = idx,
-                    "Acquisition Cost" => acquistion_cost_idx = idx,
-                    "Adjusted Cost Basis" => cost_basis_idx = idx,
-                    "Total Proceeds" => total_proceeds_idx = idx,
+                    "Date Acquired" | "Data nabycia" => date_acquired_idx = idx,
+                    "Date Sold" | "Data sprzedaży" => date_sold_idx = idx,
+                    "Acquisition Cost" | "Koszt zakupu" => acquistion_cost_idx = idx,
+                    "Adjusted Cost Basis" | "Skorygowana podstawa kosztów" => cost_basis_idx = idx,
+                    "Total Proceeds" | "Łączne wpływy" => total_proceeds_idx = idx,
                     _ => (),
                 }
             }
@@ -120,7 +120,7 @@ mod tests {
         );
         assert_eq!(
             parse_gains_and_losses("data/G&L_Expanded.xlsx"),
-            Ok((vec![
+            Ok(vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -135,9 +135,89 @@ mod tests {
                     29.28195,
                     43.67
                 )
-            ]))
+            ])
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_gain_and_losses_pl() -> Result<(), String> {
+        assert_eq!(
+            parse_gains_and_losses("data/G&L_Expanded_polish.xlsx"),
+            Ok(vec![
+                (
+                    "02/17/2023".to_owned(),
+                    "02/21/2023".to_owned(),
+                    1791.0388,
+                    2107.1,
+                    2018.3545
+                ),
+                (
+                    "08/01/2022".to_owned(),
+                    "06/05/2023".to_owned(),
+                    0.0,
+                    258.09,
+                    219.0275
+                ),
+                (
+                    "01/31/2023".to_owned(),
+                    "06/05/2023".to_owned(),
+                    0.0,
+                    195.37,
+                    219.0275
+                ),
+                (
+                    "10/31/2022".to_owned(),
+                    "06/05/2023".to_owned(),
+                    0.0,
+                    200.305,
+                    219.0275
+                ),
+                (
+                    "05/01/2023".to_owned(),
+                    "06/05/2023".to_owned(),
+                    0.0,
+                    215.32,
+                    219.0275
+                ),
+                (
+                    "07/31/2023".to_owned(),
+                    "08/07/2023".to_owned(),
+                    0.0,
+                    255.0275,
+                    247.16
+                ),
+                (
+                    "08/18/2023".to_owned(),
+                    "08/21/2023".to_owned(),
+                    1969.0505,
+                    2701.235,
+                    2689.0754
+                ),
+                (
+                    "08/30/2023".to_owned(),
+                    "12/13/2023".to_owned(),
+                    0.0,
+                    923.8725,
+                    1187.31
+                ),
+                (
+                    "11/30/2023".to_owned(),
+                    "12/13/2023".to_owned(),
+                    0.0,
+                    1163.5,
+                    1143.34
+                ),
+                (
+                    "10/31/2023".to_owned(),
+                    "12/13/2023".to_owned(),
+                    0.0,
+                    252.665,
+                    307.82
+                )
+            ])
+        );
         Ok(())
     }
 }

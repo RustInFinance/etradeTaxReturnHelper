@@ -103,7 +103,7 @@ pub fn reconstruct_sold_transactions(
                 .expect(&format!("Unable to parse trade date: {tr_date}"))
                 .format("%m/%d/%y")
                 .to_string(),
-            settlement_date.clone(),
+            tr_date.clone(),
             chrono::NaiveDate::parse_from_str(&acquisition_date, "%m/%d/%Y")
                 .expect(&format!(
                     "Unable to parse acquisition_date: {acquisition_date}"

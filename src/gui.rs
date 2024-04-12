@@ -158,31 +158,22 @@ pub mod gui {
         load_button: &mut Button,
     ) {
         load_button.set_callback(move |_| {
-            let mut chooser = dialog::FileChooser::new(
-                ".",
-                "*.{pdf,xlsx,csv}",
-                dialog::FileChooserType::Multi,
-                "Choose e-trade documents with transactions (PDF and/or XLSX)",
-            );
+            let mut chooser = dialog::FileDialog::new(dialog::FileDialogType::BrowseMultiFile);
+            chooser.set_directory(&".");
+            chooser.set_filter("*.{pdf,xlsx,csv}");
+            chooser.set_title("Choose e-trade documents with transactions (PDF and/or XLSX)");
             chooser.show();
-            chooser.window().set_pos(300, 300);
-            while chooser.shown() {
-                app::wait();
+            if let Some(message) = chooser.error_message() {
+                if message != "No error" {
+                    log::info!("Error in chooser: {}", message);
+                    return;
+                }
             }
-
-            // User hit cancel?
-            if chooser.value(1).is_none() {
-                log::info!("User hit Cancel in file choosing");
-                return;
-            }
-            let nc = chooser.count();
-            log::info!("{nc} were selected");
+            let filenames = chooser.filenames();
+            log::info!("{} were selected", filenames.len());
             let mut filelist = browser.borrow_mut();
-            for d in 1..=nc {
-                let filename = chooser
-                    .value(d)
-                    .expect_and_log("Unable to extract choosen file name");
-                filelist.add(&filename);
+            for filename in filenames {
+                filelist.add(&filename.to_string_lossy());
             }
             let mut buffer = sdisplay
                 .borrow()

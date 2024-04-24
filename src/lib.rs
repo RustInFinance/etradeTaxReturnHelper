@@ -250,8 +250,8 @@ fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
 pub fn format_sold_transactions_to_string() {}
 
 use std::collections::HashSet;
-use std::path::Path;
 use std::ffi::OsStr;
+use std::path::Path;
 
 /* Check:
 if file names have no duplicates
@@ -262,7 +262,7 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
     let mut names_set = HashSet::new();
     let mut spreadsheet_count = 0;
     let mut errors = Vec::<String>::new();
-    
+
     for file_str in files {
         let path = Path::new(&file_str);
         if !path.is_file() {
@@ -279,7 +279,7 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
             // Couldn't test it on windows.
             errors.push(format!("File has no name: {}", file_str));
         }
-        
+
         match path.extension().and_then(OsStr::to_str) {
             Some("xlsx") => spreadsheet_count += 1,
             Some("csv") | Some("pdf") => {},
@@ -289,9 +289,12 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
     }
 
     if spreadsheet_count > 1 {
-        errors.push(format!("Expected a single xlsx spreadsheet, found: {}", spreadsheet_count));
+        errors.push(format!(
+            "Expected a single xlsx spreadsheet, found: {}",
+            spreadsheet_count
+        ));
     }
-    
+
     if errors.len() > 0 {
         return Err(errors.join("\n"));
     }
@@ -315,7 +318,7 @@ pub fn run_taxation(
     String,
 > {
     validate_file_names(&names)?;
-    
+
     let mut parsed_interests_transactions: Vec<(String, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
@@ -429,7 +432,7 @@ pub fn run_taxation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_validate_file_names_invalid_path() {
         let files = vec![
@@ -452,7 +455,10 @@ mod tests {
         ];
 
         let result = validate_file_names(&files);
-        assert_eq!(result.err(), Some(String::from("Expected a single xlsx spreadsheet, found: 2")));
+        assert_eq!(
+            result.err(),
+            Some(String::from("Expected a single xlsx spreadsheet, found: 2"))
+        );
     }
 
     #[test]
@@ -483,7 +489,10 @@ mod tests {
         let files = vec![String::from("LICENCE")];
 
         let result = validate_file_names(&files);
-        assert_eq!(result.err(), Some(String::from("File has no extension: LICENCE")));
+        assert_eq!(
+            result.err(),
+            Some(String::from("File has no extension: LICENCE"))
+        );
     }
 
     #[test]

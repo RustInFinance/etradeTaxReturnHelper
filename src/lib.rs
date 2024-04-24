@@ -249,6 +249,55 @@ fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
 
 pub fn format_sold_transactions_to_string() {}
 
+use std::collections::HashSet;
+use std::path::Path;
+use std::ffi::OsStr;
+
+/* Check:
+if file names have no duplicates
+if there is only one xlsx spreadsheet
+if extensions are only pdf, csv, xlsx
+*/
+pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
+    let mut names_set = HashSet::new();
+    let mut spreadsheet_count = 0;
+    let mut errors = Vec::<String>::new();
+    
+    for file_str in files {
+        let path = Path::new(&file_str);
+        if !path.is_file() {
+            errors.push(format!("Not a file or path doesn't exist: {}", file_str));
+            continue;
+        }
+
+        if let Some(file_stem) = path.file_stem().and_then(OsStr::to_str) {
+            if !names_set.insert(file_stem.to_owned()) {
+                let file_name = path.file_name().and_then(OsStr::to_str).unwrap();
+                errors.push(format!("Duplicate file name found: {}", file_name));
+            }
+        } else {
+            // Couldn't test it on windows.
+            errors.push(format!("File has no name: {}", file_str));
+        }
+        
+        match path.extension().and_then(OsStr::to_str) {
+            Some("xlsx") => spreadsheet_count += 1,
+            Some("csv") | Some("pdf") => {},
+            Some(other_ext) => errors.push(format!("Unexpected extension {other_ext} for file: {file_str}. Only pdf, csv and xlsx are expected.")),
+            None => errors.push(format!("File has no extension: {}", file_str))
+        }
+    }
+
+    if spreadsheet_count > 1 {
+        errors.push(format!("Expected a single xlsx spreadsheet, found: {}", spreadsheet_count));
+    }
+    
+    if errors.len() > 0 {
+        return Err(errors.join("\n"));
+    }
+    Ok(())
+}
+
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
@@ -265,6 +314,8 @@ pub fn run_taxation(
     ),
     String,
 > {
+    validate_file_names(&names)?;
+    
     let mut parsed_interests_transactions: Vec<(String, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
@@ -378,6 +429,63 @@ pub fn run_taxation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    #[test]
+    fn test_validate_file_names_invalid_path() {
+        let files = vec![
+            String::from("file1.csv"),
+            String::from("data/G&L_Expanded.xlsx"),
+            String::from("data"),
+        ];
+
+        let result = validate_file_names(&files);
+        assert_eq!(result.err(), Some(String::from("Not a file or path doesn't exist: file1.csv\nNot a file or path doesn't exist: data")));
+    }
+
+    #[test]
+    fn test_validate_file_names_two_spreadsheets() {
+        let files = vec![
+            String::from("data/G&L_Expanded.xlsx"),
+            String::from("data/G&L_Collapsed.xlsx"),
+            String::from("revolut_data/revolut-savings-eng.csv"),
+            String::from("revolut_data/Revolut_21sie2023_27lis2023.csv"),
+        ];
+
+        let result = validate_file_names(&files);
+        assert_eq!(result.err(), Some(String::from("Expected a single xlsx spreadsheet, found: 2")));
+    }
+
+    #[test]
+    fn test_validate_file_names_duplicate_file() {
+        let files = vec![
+            String::from("data/G&L_Expanded.xlsx"),
+            String::from("data/G&L_Expanded.xlsx"),
+        ];
+
+        let result = validate_file_names(&files);
+        assert_eq!(result.err(), Some(String::from("Duplicate file name found: G&L_Expanded.xlsx\nExpected a single xlsx spreadsheet, found: 2")));
+    }
+
+    #[test]
+    fn test_validate_file_names_unexpected_extension() {
+        let files = vec![
+            String::from("Cargo.toml"),
+            String::from("revolut_data/revolut-savings-eng.csv"),
+            String::from("revolut_data/Revolut_21sie2023_27lis2023.csv"),
+        ];
+
+        let result = validate_file_names(&files);
+        assert_eq!(result.err(), Some(String::from("Unexpected extension toml for file: Cargo.toml. Only pdf, csv and xlsx are expected.")));
+    }
+
+    #[test]
+    fn test_validate_file_names_no_extension() {
+        let files = vec![String::from("LICENCE")];
+
+        let result = validate_file_names(&files);
+        assert_eq!(result.err(), Some(String::from("File has no extension: LICENCE")));
+    }
+
     #[test]
     fn test_simple_div_taxation() -> Result<(), String> {
         // Init Transactions

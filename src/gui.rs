@@ -100,6 +100,10 @@ pub mod gui {
             let mut file_names: Vec<String> = vec![];
             let list_names = browser.borrow();
             log::info!("Processing {} files", list_names.size());
+            if list_names.size() == 0 {
+                log::info!("No files to process");
+                return;
+            }
             for i in 1..=list_names.size() {
                 let line_content = browser.borrow().text(i);
                 match line_content {
@@ -159,7 +163,7 @@ pub mod gui {
     ) {
         load_button.set_callback(move |_| {
             let mut chooser = dialog::FileDialog::new(dialog::FileDialogType::BrowseMultiFile);
-            chooser.set_directory(&".");
+            let _ = chooser.set_directory(&".");
             chooser.set_filter("*.{pdf,xlsx,csv}");
             chooser.set_title("Choose e-trade documents with transactions (PDF and/or XLSX)");
             chooser.show();

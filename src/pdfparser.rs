@@ -4,7 +4,9 @@ use pdf::primitive::Primitive;
 
 pub use crate::logging::ResultExt;
 
+#[derive(Clone, Debug, PartialEq)]
 enum StatementType {
+    UnknownDocument,
     BrokerageStatement,
     AccountStatement,
 }
@@ -352,15 +354,44 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
         .as_ref()
         .ok_or("Unable to get content of first PDF page")?;
 
-    let mut statement_type = StatementType::BrokerageStatement;
+    let mut statement_type = StatementType::UnknownDocument;
     contents.operations.iter().try_for_each(|op| {
+        log::trace!("Detected PDF command: {}",op.operator);
         match op.operator.as_ref() {
+            "TJ" => {
+                // Text show
+                if op.operands.len() > 0 {
+                    //transaction_date = op.operands[0];
+                    let a = &op.operands[0];
+                    log::trace!("Detected PDF text object: {a}");
+                    match a {
+                        Primitive::Array(c) => {
+                            for e in c {
+                                if let Primitive::String(actual_string) = e {
+                                    let raw_string = actual_string.clone().into_string();
+                                    let rust_string = if let Ok(r) = raw_string {
+                                        r.trim().to_uppercase()
+                                    } else {
+                                        "".to_owned()
+                                    };
+                                    if rust_string.contains("ACCT:")  {
+                                        statement_type = StatementType::BrokerageStatement;
+                                        log::info!("PDF parser recognized Brokerage Statement document by finding: \"{rust_string}\"");
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            },
             "Tj" => {
                 // Text show
                 if op.operands.len() > 0 {
                     //transaction_date = op.operands[0];
                     let a = &op.operands[0];
-                    log::info!("Detected PDF object: {a}");
+                    log::info!("Detected PDF text object: {a}");
                     match a {
                         Primitive::String(actual_string) => {
                             let raw_string = actual_string.clone().into_string();
@@ -892,6 +923,10 @@ pub fn parse_statement(
 
     let (interests_transactions, div_transactions, sold_transactions, trades) = match document_type
     {
+        StatementType::UnknownDocument => {
+            log::info!("Processing unknown document PDF");
+            return Err(format!("Unsupported PDF document type: {pdftoparse}"));
+        }
         StatementType::BrokerageStatement => {
             log::info!("Processing brokerage statement PDF");
             parse_brokerage_statement(pdffile_iter)?
@@ -1087,6 +1122,74 @@ mod tests {
     fn test_yield_year() -> Result<(), String> {
         let rust_string = "(AS OF 12/31/23)";
         assert_eq!(yield_year(&rust_string), Some("23".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_recognize_document_type_ms() -> Result<(), String> {
+        let pdftoparse = "etrade_data_2023/MS_ClientStatements_6557_202309.pdf";
+
+        //2. parsing each pdf
+        let mypdffile = File::<Vec<u8>>::open(pdftoparse)
+            .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
+
+        let mut pdffile_iter = mypdffile.pages();
+
+        let first_page = pdffile_iter
+            .next()
+            .unwrap()
+            .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+
+        let document_type = recognize_statement(first_page)?;
+
+        assert_eq!(document_type, StatementType::AccountStatement);
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn test_recognize_document_type_bs() -> Result<(), String> {
+        let pdftoparse = "etrade_data_2023/Brokerage Statement - XXXXX6557 - 202302.pdf";
+
+        //2. parsing each pdf
+        let mypdffile = File::<Vec<u8>>::open(pdftoparse)
+            .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
+
+        let mut pdffile_iter = mypdffile.pages();
+
+        let first_page = pdffile_iter
+            .next()
+            .unwrap()
+            .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+
+        let document_type = recognize_statement(first_page)?;
+
+        assert_eq!(document_type, StatementType::BrokerageStatement);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_recognize_document_type_unk() -> Result<(), String> {
+        let pdftoparse = "data/HowToReadETfromMSStatement.pdf";
+
+        //2. parsing each pdf
+        let mypdffile = File::<Vec<u8>>::open(pdftoparse)
+            .map_err(|_| format!("Error opening and parsing file: {}", pdftoparse))?;
+
+        let mut pdffile_iter = mypdffile.pages();
+
+        let first_page = pdffile_iter
+            .next()
+            .unwrap()
+            .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+
+        let document_type = recognize_statement(first_page)?;
+
+        assert_eq!(document_type, StatementType::UnknownDocument);
+
         Ok(())
     }
 

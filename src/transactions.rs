@@ -95,8 +95,8 @@ pub fn reconstruct_sold_transactions(
             log::info!("Candidate Sold transaction from PDF: trade_date: {trade_dt} income: {income}");
             let trade_date_pdf = chrono::NaiveDate::parse_from_str(&trade_dt, "%m/%d/%y").expect_and_log(&format!("Unable to parse trade date: {trade_dt}"));
             trade_date ==  trade_date_pdf
-        }).expect_and_log(&format!("\n\nERROR: Sold transaction in Gain&Losses:\n (trade_date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}) exist,\n but corressponding data from PDF document is missing. You can download account statements PDF documents at:\n
-            https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n"));
+        }).ok_or(format!("\n\nERROR: Sold transaction in Gain&Losses:\n (trade_date: {tr_date}, acquisition date: {acquisition_date}, cost basis: {cost_basis}, income: {inc}) exist,\n but corressponding data from PDF document is missing. You can download account statements PDF documents at:\n
+            https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt\n\n"))?;
 
         detailed_sold_transactions.push((
             chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
@@ -698,7 +698,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_sold_transaction_reconstruction_second_fail() {
         let parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![(
             "11/07/22".to_string(), // trade date
@@ -732,7 +731,11 @@ mod tests {
             ),
         ];
 
-        let _ = reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses);
+        assert_eq!(
+            reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gains_and_losses)
+                .is_ok(),
+            false
+        );
     }
 
     #[test]

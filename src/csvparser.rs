@@ -166,9 +166,11 @@ fn parse_incomes(df: DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'sta
     Ok(incomes)
 }
 
+/// Parse revolut CSV documents (savings account and trading)
+/// returns: transactions in a form: date, gross income , tax taken
 pub fn parse_revolut_transactions(
     csvtoparse: &str,
-) -> Result<Vec<(String, crate::Currency)>, &str> {
+) -> Result<Vec<(String, crate::Currency, crate::Currency)>, &str> {
     let df = CsvReader::from_path(csvtoparse)
         .map_err(|_| "Error: opening CSV")?
         .has_header(true)
@@ -177,10 +179,11 @@ pub fn parse_revolut_transactions(
 
     log::info!("CSV DataFrame: {df}");
 
-    let mut transactions: Vec<(String, crate::Currency)> = vec![];
+    let mut transactions: Vec<(String, crate::Currency, crate::Currency)> = vec![];
 
     let dates: Vec<String>;
     let incomes: Vec<crate::Currency>;
+    let taxes: Vec<crate::Currency>;
     if df
         .select(&["Completed Date", "Description", "Money in"])
         .is_ok()
@@ -196,6 +199,9 @@ pub fn parse_revolut_transactions(
 
         incomes = parse_incomes(filtred_df, "Money in")?;
         log::info!("Incomes: {:?}", incomes);
+        // Taxes are not automatically taken from savings account
+        // so we will put zeros as tax taken
+        taxes = incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if df.select(&["Type", "Price per share"]).is_ok() {
         log::info!("Detected Investment account statement: {csvtoparse}");
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
@@ -204,13 +210,14 @@ pub fn parse_revolut_transactions(
         log::info!("Investment/Fees Dates: {:?}", dates);
         incomes = parse_incomes(filtred_df, "Total Amount")?;
         log::info!("Incomes: {:?}", incomes);
+        taxes = incomes.iter().map(|i| i.derive(0.0)).collect();
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}");
     }
 
-    let iter = std::iter::zip(dates, incomes);
-    iter.for_each(|(d, m)| {
-        transactions.push((d, m));
+    let iter = std::iter::zip(dates, std::iter::zip(incomes,taxes));
+    iter.for_each(|(d, (m, t))| {
+        transactions.push((d, m, t));
     });
     Ok(transactions)
 }
@@ -534,6 +541,29 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_parse_revolut_investment_gain_and_losses() -> Result<(), String> {
+
+/*
+2024-03-04		617	92.57 PLN	524.43 PLN	PLN
+2024-03-21		259.17	$0	259.17 PLN	PLN
+2024-03-25		212.39	31.87 PLN	180.52 PLN	PLN
+2024-05-16		700.17	105.04 PLN	595.13 PLN	PLN
+2024-05-31		875.82	131.38 PLN	744.44 PLN	PLN
+2024-06-03		488.26	73.25 PLN	415.01 PLN	PLN
+2024-06-04		613.2	92 PLN	521.20 PLN	PLN
+2024-06-11		186.16	27.92 PLN	158.24 PLN	PLN
+2024-06-13		264.74	$0	264.74 PLN	PLN
+2024-06-18		858.33	128.74 PLN	729.59 PLN	PLN
+2024-07-12		421.5	63.23 PLN	358.27 PLN	PLN
+2024-07-16		834.55	125.18 PLN	709.37 PLN	PLN
+*/
+
+
+        Ok(())
+    }
+
 
     #[test]
     fn test_parse_revolut_transactions_english_statement_pln() -> Result<(), String> {

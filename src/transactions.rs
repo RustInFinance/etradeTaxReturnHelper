@@ -286,8 +286,8 @@ mod tests {
     #[test]
     fn test_create_detailed_revolut_transactions_eur() -> Result<(), String> {
         let parsed_transactions = vec![
-            ("03/01/21".to_owned(), crate::Currency::EUR(0.05)),
-            ("04/11/21".to_owned(), crate::Currency::EUR(0.07)),
+            ("03/01/21".to_owned(), crate::Currency::EUR(0.05),crate::Currency::EUR(0.00)),
+            ("04/11/21".to_owned(), crate::Currency::EUR(0.07),crate::Currency::EUR(0.00)),
         ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
@@ -329,8 +329,8 @@ mod tests {
     #[test]
     fn test_create_detailed_revolut_transactions_pln() -> Result<(), String> {
         let parsed_transactions = vec![
-            ("03/01/21".to_owned(), crate::Currency::PLN(0.44)),
-            ("04/11/21".to_owned(), crate::Currency::PLN(0.45)),
+            ("03/01/21".to_owned(), crate::Currency::PLN(0.44), crate::Currency::PLN(0.00)),
+            ("04/11/21".to_owned(), crate::Currency::PLN(0.45), crate::Currency::PLN(0.00)),
         ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =

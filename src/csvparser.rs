@@ -17,9 +17,6 @@ fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::C
     log::info!("Entry cacheline: {cashline}");
     log::info!("Entry currency: {currency}");
 
-    println!("Entry cacheline: {cashline}");
-    println!("Entry currency: {currency}");
-
     let cashline_string: String = cashline.to_string().replace(",", "");
     let mut pln_parser = tuple((double::<&str, Error<_>>, take(1usize), tag("PLN")));
     let mut usd_parser = tuple((tag("$"), double::<&str, Error<_>>));
@@ -345,8 +342,6 @@ pub fn parse_revolut_transactions(
 
         log::info!("Content of first to be DataFrame: {sales}");
         log::info!("Content of second to be DataFrame: {others}");
-
-        println!("Content of second to be DataFrame: {others}");
 
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Data of interest: {filtred_df}");

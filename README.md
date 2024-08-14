@@ -1,12 +1,16 @@
 # etradeTaxReturnHelper
-Project that parse e-trade PDF account statements and Gain and Losses documents and compute total gross gain and tax paid in US that are needed for tax return forms out of US.
+Project that parse e-trade and revolut account statements and Gain and Losses documents  in order to compute total gross gain and tax paid in US that are needed for tax return forms out of US.
 
 ### Data for Tax form from capital gains (PIT-38 in Poland)
 1. Install this program: `cargo install etradeTaxReturnHelper`
-2. Download PDF documents from a year you are filling your tax return form for example: `Brokerage Statement <xxx>.pdf` and `MS_ClientStatements_<xxx>.pdf`:
-    1. Login to e-trade, navigate to [Documents/Brokerage Statements](https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt)
-    2. Select date period
-    3. Download all `ACCOUNT STATEMENT`  and `Single Account Statement` documents
+2. Download financial data :
+    a. Etrade: Download PDF documents from a year you are filling your tax return form for example: `Brokerage Statement <xxx>.pdf` and `MS_ClientStatements_<xxx>.pdf`:
+        1. Login to e-trade, navigate to [Documents/Brokerage Statements](https://edoc.etrade.com/e/t/onlinedocs/docsearch?doc_type=stmt)
+        2. Select date period
+        3. Download all `ACCOUNT STATEMENT`  and `Single Account Statement` documents
+    b. Revolut:
+        1. Download from your Revolut mobile app "Profit and Losses" documents in CSV format in you investment account.
+        2. Download from your Revolut mobile app Statement account documents in CSV format in saving account.
 3. Run: 
     1. `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf"> <Gain and Loss XLSX document>`
     2. Alternatively you can just run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):

@@ -1,11 +1,11 @@
 [package]
 name = "etradeTaxReturnHelper"
-version = "0.5.5"
+version = "0.6.0"
 edition = "2021"
-description = "Parses etrade financial documents for transaction details  (income, tax paid, cost basis) and compute total income and total tax paid according to chosen tax residency (currency)"
+description = "Parses etrade and revolut financial documents for transaction details  (income, tax paid, cost basis) and compute total income and total tax paid according to chosen tax residency (currency)"
 license = "BSD-3-Clause"
 readme = "README.md"
-keywords = ["etrade"]
+keywords = ["etrade","revolut"]
 repository = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
 homepage = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -28,3 +28,4 @@ wild = "2.2.0"
 fltk = {version = "=1.3.24", features = ["fltk-bundled"], optional = true}
 nom = "7.1.3"
 polars = "0.35.4"
+csv = "1.3.0"

@@ -11,6 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+//TODO: Extend revolut CSV with sold transactions support
+// TODO: remove support for account statement of investment account of revolut
 // TODO: When there is no proxy (on intel account) there are problems (UT do not work
 // getting_Exchange_rate)
 // TODO: Make a parsing of incomplete date

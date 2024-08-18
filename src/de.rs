@@ -71,6 +71,40 @@ impl etradeTaxReturnHelper::Residency for DE {
     }
 }
 
+fn get_exchange_rate(url: &str, query: &[(&str, &str)]) -> Result<String, String> {
+    let client = reqwest::blocking::Client::builder()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client
+        .get(url)
+        .query(&query)
+        .send()
+        .map_err(|e| e.to_string())?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("Request failed with status {}", status));
+    }
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .ok_or("Content-Type header missing")?
+        .to_str()
+        .map_err(|e| e.to_string())?;
+
+    let expected_content_type = "application/vnd.sdmx.genericdata+xml;version=2.1";
+    if content_type != expected_content_type {
+        return Err(format!(
+            "Unexpected Content-Type: {}, expected: {}",
+            content_type, expected_content_type
+        ));
+    }
+
+    response.text().map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +161,30 @@ mod tests {
 
         assert_eq!(dates, expected_result);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_ecb_content_type() {
+        let url = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
+        let query = [("startPeriod", "2023-07-13"), ("endPeriod", "2023-07-13")];
+
+        let client = reqwest::blocking::Client::new();
+        let res = client.get(url).query(&query).send().unwrap();
+
+        assert_eq!(
+            res.headers().get("content-type").unwrap().to_str().unwrap(),
+            "application/vnd.sdmx.genericdata+xml;version=2.1"
+        );
+    }
+
+    #[test]
+    fn test_ecb() -> Result<(), String> {
+        let url = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
+        let query = [("startPeriod", "2023-07-13"), ("endPeriod", "2023-07-13")];
+        let response: String = get_exchange_rate(url, &query)?;
+        println!("{:?}", response);
+        assert!(response.len() > 0);
         Ok(())
     }
 }

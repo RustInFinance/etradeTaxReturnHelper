@@ -2,6 +2,7 @@ use clap::{App, AppSettings, Arg};
 use std::env;
 
 mod de;
+mod ecb;
 mod logging;
 mod nbp;
 mod pl;
@@ -126,7 +127,7 @@ mod tests {
 
         assert_eq!(
             (exchange_rate_date, exchange_rate),
-            ("2023-02-20".to_owned(), 0.93561)
+            ("2023-02-20".to_owned(), 0.9368559)
         );
         Ok(())
     }

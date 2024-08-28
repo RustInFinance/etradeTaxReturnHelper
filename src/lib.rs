@@ -1,4 +1,5 @@
 mod csvparser;
+mod ecb;
 mod logging;
 mod pdfparser;
 mod transactions;
@@ -146,6 +147,49 @@ pub trait Residency {
     }
 
     fn get_currency_exchange_rates(
+        &self,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        to: &str,
+    ) -> Result<(), String> {
+        if to == "EUR" {
+            self.get_currency_exchange_rates_ecb(dates, to)
+        } else {
+            self.get_currency_exchange_rates_legacy(dates, to)
+        }
+    }
+
+    fn get_currency_exchange_rates_ecb(
+        &self,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        to: &str,
+    ) -> Result<(), String> {
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+            let (from, date) = match exchange {
+                Exchange::USD(date) => ("usd", date),
+                Exchange::EUR(date) => ("eur", date),
+                Exchange::PLN(date) => ("pln", date),
+            };
+
+            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
+                .map_err(|x| format!("Unable to convert date {x}"))?;
+
+            let day_before = converted_date
+                .checked_sub_signed(chrono::Duration::days(1))
+                .ok_or("Error traversing date")?;
+
+            let day_before_str = day_before.format("%Y-%m-%d").to_string();
+
+            let exchange_rate = ecb::get_eur_to_usd_exchange_rate(day_before, day_before)
+                .map_err(|x| format!("Error getting exchange rate from ECB: {x}"))?;
+
+            *val = Some((day_before_str, exchange_rate));
+            Ok::<(), String>(())
+        })?;
+
+        Ok(())
+    }
+
+    fn get_currency_exchange_rates_legacy(
         &self,
         dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
         to: &str,

@@ -1,6 +1,7 @@
 use clap::{App, AppSettings, Arg};
 use std::env;
 
+mod ecb;
 mod de;
 mod logging;
 mod pl;

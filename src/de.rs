@@ -164,13 +164,18 @@ mod tests {
         Ok(())
     }
 
+    const ECB_URL: &str = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
+
     #[test]
     fn test_ecb_content_type() {
-        let url = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
         let query = [("startPeriod", "2023-07-13"), ("endPeriod", "2023-07-13")];
 
         let client = reqwest::blocking::Client::new();
-        let res = client.get(url).query(&query).send().unwrap();
+        let res = client
+            .get(ECB_URL)
+            .query(&query)
+            .send()
+            .expect("Error while sending request");
 
         assert_eq!(
             res.headers().get("content-type").unwrap().to_str().unwrap(),
@@ -179,12 +184,11 @@ mod tests {
     }
 
     #[test]
-    fn test_ecb() -> Result<(), String> {
-        let url = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
+    fn test_ecb() {
         let query = [("startPeriod", "2023-07-13"), ("endPeriod", "2023-07-13")];
-        let response: String = get_exchange_rate(url, &query)?;
-        println!("{:?}", response);
+        let response: String =
+            get_exchange_rate(ECB_URL, &query).expect("Failed to get exchange rate");
+        println!("{}", response);
         assert!(response.len() > 0);
-        Ok(())
     }
 }

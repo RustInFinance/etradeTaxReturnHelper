@@ -323,7 +323,8 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_transactions: Vec<(String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -337,7 +338,9 @@ pub fn run_taxation(
         } else if x.contains(".xlsx") {
             parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else if x.contains(".csv") {
-            parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
+            let (mut div_t, mut sold_t) = csvparser::parse_revolut_transactions(x)?;
+            parsed_revolut_dividends_transactions.append(&mut div_t);
+            parsed_revolut_sold_transactions.append(&mut sold_t);
         } else {
             return Err(format!("Error: Unable to open a file: {x}"));
         }
@@ -391,7 +394,7 @@ pub fn run_taxation(
             }
         },
     );
-    parsed_revolut_transactions
+    parsed_revolut_dividends_transactions
         .iter()
         .for_each(|(trade_date, gross, _)| {
             let ex = gross.derive_exchange(trade_date.clone());
@@ -407,7 +410,7 @@ pub fn run_taxation(
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
     let revolut_transactions =
-        create_detailed_revolut_transactions(parsed_revolut_transactions, &dates)?;
+        create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);

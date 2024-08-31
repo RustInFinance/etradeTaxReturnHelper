@@ -13,7 +13,7 @@ use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
     create_detailed_sold_transactions, reconstruct_sold_transactions,
-    verify_dividends_transactions, verify_interests_transactions,
+    verify_dividends_transactions, verify_interests_transactions, verify_transactions,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -355,6 +355,8 @@ pub fn run_taxation(
     log::info!("Dividends transactions are consistent");
     verify_dividends_transactions(&parsed_revolut_dividends_transactions)?;
     log::info!("Revolut Dividends transactions are consistent");
+    verify_transactions(&parsed_revolut_sold_transactions)?;
+    log::info!("Revolut Sold transactions are consistent");
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =

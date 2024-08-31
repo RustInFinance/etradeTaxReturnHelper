@@ -351,6 +351,8 @@ pub fn run_taxation(
     log::info!("Interests transactions are consistent");
     verify_dividends_transactions(&parsed_div_transactions)?;
     log::info!("Dividends transactions are consistent");
+    //    verify_revolut_dividends_transactions(&parsed_revolut_dividends_transactions)?;
+    log::info!("Revolut Dividends transactions are consistent");
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =

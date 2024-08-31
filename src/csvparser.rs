@@ -79,6 +79,20 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
     Ok(df_transactions)
 }
 
+fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
+    let mut df_transactions = df
+        .select(&[
+            "Date acquired",
+            "Date sold",
+            "Cost basis",
+            "Gross proceeds",
+            "Currency",
+        ])
+        .map_err(|_| "Error: Unable to select sold data")?;
+
+    Ok(df_transactions)
+}
+
 fn extract_investment_gains_and_costs_transactions(
     df: &DataFrame,
 ) -> Result<DataFrame, &'static str> {
@@ -144,9 +158,12 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
     Ok(filtred_df)
 }
 
-fn parse_investment_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> {
+fn parse_investment_transaction_dates(
+    df: &DataFrame,
+    col_name: &str,
+) -> Result<Vec<String>, &'static str> {
     let date = df
-        .column("Date")
+        .column(col_name)
         .map_err(|_| "Error: Unable to select Date")?;
     let mut dates: Vec<String> = vec![];
     let possible_dates = date
@@ -259,7 +276,10 @@ fn parse_income_with_currency(
 }
 
 /// Parse revolut CSV documents (savings account and trading)
-/// returns: transactions in a form: date, gross income , tax taken
+/// returns: (
+/// dividend transactions in a form: date, gross income , tax taken
+/// sold transactions in a form date acquired, date sold, cost basis, gross income
+/// )
 pub fn parse_revolut_transactions(
     csvtoparse: &str,
 ) -> Result<
@@ -273,6 +293,10 @@ pub fn parse_revolut_transactions(
     let mut sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
 
     let mut dates: Vec<String> = vec![];
+    let mut acquired_dates: Vec<String> = vec![];
+    let mut sold_dates: Vec<String> = vec![];
+    let mut costs: Vec<crate::Currency> = vec![];
+    let mut gross: Vec<crate::Currency> = vec![];
     let mut incomes: Vec<crate::Currency> = vec![];
     let mut taxes: Vec<crate::Currency> = vec![];
     //let mut rdr = csv::Reader::from_path(csvtoparse).map_err(|_| "Error: opening CSV")?;
@@ -314,7 +338,7 @@ pub fn parse_revolut_transactions(
         log::info!("CSV DataFrame: {df}");
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
-        dates = parse_investment_transaction_dates(&filtred_df)?;
+        dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
         incomes = parse_incomes(filtred_df, "Total Amount")?;
         taxes = incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
@@ -348,24 +372,48 @@ pub fn parse_revolut_transactions(
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
         log::info!("Content of first to be DataFrame: {sales}");
+        println!("Content of first to be DataFrame: {sales}");
+
+        let filtred_df = extract_sold_transactions(&sales)?;
+        log::info!("Filtered Sold Data of interest: {filtred_df}");
+        acquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
+        sold_dates = parse_investment_transaction_dates(&filtred_df, "Date sold")?;
+        // For each sold data has to be one acquire date
+        if acquired_dates.len() != sold_dates.len() {
+            return Err("ERROR: Different number of acquired and sold dates".to_string());
+        }
+        costs = parse_income_with_currency(&filtred_df, "Cost basis", "Currency")?;
+        gross = parse_income_with_currency(&filtred_df, "Gross proceeds", "Currency")?;
+
         log::info!("Content of second to be DataFrame: {others}");
 
         let filtred_df = extract_dividends_transactions(&others)?;
-        log::info!("Filtered Data of interest: {filtred_df}");
-        dates = parse_investment_transaction_dates(&filtred_df)?;
+        log::info!("Filtered Dividend Data of interest: {filtred_df}");
+        dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
         // parse income
         incomes = parse_income_with_currency(&filtred_df, "Gross amount", "Currency")?;
         // parse taxes
         taxes = parse_income_with_currency(&filtred_df, "Withholding tax", "Currency")?;
-
-        // TODO: sales
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}".to_string());
     }
+    // Sold transactions
+    log::info!("Sold Acquire Dates: {:?}", acquired_dates);
+    log::info!("Sold Sold Dates: {:?}", sold_dates);
+    log::info!("Sold Incomes: {:?}", gross);
+    log::info!("Sold Cost Basis: {:?}", costs);
+    let iter = std::iter::zip(
+        acquired_dates,
+        std::iter::zip(sold_dates, std::iter::zip(costs, gross)),
+    );
+    iter.for_each(|(acq_d, (sol_d, (c, g)))| {
+        sold_transactions.push((acq_d, sol_d, c, g));
+    });
 
-    log::info!("Investment/Fees Dates: {:?}", dates);
-    log::info!("Incomes: {:?}", incomes);
-    log::info!("Taxes: {:?}", taxes);
+    // Dividends
+    log::info!("Dividend Dates: {:?}", dates);
+    log::info!("Dividend Incomes: {:?}", incomes);
+    log::info!("Dividend Taxes: {:?}", taxes);
     let iter = std::iter::zip(dates, std::iter::zip(incomes, taxes));
     iter.for_each(|(d, (m, t))| {
         dividend_transactions.push((d, m, t));
@@ -474,7 +522,7 @@ mod tests {
         let expected_second_date = "09/09/23".to_owned();
 
         assert_eq!(
-            parse_investment_transaction_dates(&df),
+            parse_investment_transaction_dates(&df, "Date"),
             Ok(vec![expected_first_date, expected_second_date])
         );
 
@@ -493,7 +541,7 @@ mod tests {
         let expected_second_date = "07/16/24".to_owned();
 
         assert_eq!(
-            parse_investment_transaction_dates(&df),
+            parse_investment_transaction_dates(&df, "Date"),
             Ok(vec![expected_first_date, expected_second_date])
         );
 
@@ -1639,7 +1687,12 @@ mod tests {
                     crate::Currency::PLN(130.90),
                 ),
             ],
-            vec![],
+            vec![(
+                "11/20/23".to_owned(),
+                "08/12/24".to_owned(),
+                crate::Currency::USD(5000.0),
+                crate::Currency::USD(5804.62),
+            )],
         ));
 
         assert_eq!(

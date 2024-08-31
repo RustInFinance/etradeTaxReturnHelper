@@ -372,7 +372,6 @@ pub fn parse_revolut_transactions(
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
         log::info!("Content of first to be DataFrame: {sales}");
-        println!("Content of first to be DataFrame: {sales}");
 
         let filtred_df = extract_sold_transactions(&sales)?;
         log::info!("Filtered Sold Data of interest: {filtred_df}");

@@ -11,9 +11,9 @@ type ReqwestClient = reqwest::blocking::Client;
 pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
-    create_detailed_revolut_transactions, create_detailed_sold_transactions,
-    create_detailed_revolut_sold_transactions,
-    reconstruct_sold_transactions, verify_dividends_transactions, verify_interests_transactions,
+    create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
+    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    verify_dividends_transactions, verify_interests_transactions,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -115,9 +115,9 @@ pub struct SoldTransaction {
 }
 
 impl SoldTransaction {
-    pub fn format_to_print(&self) -> String {
+    pub fn format_to_print(&self, prefix: &str) -> String {
         format!(
-                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                "{prefix} SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
                 chrono::NaiveDate::parse_from_str(&self.trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
@@ -315,6 +315,7 @@ pub fn run_taxation(
         Vec<Transaction>,
         Vec<Transaction>,
         Vec<SoldTransaction>,
+        Vec<SoldTransaction>,
     ),
     String,
 > {
@@ -426,7 +427,8 @@ pub fn run_taxation(
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
     let revolut_dividends_transactions =
         create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
-    let revolut_sold_transactions = create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
+    let revolut_sold_transactions =
+        create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
@@ -436,12 +438,13 @@ pub fn run_taxation(
     Ok((
         gross_interests + gross_div + gross_revolut,
         tax_div + tax_revolut,
-        gross_sold + gross_revolut_sold, 
+        gross_sold + gross_revolut_sold,
         cost_sold + cost_revolut_sold,
         interests,
         transactions,
         revolut_dividends_transactions,
-        sold_transactions,  // Add revolut sold transactions
+        sold_transactions,
+        revolut_sold_transactions,
     ))
 }
 

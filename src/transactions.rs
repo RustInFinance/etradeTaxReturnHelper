@@ -250,7 +250,7 @@ pub fn create_detailed_sold_transactions(
                 exchange_rate_acquisition,
             };
 
-            let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("");
 
             println!("{}", msg);
             log::info!("{}", msg);
@@ -261,14 +261,14 @@ pub fn create_detailed_sold_transactions(
     Ok(detailed_transactions)
 }
 
-
 pub fn create_detailed_revolut_sold_transactions(
     transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
-    transactions.iter().for_each(
-        |(acquired_date, sold_date, cost_basis, gross_income)| {
+    transactions
+        .iter()
+        .for_each(|(acquired_date, sold_date, cost_basis, gross_income)| {
             let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
                 [&gross_income.derive_exchange(sold_date.clone())] // TODO: settlement date???
                 .clone()
@@ -290,17 +290,15 @@ pub fn create_detailed_revolut_sold_transactions(
                 exchange_rate_acquisition,
             };
 
-            let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("REVOLUT ");
 
             println!("{}", msg);
             log::info!("{}", msg);
 
             detailed_transactions.push(transaction);
-        },
-    );
+        });
     Ok(detailed_transactions)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -537,14 +535,12 @@ mod tests {
 
     #[test]
     fn test_create_detailed_revolut_sold_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, String, Currency, Currency)> = vec![
-            (
-                "11/20/23".to_string(),
-                "12/08/24".to_string(),
-                Currency::USD(5000.0),
-                Currency::USD(5804.62),
-            )
-        ];
+        let parsed_transactions: Vec<(String, String, Currency, Currency)> = vec![(
+            "11/20/23".to_string(),
+            "12/08/24".to_string(),
+            Currency::USD(5000.0),
+            Currency::USD(5804.62),
+        )];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
@@ -562,19 +558,17 @@ mod tests {
 
         assert_eq!(
             transactions,
-            Ok(vec![
-                SoldTransaction {
-                    trade_date: "12/08/24".to_string(),
-                    settlement_date: "12/08/24".to_string(),
-                    acquisition_date: "11/20/23".to_string(),
-                    income_us: 5804.62,
-                    cost_basis: 5000.0,
-                    exchange_rate_settlement_date: "12/06/24".to_string(),
-                    exchange_rate_settlement: 3.0,
-                    exchange_rate_acquisition_date: "11/19/23".to_string(),
-                    exchange_rate_acquisition: 2.0,
-                },
-            ])
+            Ok(vec![SoldTransaction {
+                trade_date: "12/08/24".to_string(),
+                settlement_date: "12/08/24".to_string(),
+                acquisition_date: "11/20/23".to_string(),
+                income_us: 5804.62,
+                cost_basis: 5000.0,
+                exchange_rate_settlement_date: "12/06/24".to_string(),
+                exchange_rate_settlement: 3.0,
+                exchange_rate_acquisition_date: "11/19/23".to_string(),
+                exchange_rate_acquisition: 2.0,
+            },])
         );
         Ok(())
     }

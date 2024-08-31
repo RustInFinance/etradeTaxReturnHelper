@@ -121,11 +121,11 @@ pub mod gui {
             tbuffer.set_text("");
             nbuffer.set_text("Running...");
             let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-            let (gross_div, tax_div, gross_sold, cost_sold, interests_transactions, div_transactions, revolut_transactions, sold_transactions) =
+            let (gross_div, tax_div, gross_sold, cost_sold, interests_transactions, div_transactions, revolut_transactions, sold_transactions, revolut_sold_transactions) =
                 match run_taxation(&rd, file_names) {
-                    Ok((gd, td, gs, cs, its, dts, rts, sts)) => {
+                    Ok((gd, td, gs, cs, its, dts, rts, sts, rsts)) => {
                         nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
-                        (gd, td, gs, cs, its, dts, rts, sts)
+                        (gd, td, gs, cs, its, dts, rts, sts, rsts)
                     }
                     Err(err) => {
                         nbuffer.set_text(&err);
@@ -149,7 +149,10 @@ pub mod gui {
                 .for_each(|x| transactions_strings.push(x.format_to_print("REVOLUT ").expect_and_log("Error: Formatting DIV transaction failed")));
             sold_transactions
                 .iter()
-                .for_each(|x| transactions_strings.push(x.format_to_print()));
+                .for_each(|x| transactions_strings.push(x.format_to_print("")));
+            revolut_sold_transactions
+                .iter()
+                .for_each(|x| transactions_strings.push(x.format_to_print("REVOLUT ")));
             tbuffer.set_text(&transactions_strings.join("\n"));
         });
     }

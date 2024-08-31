@@ -11,8 +11,9 @@ type ReqwestClient = reqwest::blocking::Client;
 pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
-    create_detailed_revolut_transactions, create_detailed_sold_transactions,
-    reconstruct_sold_transactions, verify_dividends_transactions, verify_interests_transactions,
+    create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
+    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    verify_dividends_transactions, verify_interests_transactions, verify_transactions,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -114,9 +115,9 @@ pub struct SoldTransaction {
 }
 
 impl SoldTransaction {
-    pub fn format_to_print(&self) -> String {
+    pub fn format_to_print(&self, prefix: &str) -> String {
         format!(
-                " SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+                "{prefix} SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
                 chrono::NaiveDate::parse_from_str(&self.trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
@@ -314,6 +315,7 @@ pub fn run_taxation(
         Vec<Transaction>,
         Vec<Transaction>,
         Vec<SoldTransaction>,
+        Vec<SoldTransaction>,
     ),
     String,
 > {
@@ -323,7 +325,8 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_transactions: Vec<(String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -337,7 +340,9 @@ pub fn run_taxation(
         } else if x.contains(".xlsx") {
             parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else if x.contains(".csv") {
-            parsed_revolut_transactions.append(&mut csvparser::parse_revolut_transactions(x)?);
+            let (mut div_t, mut sold_t) = csvparser::parse_revolut_transactions(x)?;
+            parsed_revolut_dividends_transactions.append(&mut div_t);
+            parsed_revolut_sold_transactions.append(&mut sold_t);
         } else {
             return Err(format!("Error: Unable to open a file: {x}"));
         }
@@ -348,6 +353,10 @@ pub fn run_taxation(
     log::info!("Interests transactions are consistent");
     verify_dividends_transactions(&parsed_div_transactions)?;
     log::info!("Dividends transactions are consistent");
+    verify_dividends_transactions(&parsed_revolut_dividends_transactions)?;
+    log::info!("Revolut Dividends transactions are consistent");
+    verify_transactions(&parsed_revolut_sold_transactions)?;
+    log::info!("Revolut Sold transactions are consistent");
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =
@@ -391,10 +400,22 @@ pub fn run_taxation(
             }
         },
     );
-    parsed_revolut_transactions
+    parsed_revolut_dividends_transactions
         .iter()
         .for_each(|(trade_date, gross, _)| {
             let ex = gross.derive_exchange(trade_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+        });
+    parsed_revolut_sold_transactions
+        .iter()
+        .for_each(|(acquired_date, sold_date, cost, gross)| {
+            let ex = cost.derive_exchange(acquired_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+            let ex = gross.derive_exchange(sold_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
@@ -406,22 +427,26 @@ pub fn run_taxation(
     let interests = create_detailed_interests_transactions(parsed_interests_transactions, &dates)?;
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
-    let revolut_transactions =
-        create_detailed_revolut_transactions(parsed_revolut_transactions, &dates)?;
+    let revolut_dividends_transactions =
+        create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
+    let revolut_sold_transactions =
+        create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_transactions);
+    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
+    let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
     Ok((
         gross_interests + gross_div + gross_revolut,
         tax_div + tax_revolut,
-        gross_sold, // We put sold and savings income into the same column
-        cost_sold,
+        gross_sold + gross_revolut_sold,
+        cost_sold + cost_revolut_sold,
         interests,
         transactions,
-        revolut_transactions,
+        revolut_dividends_transactions,
         sold_transactions,
+        revolut_sold_transactions,
     ))
 }
 

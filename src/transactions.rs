@@ -5,12 +5,10 @@ pub use crate::logging::ResultExt;
 use crate::{SoldTransaction, Transaction};
 
 /// Check if all interests rate transactions come from the same year
-pub fn verify_interests_transactions(
-    interests_transactions: &Vec<(String, f32)>,
-) -> Result<(), String> {
-    let mut trans = interests_transactions.iter();
-    let (transaction_date, _) = match trans.next() {
-        Some((x, a)) => (x, a),
+pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T)>) -> Result<(), String> {
+    let mut trans = transactions.iter();
+    let transaction_date = match trans.next() {
+        Some((x, _)) => x,
         None => {
             log::info!("No interests transactions");
             return Ok(());
@@ -18,28 +16,29 @@ pub fn verify_interests_transactions(
     };
 
     let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
-        .unwrap()
+        .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
-    trans.for_each(|(tr_date, _)| {
+    trans.try_for_each(|(tr_date, _)| {
         let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
-            .unwrap()
+            .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
         if tr_year != transaction_year {
-            let msg: &str = "Error:  Brokerage statements are related to different years!";
+            let msg: &str = "Error:  Statements are related to different years!";
             verification = Err(msg.to_owned());
         }
+        Ok::<(), String>(())
     });
     verification
 }
 
 /// Check if all dividends transaction come from the same year
-pub fn verify_dividends_transactions(
-    div_transactions: &Vec<(String, f32, f32)>,
+pub fn verify_dividends_transactions<T>(
+    div_transactions: &Vec<(String, T, T)>,
 ) -> Result<(), String> {
     let mut trans = div_transactions.iter();
-    let (transaction_date, _, _) = match trans.next() {
-        Some((x, a, b)) => (x, a, b),
+    let transaction_date = match trans.next() {
+        Some((x, _, _)) => x,
         None => {
             log::info!("No Dividends transactions");
             return Ok(());
@@ -47,17 +46,45 @@ pub fn verify_dividends_transactions(
     };
 
     let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
-        .unwrap()
+        .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
-    trans.for_each(|(tr_date, _, _)| {
+    trans.try_for_each(|(tr_date, _, _)| {
         let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
-            .unwrap()
+            .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
         if tr_year != transaction_year {
-            let msg: &str = "Error:  Brokerage statements are related to different years!";
+            let msg: &str = "Error:  Statements are related to different years!";
             verification = Err(msg.to_owned());
         }
+        Ok::<(), String>(())
+    });
+    verification
+}
+
+pub fn verify_transactions<T>(transactions: &Vec<(String, String, T, T)>) -> Result<(), String> {
+    let mut trans = transactions.iter();
+    let transaction_date = match trans.next() {
+        Some((_, x, _, _)) => x,
+        None => {
+            log::info!("No revolut sold transactions");
+            return Ok(());
+        }
+    };
+
+    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+        .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
+        .year();
+    let mut verification: Result<(), String> = Ok(());
+    trans.try_for_each(|(_, tr_date, _, _)| {
+        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+            .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
+            .year();
+        if tr_year != transaction_year {
+            let msg: &str = "Error: Statements are related to different years!";
+            verification = Err(msg.to_owned());
+        }
+        Ok::<(), String>(())
     });
     verification
 }
@@ -249,7 +276,7 @@ pub fn create_detailed_sold_transactions(
                 exchange_rate_acquisition,
             };
 
-            let msg = transaction.format_to_print();
+            let msg = transaction.format_to_print("");
 
             println!("{}", msg);
             log::info!("{}", msg);
@@ -260,10 +287,50 @@ pub fn create_detailed_sold_transactions(
     Ok(detailed_transactions)
 }
 
+pub fn create_detailed_revolut_sold_transactions(
+    transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<SoldTransaction>, &str> {
+    let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
+    transactions
+        .iter()
+        .for_each(|(acquired_date, sold_date, cost_basis, gross_income)| {
+            let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
+                [&gross_income.derive_exchange(sold_date.clone())] // TODO: settlement date???
+                .clone()
+                .unwrap();
+            let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates
+                [&cost_basis.derive_exchange(acquired_date.clone())]
+                .clone()
+                .unwrap();
+
+            let transaction = SoldTransaction {
+                settlement_date: sold_date.clone(),
+                trade_date: sold_date.clone(),
+                acquisition_date: acquired_date.clone(),
+                income_us: (gross_income.value() as f32),
+                cost_basis: (cost_basis.value() as f32),
+                exchange_rate_settlement_date,
+                exchange_rate_settlement,
+                exchange_rate_acquisition_date,
+                exchange_rate_acquisition,
+            };
+
+            let msg = transaction.format_to_print("REVOLUT ");
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+
+            detailed_transactions.push(transaction);
+        });
+    Ok(detailed_transactions)
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
+    use crate::Currency;
 
     #[test]
     fn test_interests_verification_ok() -> Result<(), String> {
@@ -275,12 +342,56 @@ mod tests {
     }
 
     #[test]
+    fn test_revolut_sold_verification_false() -> Result<(), String> {
+        let transactions: Vec<(String, String, Currency, Currency)> = vec![
+            (
+                "06/01/21".to_string(),
+                "06/01/22".to_string(),
+                Currency::PLN(10.0),
+                Currency::PLN(2.0),
+            ),
+            (
+                "06/01/21".to_string(),
+                "07/04/23".to_string(),
+                Currency::PLN(10.0),
+                Currency::PLN(2.0),
+            ),
+        ];
+        assert_eq!(
+            verify_transactions(&transactions),
+            Err("Error: Statements are related to different years!".to_owned())
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_dividends_verification_ok() -> Result<(), String> {
         let transactions: Vec<(String, f32, f32)> = vec![
             ("06/01/21".to_string(), 100.0, 25.0),
             ("03/01/21".to_string(), 126.0, 10.0),
         ];
         verify_dividends_transactions(&transactions)
+    }
+
+    #[test]
+    fn test_dividends_verification_false() -> Result<(), String> {
+        let transactions: Vec<(String, Currency, Currency)> = vec![
+            (
+                "06/01/21".to_string(),
+                Currency::PLN(10.0),
+                Currency::PLN(2.0),
+            ),
+            (
+                "03/01/22".to_string(),
+                Currency::PLN(126.0),
+                Currency::PLN(10.0),
+            ),
+        ];
+        assert_eq!(
+            verify_dividends_transactions(&transactions),
+            Err("Error:  Statements are related to different years!".to_owned())
+        );
+        Ok(())
     }
 
     #[test]
@@ -467,6 +578,46 @@ mod tests {
                     exchange_rate: 2.0,
                 },
             ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_detailed_revolut_sold_transactions() -> Result<(), String> {
+        let parsed_transactions: Vec<(String, String, Currency, Currency)> = vec![(
+            "11/20/23".to_string(),
+            "12/08/24".to_string(),
+            Currency::USD(5000.0),
+            Currency::USD(5804.62),
+        )];
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::USD("11/20/23".to_owned()),
+            Some(("11/19/23".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("12/08/24".to_owned()),
+            Some(("12/06/24".to_owned(), 3.0)),
+        );
+
+        let transactions = create_detailed_revolut_sold_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![SoldTransaction {
+                trade_date: "12/08/24".to_string(),
+                settlement_date: "12/08/24".to_string(),
+                acquisition_date: "11/20/23".to_string(),
+                income_us: 5804.62,
+                cost_basis: 5000.0,
+                exchange_rate_settlement_date: "12/06/24".to_string(),
+                exchange_rate_settlement: 3.0,
+                exchange_rate_acquisition_date: "11/19/23".to_string(),
+                exchange_rate_acquisition: 2.0,
+            },])
         );
         Ok(())
     }

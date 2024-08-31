@@ -11,6 +11,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: VERIFY dividend from revolut if from the same year
+// TODO: implement run_taxation further for revolut sold transactions
 //TODO: Add fees to revolut sold transactions when CSV contains such a data
 // TODO: remove support for account statement of investment account of revolut
 // TODO: When there is no proxy (on intel account) there are problems (UT do not work

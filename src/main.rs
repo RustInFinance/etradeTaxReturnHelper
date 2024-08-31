@@ -11,7 +11,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: VERIFY dividend from revolut if from the same year
+// TODO: VERIFY sold transactions from revolut if from the same year
 // TODO: implement run_taxation further for revolut sold transactions
 //TODO: Add fees to revolut sold transactions when CSV contains such a data
 // TODO: remove support for account statement of investment account of revolut
@@ -409,6 +409,33 @@ mod tests {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (6331.29, 871.17993, 0.0, 0.0),
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process"),
+        }
+    }
+
+    #[test]
+    fn test_revolut_sold_and_dividends() -> Result<(), clap::Error> {
+        // Get all brokerage with dividends only
+        let myapp = App::new("E-trade tax helper").setting(AppSettings::ArgRequiredElseHelp);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+
+        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
+            "mytest",
+            "revolut_data/trading-pnl-statement_2022-11-01_2024-09-01_pl-pl_e989f4.csv",
+        ])?;
+        let pdfnames = matches
+            .values_of("financial documents")
+            .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
+            Ok((gross_div, tax_div, gross_sold, cost_sold, _, _, _, _)) => {
+                assert_eq!(
+                    (gross_div, tax_div, gross_sold, cost_sold),
+                    (9142.319, 1207.08, 22988.617, 20163.5),
                 );
                 Ok(())
             }

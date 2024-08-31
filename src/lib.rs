@@ -12,6 +12,7 @@ pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_transactions, create_detailed_sold_transactions,
+    create_detailed_revolut_sold_transactions,
     reconstruct_sold_transactions, verify_dividends_transactions, verify_interests_transactions,
 };
 
@@ -404,6 +405,18 @@ pub fn run_taxation(
                 dates.insert(ex, None);
             }
         });
+    parsed_revolut_sold_transactions
+        .iter()
+        .for_each(|(acquired_date, sold_date, cost, gross)| {
+            let ex = cost.derive_exchange(acquired_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+            let ex = gross.derive_exchange(sold_date.clone());
+            if dates.contains_key(&ex) == false {
+                dates.insert(ex, None);
+            }
+        });
 
     rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
@@ -411,22 +424,24 @@ pub fn run_taxation(
     let interests = create_detailed_interests_transactions(parsed_interests_transactions, &dates)?;
     let transactions = create_detailed_div_transactions(parsed_div_transactions, &dates)?;
     let sold_transactions = create_detailed_sold_transactions(detailed_sold_transactions, &dates)?;
-    let revolut_transactions =
+    let revolut_dividends_transactions =
         create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
+    let revolut_sold_transactions = create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_transactions);
+    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
+    let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
     Ok((
         gross_interests + gross_div + gross_revolut,
         tax_div + tax_revolut,
-        gross_sold, // We put sold and savings income into the same column
-        cost_sold,
+        gross_sold + gross_revolut_sold, 
+        cost_sold + cost_revolut_sold,
         interests,
         transactions,
-        revolut_transactions,
-        sold_transactions,
+        revolut_dividends_transactions,
+        sold_transactions,  // Add revolut sold transactions
     ))
 }
 

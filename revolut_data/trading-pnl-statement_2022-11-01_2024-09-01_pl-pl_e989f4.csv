@@ -4,8 +4,6 @@ Date acquired,Date sold,Symbol,Security name,ISIN,Country,Quantity,Cost basis,Gr
 
 Other income & fees
 Date,Symbol,Security name,ISIN,Country,Gross amount,Withholding tax,Net Amount,Currency
-2023-12-14,AMCR,Amcor,JE00BJ1F3079,JE,11.52,$0,11.52 PLN,PLN
-2023-12-26,PXD,Pioneer Natural Resources,US7237871071,US,261.78,39.26 PLN,222.52 PLN,PLN
 2024-03-04,TFC,Truist Financial Corp,US89832Q1094,US,617.00,92.57 PLN,524.43 PLN,PLN
 2024-03-21,AMCR,Amcor,JE00BJ1F3079,JE,259.17,$0,259.17 PLN,PLN
 2024-03-25,PXD,Pioneer Natural Resources,US7237871071,US,212.39,31.87 PLN,180.52 PLN,PLN

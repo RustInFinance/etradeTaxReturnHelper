@@ -1597,16 +1597,6 @@ mod tests {
         let expected_result = Ok((
             vec![
                 (
-                    "12/14/23".to_owned(),
-                    crate::Currency::PLN(11.52),
-                    crate::Currency::PLN(0.0),
-                ),
-                (
-                    "12/26/23".to_owned(),
-                    crate::Currency::PLN(261.78),
-                    crate::Currency::PLN(39.26),
-                ),
-                (
                     "03/04/24".to_owned(),
                     crate::Currency::PLN(617.00),
                     crate::Currency::PLN(92.57),

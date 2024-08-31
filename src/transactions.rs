@@ -261,6 +261,47 @@ pub fn create_detailed_sold_transactions(
     Ok(detailed_transactions)
 }
 
+
+pub fn create_detailed_revolut_sold_transactions(
+    transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
+    dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
+) -> Result<Vec<SoldTransaction>, &str> {
+    let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
+    transactions.iter().for_each(
+        |(acquired_date, sold_date, cost_basis, gross_income)| {
+            let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
+                [&gross_income.derive_exchange(sold_date.clone())] // TODO: settlement date???
+                .clone()
+                .unwrap();
+            let (exchange_rate_acquisition_date, exchange_rate_acquisition) = dates
+                [&cost_basis.derive_exchange(acquired_date.clone())]
+                .clone()
+                .unwrap();
+
+            let transaction = SoldTransaction {
+                settlement_date: sold_date.clone(),
+                trade_date: sold_date.clone(),
+                acquisition_date: acquired_date.clone(),
+                income_us: (gross_income.value() as f32),
+                cost_basis: (cost_basis.value() as f32),
+                exchange_rate_settlement_date,
+                exchange_rate_settlement,
+                exchange_rate_acquisition_date,
+                exchange_rate_acquisition,
+            };
+
+            let msg = transaction.format_to_print();
+
+            println!("{}", msg);
+            log::info!("{}", msg);
+
+            detailed_transactions.push(transaction);
+        },
+    );
+    Ok(detailed_transactions)
+}
+
+
 #[cfg(test)]
 mod tests {
 
@@ -488,6 +529,50 @@ mod tests {
                     tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
+                },
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_detailed_revolut_sold_transactions() -> Result<(), String> {
+        let parsed_transactions: Vec<(String, String, Currency, Currency)> = vec![
+            (
+                "11/20/23".to_string(),
+                "12/08/24".to_string(),
+                Currency::USD(5000.0),
+                Currency::USD(5804.62),
+            )
+        ];
+
+        let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
+            std::collections::HashMap::new();
+
+        dates.insert(
+            crate::Exchange::USD("11/20/23".to_owned()),
+            Some(("11/19/23".to_owned(), 2.0)),
+        );
+        dates.insert(
+            crate::Exchange::USD("12/08/24".to_owned()),
+            Some(("12/06/24".to_owned(), 3.0)),
+        );
+
+        let transactions = create_detailed_revolut_sold_transactions(parsed_transactions, &dates);
+
+        assert_eq!(
+            transactions,
+            Ok(vec![
+                SoldTransaction {
+                    trade_date: "12/08/24".to_string(),
+                    settlement_date: "12/08/24".to_string(),
+                    acquisition_date: "11/20/23".to_string(),
+                    income_us: 5804.62,
+                    cost_basis: 5000.0,
+                    exchange_rate_settlement_date: "12/06/24".to_string(),
+                    exchange_rate_settlement: 3.0,
+                    exchange_rate_acquisition_date: "11/19/23".to_string(),
+                    exchange_rate_acquisition: 2.0,
                 },
             ])
         );

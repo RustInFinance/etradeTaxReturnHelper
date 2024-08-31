@@ -1454,7 +1454,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_revolut_investment_gain_and_losses() -> Result<(), String> {
+    fn test_parse_revolut_investment_gain_and_losses_dividends() -> Result<(), String> {
         let expected_result = Ok(vec![
             (
                 "03/04/24".to_owned(),
@@ -1521,6 +1521,111 @@ mod tests {
         assert_eq!(
             parse_revolut_transactions(
                 "revolut_data/trading-pnl-statement_2024-01-01_2024-08-04_pl-pl_8e8783.csv"
+            ),
+            expected_result
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_investment_gain_and_losses_sells_and_dividends() -> Result<(), String> {
+        let expected_result = Ok(vec![
+            (
+                "12/14/23".to_owned(),
+                crate::Currency::PLN(11.52),
+                crate::Currency::PLN(0.0),
+            ),
+            (
+                "12/26/23".to_owned(),
+                crate::Currency::PLN(261.78),
+                crate::Currency::PLN(39.26),
+            ),
+            (
+                "03/04/24".to_owned(),
+                crate::Currency::PLN(617.00),
+                crate::Currency::PLN(92.57),
+            ),
+            (
+                "03/21/24".to_owned(),
+                crate::Currency::PLN(259.17),
+                crate::Currency::PLN(0.0),
+            ),
+            (
+                "03/25/24".to_owned(),
+                crate::Currency::PLN(212.39),
+                crate::Currency::PLN(31.87),
+            ),
+            (
+                "05/16/24".to_owned(),
+                crate::Currency::PLN(700.17),
+                crate::Currency::PLN(105.04),
+            ),
+            (
+                "05/31/24".to_owned(),
+                crate::Currency::PLN(875.82),
+                crate::Currency::PLN(131.38),
+            ),
+            (
+                "06/03/24".to_owned(),
+                crate::Currency::PLN(488.26),
+                crate::Currency::PLN(73.25),
+            ),
+            (
+                "06/04/24".to_owned(),
+                crate::Currency::PLN(613.2),
+                crate::Currency::PLN(92.00),
+            ),
+            (
+                "06/11/24".to_owned(),
+                crate::Currency::PLN(186.16),
+                crate::Currency::PLN(27.92),
+            ),
+            (
+                "06/13/24".to_owned(),
+                crate::Currency::PLN(264.74),
+                crate::Currency::PLN(0.00),
+            ),
+            (
+                "06/18/24".to_owned(),
+                crate::Currency::PLN(858.33),
+                crate::Currency::PLN(128.74),
+            ),
+            (
+                "07/12/24".to_owned(),
+                crate::Currency::PLN(421.5),
+                crate::Currency::PLN(63.23),
+            ),
+            (
+                "07/16/24".to_owned(),
+                crate::Currency::PLN(834.55),
+                crate::Currency::PLN(125.18),
+            ),
+            (
+                "08/16/24".to_owned(),
+                crate::Currency::PLN(834.79),
+                crate::Currency::PLN(125.23),
+            ),
+            (
+                "08/26/24".to_owned(),
+                crate::Currency::PLN(302.43),
+                crate::Currency::PLN(79.77),
+            ),
+            (
+                "08/29/24".to_owned(),
+                crate::Currency::PLN(801.25),
+                crate::Currency::PLN(0.0),
+            ),
+            (
+                "08/30/24".to_owned(),
+                crate::Currency::PLN(872.56),
+                crate::Currency::PLN(130.90),
+            ),
+        ]);
+
+        assert_eq!(
+            parse_revolut_transactions(
+                "revolut_data/trading-pnl-statement_2022-11-01_2024-09-01_pl-pl_e989f4.csv"
             ),
             expected_result
         );

@@ -1518,73 +1518,31 @@ mod tests {
         let expected_result = Ok((
             vec![
                 (
-                    "03/04/24".to_owned(),
-                    crate::Currency::PLN(617.00),
-                    crate::Currency::PLN(92.57),
-                ),
-                (
-                    "03/21/24".to_owned(),
-                    crate::Currency::PLN(259.17),
-                    crate::Currency::PLN(0.0),
-                ),
-                (
-                    "03/25/24".to_owned(),
-                    crate::Currency::PLN(212.39),
-                    crate::Currency::PLN(31.87),
-                ),
-                (
-                    "05/16/24".to_owned(),
-                    crate::Currency::PLN(700.17),
-                    crate::Currency::PLN(105.04),
-                ),
-                (
-                    "05/31/24".to_owned(),
-                    crate::Currency::PLN(875.82),
-                    crate::Currency::PLN(131.38),
-                ),
-                (
-                    "06/03/24".to_owned(),
-                    crate::Currency::PLN(488.26),
-                    crate::Currency::PLN(73.25),
-                ),
-                (
                     "06/04/24".to_owned(),
-                    crate::Currency::PLN(613.2),
-                    crate::Currency::PLN(92.00),
+                    crate::Currency::PLN(2.80),
+                    crate::Currency::PLN(0.68),
                 ),
                 (
-                    "06/11/24".to_owned(),
-                    crate::Currency::PLN(186.16),
-                    crate::Currency::PLN(27.92),
+                    "06/20/24".to_owned(),
+                    crate::Currency::PLN(0.34),
+                    crate::Currency::PLN(0.08),
                 ),
                 (
-                    "06/13/24".to_owned(),
-                    crate::Currency::PLN(264.74),
-                    crate::Currency::PLN(0.00),
+                    "06/28/24".to_owned(),
+                    crate::Currency::PLN(3.79),
+                    crate::Currency::PLN(0.94),
                 ),
                 (
-                    "06/18/24".to_owned(),
-                    crate::Currency::PLN(858.33),
-                    crate::Currency::PLN(128.74),
-                ),
-                (
-                    "07/12/24".to_owned(),
-                    crate::Currency::PLN(421.5),
-                    crate::Currency::PLN(63.23),
-                ),
-                (
-                    "07/16/24".to_owned(),
-                    crate::Currency::PLN(834.55),
-                    crate::Currency::PLN(125.18),
+                    "07/01/24".to_owned(),
+                    crate::Currency::PLN(1.07),
+                    crate::Currency::PLN(0.25),
                 ),
             ],
             vec![],
         ));
 
         assert_eq!(
-            parse_revolut_transactions(
-                "revolut_data/trading-pnl-statement_2024-01-01_2024-08-04_pl-pl_8e8783.csv"
-            ),
+            parse_revolut_transactions("revolut_data/trading-pnl-statement_2024-01-robo.csv"),
             expected_result
         );
 

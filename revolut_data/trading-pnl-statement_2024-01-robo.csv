@@ -1,0 +1,9 @@
+Income from Sells
+Date acquired,Date sold,Symbol,Security name,ISIN,Country,Quantity,Cost basis,Gross proceeds,Gross PnL,Currency
+
+Other income & fees
+Date,Symbol,Security name,ISIN,Country,Gross amount,Withholding tax,Net Amount,Currency
+2024-06-04,QDVY,iShares Floating Rate Bond ETF (Dist),IE00BZ048462,IE,2.80,0.68 PLN,2.12 PLN,PLN
+2024-06-20,EXI2,iShares Dow Jones Global Titans 50 ETF (Dist),DE0006289382,DE,0.34,0.08 PLN,0.26 PLN,PLN
+2024-06-28,IS3K,iShares Short Duration High Yield Corporate Bond ETF (Dist),IE00BCRY6003,IE,3.79,0.94 PLN,2.85 PLN,PLN
+2024-07-01,IBCD,iShares Corporate Bond ETF (Dist),IE0032895942,IE,01.07,0.25 PLN,0.82 PLN,PLN

@@ -1,10 +1,6 @@
 use nom::{
-    bytes::complete::tag,
-    bytes::complete::take,
-    error::Error,
-    multi::many_m_n,
-    number::complete::double,
-    sequence::tuple,
+    bytes::complete::tag, bytes::complete::take, error::Error, multi::many_m_n,
+    number::complete::double, sequence::tuple,
 };
 use polars::prelude::*;
 

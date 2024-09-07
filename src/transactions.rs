@@ -15,12 +15,12 @@ pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T)>) -> Resu
         }
     };
 
-    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+    let transaction_year = chrono::NaiveDate::parse_from_str(transaction_date, "%m/%d/%y")
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
     trans.try_for_each(|(tr_date, _)| {
-        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+        let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
         if tr_year != transaction_year {
@@ -28,7 +28,7 @@ pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T)>) -> Resu
             verification = Err(msg.to_owned());
         }
         Ok::<(), String>(())
-    });
+    })?;
     verification
 }
 
@@ -45,12 +45,12 @@ pub fn verify_dividends_transactions<T>(
         }
     };
 
-    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+    let transaction_year = chrono::NaiveDate::parse_from_str(transaction_date, "%m/%d/%y")
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
     trans.try_for_each(|(tr_date, _, _)| {
-        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+        let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
         if tr_year != transaction_year {
@@ -58,7 +58,7 @@ pub fn verify_dividends_transactions<T>(
             verification = Err(msg.to_owned());
         }
         Ok::<(), String>(())
-    });
+    })?;
     verification
 }
 
@@ -72,12 +72,12 @@ pub fn verify_transactions<T>(transactions: &Vec<(String, String, T, T)>) -> Res
         }
     };
 
-    let transaction_year = chrono::NaiveDate::parse_from_str(&transaction_date, "%m/%d/%y")
+    let transaction_year = chrono::NaiveDate::parse_from_str(transaction_date, "%m/%d/%y")
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
     trans.try_for_each(|(_, tr_date, _, _)| {
-        let tr_year = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%y")
+        let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
         if tr_year != transaction_year {
@@ -85,7 +85,7 @@ pub fn verify_transactions<T>(transactions: &Vec<(String, String, T, T)>) -> Res
             verification = Err(msg.to_owned());
         }
         Ok::<(), String>(())
-    });
+    })?;
     verification
 }
 

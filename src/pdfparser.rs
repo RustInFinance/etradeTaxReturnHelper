@@ -430,7 +430,7 @@ fn process_transaction(
     sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
     transaction_type: TransactionType,
 ) -> Result<ParserState, String> {
-    let mut state = ParserState::ProcessingTransaction(transaction_type.clone());
+    let state;
     let possible_obj = sequence.pop_front();
     match possible_obj {
         // Move executed parser objects into Vector

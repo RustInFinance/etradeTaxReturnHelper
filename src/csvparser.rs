@@ -1,15 +1,10 @@
-pub use crate::logging::ResultExt;
 use nom::{
-    branch::alt,
     bytes::complete::tag,
     bytes::complete::take,
-    character::{complete::alphanumeric1, is_digit},
     error::Error,
     multi::many_m_n,
     number::complete::double,
-    sequence::delimited,
     sequence::tuple,
-    IResult,
 };
 use polars::prelude::*;
 
@@ -72,16 +67,16 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
 }
 
 fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let mut df_transactions = df
-        .select(&["Date", "Gross amount", "Withholding tax", "Currency"])
+    let df_transactions = df
+        .select(["Date", "Gross amount", "Withholding tax", "Currency"])
         .map_err(|_| "Error: Unable to select dividend data")?;
 
     Ok(df_transactions)
 }
 
 fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let mut df_transactions = df
-        .select(&[
+    let df_transactions = df
+        .select([
             "Date acquired",
             "Date sold",
             "Cost basis",
@@ -96,8 +91,8 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
 fn extract_investment_gains_and_costs_transactions(
     df: &DataFrame,
 ) -> Result<DataFrame, &'static str> {
-    let mut df_transactions = df
-        .select(&["Date", "Type", "Total Amount"])
+    let df_transactions = df
+        .select(["Date", "Type", "Total Amount"])
         .map_err(|_| "Error: Unable to select description")?;
 
     let intrest_rate_mask = df_transactions
@@ -292,13 +287,13 @@ pub fn parse_revolut_transactions(
     let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency)> = vec![];
     let mut sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
 
-    let mut dates: Vec<String> = vec![];
+    let dates: Vec<String>;
     let mut acquired_dates: Vec<String> = vec![];
     let mut sold_dates: Vec<String> = vec![];
     let mut costs: Vec<crate::Currency> = vec![];
     let mut gross: Vec<crate::Currency> = vec![];
-    let mut incomes: Vec<crate::Currency> = vec![];
-    let mut taxes: Vec<crate::Currency> = vec![];
+    let incomes: Vec<crate::Currency>;
+    let taxes: Vec<crate::Currency>;
     //let mut rdr = csv::Reader::from_path(csvtoparse).map_err(|_| "Error: opening CSV")?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)

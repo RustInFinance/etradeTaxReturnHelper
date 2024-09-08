@@ -33,7 +33,7 @@ jobs:
         - name: Build
           run:  mkdir etradeTaxReturnHelper && cargo build --release && dir && dir target\release && xcopy target\release\etradeTaxReturnHelper.exe etradeTaxReturnHelper /R /K /O /Y
         - name: Archiving
-          uses: actions/upload-artifact@v2
+          uses: actions/upload-artifact@v4
           with: 
             name: assets-for-download
             path: etradeTaxReturnHelper

@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub use crate::logging::ResultExt;
-
 pub struct PL {}
 
 type ReqwestClient = reqwest::blocking::Client;

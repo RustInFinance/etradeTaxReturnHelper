@@ -7,14 +7,10 @@ pub mod gui {
         browser::MultiBrowser,
         button::Button,
         dialog,
-        enums::{CallbackTrigger, Color, Event, Font, FrameType, Key, Shortcut},
+        enums::{Event, Font, FrameType, Key},
         frame::Frame,
         group::Pack,
-        input::MultilineInput,
-        menu,
-        menu::Choice,
         prelude::*,
-        text,
         text::{TextBuffer, TextDisplay},
         window,
     };
@@ -221,8 +217,6 @@ pub mod gui {
 
         wind.make_resizable(true);
 
-        let (s, r) = app::channel::<Message>();
-
         let mut uberpack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
 
         let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y / 2 as i32, "");
@@ -233,7 +227,7 @@ pub mod gui {
         let mut frame1 = Frame::new(0, 0, DOCUMENTS_COL_WIDTH, 30, "Documents");
         frame1.set_frame(FrameType::EngravedFrame);
 
-        let mut browser = Rc::new(RefCell::new(MultiBrowser::new(
+        let browser = Rc::new(RefCell::new(MultiBrowser::new(
             0,
             30,
             DOCUMENTS_COL_WIDTH,

@@ -58,7 +58,7 @@ mod tests {
                         }
                     }
                 }
-                // This didn't work
+                // This didn't work, therfore the above is used
                 // if (node.tag_name().name() == "ObsDimension") {
                 //     let date = node.attribute("value");
                 // }

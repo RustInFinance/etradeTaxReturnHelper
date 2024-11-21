@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ecb() {
+    fn test_ecb_get_exchange_rate() {
         let query = [("startPeriod", "2023-07-13"), ("endPeriod", "2023-07-13")];
         let response: String =
             get_exchange_rate(ECB_URL, &query).expect("Failed to get exchange rate");

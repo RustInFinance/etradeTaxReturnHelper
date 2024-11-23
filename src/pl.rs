@@ -21,10 +21,21 @@ struct NBPResponse<T> {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(non_snake_case)]
-struct ExchangeRate {
+pub struct ExchangeRate {
     no: String,
     effectiveDate: String,
     mid: f32,
+}
+
+// Iterate through dates and find where value is None
+// and then try to get for that specific date from cache
+fn get_exchange_rates_from_cache(dates: &mut std::collections::HashMap<
+            etradeTaxReturnHelper::Exchange,
+            Option<(String, f32)>>) -> bool {
+   crate::nbp::get_exchange_rates();
+   //TODO: move date backward by one day 
+   // and check in cache if we have that exchange rate
+   todo!();
 }
 
 impl etradeTaxReturnHelper::Residency for PL {
@@ -35,6 +46,10 @@ impl etradeTaxReturnHelper::Residency for PL {
             Option<(String, f32)>,
         >,
     ) -> Result<(), String> {
+
+        // Try to get exchange rates from cached data (output from program gen_exchange_rates)
+        get_exchange_rates_from_cache(dates);
+
         // proxies are taken from env vars: http_proxy and https_proxy
         let http_proxy = std::env::var("http_proxy");
         let https_proxy = std::env::var("https_proxy");

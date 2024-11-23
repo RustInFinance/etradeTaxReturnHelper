@@ -55,7 +55,6 @@ fn main() {
 
         // Tworzenie HashMapy
         let kursy = table.rates;
-        println!("code: {}", table.code.as_str());
         match table.code.as_str() {
             "USD" => {
                 for kurs in kursy {
@@ -81,25 +80,28 @@ fn main() {
     // Generowanie pliku .rs z hashmapą
     let mut output_content = String::new();
     output_content.push_str("use std::collections::HashMap;\n\n");
-    output_content.push_str("pub fn get_exchange_rates() -> HashMap<String, f64> {\n");
-    output_content.push_str("    let mut exchange_rates = HashMap::new();\n");
+    output_content.push_str("use etradeTaxReturnHelper::Exchange;\n\n");
+
+    output_content.push_str("pub fn get_exchange_rates() -> HashMap<Exchange, f64> {\n");
+    output_content.push_str("   let mut exchange_rates = HashMap::new();\n");
 
 
     for (exchange, kurs) in &kursy_map {
 
         match exchange {
             Exchange::USD(data) => {
-                output_content.push_str(&format!("    exchange_rates.insert(Exchange::USD(\"{}\").to_string(), {});\n", data, kurs));
+                output_content.push_str(&format!("  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {});\n", data, kurs));
             }
             Exchange::EUR(data) => {
-                output_content.push_str(&format!("    exchange_rates.insert(Exchange::EUR(\"{}\").to_string(), {});\n", data, kurs));
+                output_content.push_str(&format!("  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {});\n", data, kurs));
             }
             Exchange::PLN(data) => {
-                output_content.push_str(&format!("    exchange_rates.insert(Exchange::PLN(\"{}\").to_string(), {});\n", data, kurs));
+                output_content.push_str(&format!("  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {});\n", data, kurs));
             }
         }
     }
 
+    output_content.push_str("   exchange_rates\n");
     output_content.push_str("}\n");
     println!("{output_content}");
 }

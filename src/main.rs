@@ -5,6 +5,7 @@ mod de;
 mod logging;
 mod pl;
 mod us;
+mod nbp;
 
 mod gui;
 
@@ -12,6 +13,8 @@ use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
 // TODO: Add in pl.rs generated nbp exchange rates with UT
+// TODO: Hashmap should add return of hashmap .
+// TODO: algorithm of checking if given day is a saturday or sunday
 // TODO: Add revolut sold transactions settlement date when it is available in CSV documents
 // TODO: Revolut sold tranasactions in EUR currency
 // TODO: Add fees to revolut sold transactions when CSV contains such a data

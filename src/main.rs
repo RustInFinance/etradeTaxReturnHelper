@@ -12,7 +12,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Add in pl.rs generated nbp exchange rates with UT
+// TODO: make NBP call only feeling dates that are empty after getting from cachce . Make UT on
+// that
 // TODO: Hashmap should add return of hashmap .
 // TODO: algorithm of checking if given day is a saturday or sunday
 // TODO: Add revolut sold transactions settlement date when it is available in CSV documents

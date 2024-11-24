@@ -40,3 +40,6 @@ nom = "7.1.3"
 polars = "0.35.4"
 csv = "1.3.0"
 serde_json = {version = "=1.0.133", optional = true}
+holidays = { version = "0.1.0", default-features = false, features = ["PL"] }
+
+

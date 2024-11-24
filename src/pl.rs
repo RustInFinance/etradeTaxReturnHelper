@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use chrono::Datelike;
 
 pub struct PL {}
 
@@ -27,15 +28,91 @@ pub struct ExchangeRate {
     mid: f32,
 }
 
+
+fn is_non_working_day( date: &chrono::NaiveDate) -> Result<bool,String> {
+
+    let weekend = match date.weekday() {
+        chrono::Weekday::Sat | chrono::Weekday::Sun => true,
+        _ => false,
+    };
+
+    if weekend == true {
+        return Ok(true);
+    }
+
+    let year = date.year();
+
+    // Check if a date is a holiday 
+
+    holidays::Builder::new()
+        .countries(&[holidays::Country::PL])
+        .years(year..year)
+        .init().map_err(|_| "Holiday module initialization failed")?;
+
+    holidays::contains(holidays::Country::PL,*date).map_err(|_| format!("Error checking if given date: {date} is holiday"))
+}
+
+
+
 // Iterate through dates and find where value is None
 // and then try to get for that specific date from cache
 fn get_exchange_rates_from_cache(dates: &mut std::collections::HashMap<
             etradeTaxReturnHelper::Exchange,
-            Option<(String, f32)>>) -> bool {
-   crate::nbp::get_exchange_rates();
-   //TODO: move date backward by one day 
-   // and check in cache if we have that exchange rate
-   todo!();
+            Option<(String, f32)>>) -> Result<bool,String> {
+
+        let mut all_filled = true;
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+
+            // If there is a exchange value filled (from cached)
+            // then skip this entry (Make UT)
+            if val.is_some() {
+                return Ok::<(), String>(());
+            }
+
+            let (from, date) = match exchange {
+                etradeTaxReturnHelper::Exchange::USD(date) => ("usd", date),
+                etradeTaxReturnHelper::Exchange::EUR(date) => ("eur", date),
+                etradeTaxReturnHelper::Exchange::PLN(_) => {
+                    *val = Some(("N/A".to_owned(), 1.0));
+                    return Ok::<(), String>(());
+                } // For PLN to PLN follow fast path
+            };
+
+            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y").map_err(|_| format!("Error parsing date: {date}"))?;
+            let mut is_working_day = false;
+            while is_working_day == false {
+                converted_date = converted_date
+                    .checked_sub_signed(chrono::Duration::days(1))
+                    .ok_or("Error traversing date")?;
+
+                // if given day is not working day then skip it
+                is_working_day = is_non_working_day(&converted_date)? == false;
+            }
+
+            let exchange_rates = crate::nbp::get_exchange_rates();
+            let exchange_rate_date = converted_date.clone().format("%Y-%m-%d").to_string(); 
+            let curr_exchange = match exchange {
+                etradeTaxReturnHelper::Exchange::USD(_) => etradeTaxReturnHelper::Exchange::USD(exchange_rate_date.clone()),
+                etradeTaxReturnHelper::Exchange::EUR(_) => etradeTaxReturnHelper::Exchange::EUR(exchange_rate_date.clone()),
+                etradeTaxReturnHelper::Exchange::PLN(_) => {
+                    log::error!("Error: PLN exchange rate should be served already! Bug in code probably!");
+                    return Err::<(), String>("Error: PLN exchange rate should be served already! Bug in code probably!".to_string());
+                }
+            };
+            // If there is no proper date in a cache then skip it
+            if exchange_rates.contains_key(&curr_exchange) {
+                let exchange_rate = exchange_rates.get(&curr_exchange).ok_or("Error: exchange rate not found in cache")?;
+
+                log::info!("Found cached exchange rate. Date:{} Rate: {}", exchange_rate_date,exchange_rate);
+                *val = Some((exchange_rate_date, *exchange_rate as f32));
+            } else {
+                log::info!("Not Found cached exchange rate. Date:{} ", exchange_rate_date);
+                all_filled = false;
+            }
+
+            Ok::<(), String>(())
+        })?;
+        Ok(all_filled) 
 }
 
 impl etradeTaxReturnHelper::Residency for PL {
@@ -48,7 +125,12 @@ impl etradeTaxReturnHelper::Residency for PL {
     ) -> Result<(), String> {
 
         // Try to get exchange rates from cached data (output from program gen_exchange_rates)
-        get_exchange_rates_from_cache(dates);
+        if get_exchange_rates_from_cache(dates)? == true {
+            log::info!("All needed Exchange rates were taken from cache.");
+            return Ok(());
+        } else {
+            log::info!("Some of the Exchange rates were not found in cache. Trying to get them using NBP API.");
+        }
 
         // proxies are taken from env vars: http_proxy and https_proxy
         let http_proxy = std::env::var("http_proxy");
@@ -77,6 +159,13 @@ impl etradeTaxReturnHelper::Residency for PL {
         let base_exchange_rate_url = "https://api.nbp.pl/api/exchangerates/rates/a/";
 
         dates.iter_mut().try_for_each(|(exchange, val)| {
+
+            // If there is a exchange value filled (from cached)
+            // then skip this entry (Make UT)
+            if val.is_some() {
+                return Ok::<(), String>(());
+            }
+
             let (from, date) = match exchange {
                 etradeTaxReturnHelper::Exchange::USD(date) => ("usd", date),
                 etradeTaxReturnHelper::Exchange::EUR(date) => ("eur", date),
@@ -235,6 +324,10 @@ mod tests {
         Ok(())
     }
 
+
+
+
+
     #[test]
     fn test_present_result_double_taxation_warning_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
@@ -268,4 +361,17 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_is_non_working_day() -> Result<(), String> {
+
+        let date = chrono::NaiveDate::parse_from_str(&"11/01/24", "%m/%d/%y").map_err(|_| format!("Error parsing date"))?;
+        assert_eq!(is_non_working_day(&date), Ok(true));
+        let date = chrono::NaiveDate::parse_from_str(&"03/31/24", "%m/%d/%y").map_err(|_| format!("Error parsing date"))?;
+        assert_eq!(is_non_working_day(&date), Ok(true));
+        let date = chrono::NaiveDate::parse_from_str(&"01/08/24", "%m/%d/%y").map_err(|_| format!("Error parsing date"))?;
+        assert_eq!(is_non_working_day(&date), Ok(false));
+        Ok(())
+    }
 }
+

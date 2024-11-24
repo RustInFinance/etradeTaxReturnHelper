@@ -1,7 +1,7 @@
+use clap::{App, Arg};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
-use clap::{App,Arg};
 
 #[derive(Deserialize)]
 struct Kurs {
@@ -42,8 +42,6 @@ fn main() {
         )
         .get_matches();
 
-    
-
     let file_paths = matches.values_of("input").unwrap().collect::<Vec<_>>();
     let mut kursy_map: HashMap<Exchange, f64> = HashMap::new();
 
@@ -51,7 +49,8 @@ fn main() {
         let file_content = fs::read_to_string(&file).expect("Unable to read a file: {file}");
 
         // Deserializacja JSON do wektora struktur Kurs
-        let table: Tabela = serde_json::from_str(&file_content).expect("Unable to parse {file} to JSON format");
+        let table: Tabela =
+            serde_json::from_str(&file_content).expect("Unable to parse {file} to JSON format");
 
         // Tworzenie HashMapy
         let kursy = table.rates;
@@ -72,7 +71,7 @@ fn main() {
                 }
             }
             _ => {
-                panic!("Unsupported currency: {}",table.code);
+                panic!("Unsupported currency: {}", table.code);
             }
         }
     }
@@ -85,18 +84,25 @@ fn main() {
     output_content.push_str("pub fn get_exchange_rates() -> HashMap<Exchange, f64> {\n");
     output_content.push_str("   let mut exchange_rates = HashMap::new();\n");
 
-
     for (exchange, kurs) in &kursy_map {
-
         match exchange {
             Exchange::USD(data) => {
-                output_content.push_str(&format!("  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {});\n", data, kurs));
+                output_content.push_str(&format!(
+                    "  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {});\n",
+                    data, kurs
+                ));
             }
             Exchange::EUR(data) => {
-                output_content.push_str(&format!("  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {});\n", data, kurs));
+                output_content.push_str(&format!(
+                    "  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {});\n",
+                    data, kurs
+                ));
             }
             Exchange::PLN(data) => {
-                output_content.push_str(&format!("  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {});\n", data, kurs));
+                output_content.push_str(&format!(
+                    "  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {});\n",
+                    data, kurs
+                ));
             }
         }
     }

@@ -3,9 +3,9 @@ use std::env;
 
 mod de;
 mod logging;
+mod nbp;
 mod pl;
 mod us;
-mod nbp;
 
 mod gui;
 

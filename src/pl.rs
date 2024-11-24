@@ -45,7 +45,7 @@ fn is_non_working_day(date: &chrono::NaiveDate) -> Result<bool, String> {
 
     holidays::Builder::new()
         .countries(&[holidays::Country::PL])
-        .years(year..year + 1)
+        .years(year - 1..year + 1)
         .init()
         .map_err(|_| "Holiday module initialization failed")?;
 
@@ -383,6 +383,52 @@ mod tests {
         let date = chrono::NaiveDate::parse_from_str(&"01/08/24", "%m/%d/%y")
             .map_err(|_| format!("Error parsing date"))?;
         assert_eq!(is_non_working_day(&date), Ok(false));
+        Ok(())
+    }
+    #[test]
+    fn test_get_exchange_rates_from_cache() -> Result<(), String> {
+        let mut rates = std::collections::HashMap::from([
+            (
+                etradeTaxReturnHelper::Exchange::USD("02/26/24".to_owned()),
+                None,
+            ),
+            (
+                etradeTaxReturnHelper::Exchange::EUR("02/23/24".to_owned()),
+                Some(("2024-02-21".to_string(), 3.994)),
+            ),
+        ]);
+
+        let expected_rates = std::collections::HashMap::from([
+            (
+                etradeTaxReturnHelper::Exchange::USD("02/26/24".to_owned()),
+                Some(("2024-02-23".to_string(), 4.005)),
+            ),
+            (
+                etradeTaxReturnHelper::Exchange::EUR("02/23/24".to_owned()),
+                Some(("2024-02-21".to_string(), 3.994)),
+            ),
+        ]);
+
+        assert_eq!(get_exchange_rates_from_cache(&mut rates)?, true);
+
+        assert_eq!(rates, expected_rates);
+
+        // This works assuming there is no data from 2020 in cache
+        let mut rates = std::collections::HashMap::from([
+            (
+                etradeTaxReturnHelper::Exchange::USD("02/26/20".to_owned()),
+                None,
+            ),
+            (
+                etradeTaxReturnHelper::Exchange::EUR("02/23/20".to_owned()),
+                Some(("2020-02-21".to_string(), 3.994)),
+            ),
+        ]);
+
+        assert_eq!(get_exchange_rates_from_cache(&mut rates)?, false);
+
+        assert_eq!(rates, rates);
+
         Ok(())
     }
 }

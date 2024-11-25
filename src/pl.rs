@@ -429,6 +429,31 @@ mod tests {
 
         assert_eq!(rates, rates);
 
+        let mut rates = std::collections::HashMap::from([
+            (
+                etradeTaxReturnHelper::Exchange::EUR("02/10/23".to_owned()),
+                None,
+            ),
+            (
+                etradeTaxReturnHelper::Exchange::EUR("09/25/23".to_owned()),
+                None,
+            ),
+        ]);
+
+        let expected_rates = std::collections::HashMap::from([
+            (
+                etradeTaxReturnHelper::Exchange::EUR("02/10/23".to_owned()),
+                Some(("2023-02-09".to_string(), 4.7363)),
+            ),
+            (
+                etradeTaxReturnHelper::Exchange::EUR("09/25/23".to_owned()),
+                Some(("2023-09-22".to_string(), 4.6069)),
+            ),
+        ]);
+
+        assert_eq!(get_exchange_rates_from_cache(&mut rates)?, true);
+
+        assert_eq!(rates, expected_rates);
         Ok(())
     }
 }

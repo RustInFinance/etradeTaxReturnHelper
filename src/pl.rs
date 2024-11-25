@@ -45,7 +45,7 @@ fn is_non_working_day(date: &chrono::NaiveDate) -> Result<bool, String> {
 
     holidays::Builder::new()
         .countries(&[holidays::Country::PL])
-        .years(year - 1..year + 1)
+        .years(year - 20..year + 1)
         .init()
         .map_err(|_| "Holiday module initialization failed")?;
 
@@ -413,14 +413,14 @@ mod tests {
 
         assert_eq!(rates, expected_rates);
 
-        // This works assuming there is no data from 2020 in cache
+        // This works assuming there is no data from 2000 in cache
         let mut rates = std::collections::HashMap::from([
             (
-                etradeTaxReturnHelper::Exchange::USD("02/26/20".to_owned()),
+                etradeTaxReturnHelper::Exchange::USD("02/26/00".to_owned()),
                 None,
             ),
             (
-                etradeTaxReturnHelper::Exchange::EUR("02/23/20".to_owned()),
+                etradeTaxReturnHelper::Exchange::EUR("02/23/00".to_owned()),
                 Some(("2020-02-21".to_string(), 3.994)),
             ),
         ]);

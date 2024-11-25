@@ -46,7 +46,8 @@ fn main() {
     let mut kursy_map: HashMap<Exchange, f64> = HashMap::new();
 
     for file in file_paths {
-        let file_content = fs::read_to_string(&file).expect("Unable to read a file: {file}");
+        let file_content =
+            fs::read_to_string(&file).expect(&format!("Unable to read a file: {file}"));
 
         // Deserializacja JSON do wektora struktur Kurs
         let table: Tabela =

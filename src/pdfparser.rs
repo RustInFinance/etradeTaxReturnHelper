@@ -83,10 +83,10 @@ impl Entry for I32Entry {
         let mystr = pstr
             .clone()
             .into_string()
-            .expect(&format!("Error parsing : {:#?} to f32", pstr));
+            .expect(&format!("Error parsing : {:#?} to i32", pstr));
         self.val = mystr
             .parse::<i32>()
-            .expect(&format!("Error parsing : {} to f32", mystr));
+            .expect(&format!("Error parsing : {} to i32", mystr));
         log::info!("Parsed i32 value: {}", self.val);
     }
     fn geti32(&self) -> Option<i32> {
@@ -103,7 +103,7 @@ impl Entry for DateEntry {
         let mystr = pstr
             .clone()
             .into_string()
-            .expect(&format!("Error parsing : {:#?} to f32", pstr));
+            .expect(&format!("Error parsing : {:#?} to Data", pstr));
 
         if chrono::NaiveDate::parse_from_str(&mystr, "%m/%d/%y").is_ok() {
             self.val = mystr;
@@ -125,7 +125,7 @@ impl Entry for StringEntry {
         self.val = pstr
             .clone()
             .into_string()
-            .expect(&format!("Error parsing : {:#?} to f32", pstr));
+            .expect(&format!("Error parsing : {:#?} to String", pstr));
         log::info!("Parsed String value: {}", self.val);
     }
     fn getstring(&self) -> Option<String> {
@@ -164,7 +164,10 @@ fn create_interests_fund_parsing_sequence(
     }));
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["DIV PAYMENT".to_owned()],
+        patterns: vec![
+            "DIV PAYMENT".to_owned(),
+            "Transaction Reportable for the Prior Year.".to_owned(),
+        ],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Income Entry
 }
@@ -470,7 +473,7 @@ fn process_transaction(
                         // applied
                         let subject_to_tax = div_transactions
                             .iter_mut()
-                            .find(|x| x.1 > tax_us && x.2 == 0.0f32 )
+                            .find(|x| x.1 > tax_us && x.2 == 0.0f32)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
                         subject_to_tax.2 = tax_us;
@@ -489,7 +492,7 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                         ));
-                        log::info!("Completed parsing Dividend transaction");
+                        log::info!("Completed parsing Interests transaction");
                     }
                     TransactionType::Dividends => {
                         let gross_us = transaction
@@ -736,7 +739,7 @@ fn check_if_transaction(
     if candidate_string == "DIVIDEND" {
         create_interests_fund_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Interests);
-        log::info!("Starting to parse Interests Fund transaction");
+        log::info!("Starting to parse Interests transaction");
     } else if candidate_string == "INTEREST INCOME-ADJ" {
         create_interest_adjustment_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Interests);
@@ -1215,48 +1218,209 @@ mod tests {
         Ok(())
     }
 
-
-
-
     #[test]
     #[ignore]
     fn test_combined_account_statement() -> Result<(), String> {
         assert_eq!(
             parse_statement("etrade_data_2024/ClientStatements_110324.pdf"),
             (Ok((
-                vec![("9/3/24".to_owned(), 23.65),// Interest rates
-                     ("8/1/24".to_owned(), 4.34), 
-                     ("7/1/24".to_owned(), 3.72),
-                     ("6/3/24".to_owned(), 13.31),
-                     ("5/1/24".to_owned(), 0.62),
-                     ("4/1/24".to_owned(), 1.16)], 
-                vec![("6/3/24".to_owned(), 57.25, 8.59),// Dividends date, gross, tax_us
-                     ("3/1/24".to_owned(), 380.25, 57.04)],  
-                vec![("9/3/24".to_owned(), "9/4/24".to_owned(), 17.0, 21.53, 365.99), // Sold
-                     ("9/9/24".to_owned(), "9/10/24".to_owned(), 14.0, 18.98, 265.71),
-                     ("8/5/24".to_owned(), "8/6/24".to_owned(), 14.0, 20.21, 282.93),
-                     ("8/20/24".to_owned(), "8/21/24".to_owned(), 328.0, 21.0247, 6895.89),
-                     ("7/31/24".to_owned(), "8/1/24".to_owned(), 151.0, 30.44, 4596.31),
-                     ("6/3/24".to_owned(), "6/4/24".to_owned(), 14.0, 31.04, 434.54),
-                     ("5/1/24".to_owned(), "5/3/24".to_owned(), 126.0, 30.14, 3797.6),
-                     ("5/1/24".to_owned(), "5/3/24".to_owned(), 124.0, 30.14, 3737.33),
-                     ("5/1/24".to_owned(), "5/3/24".to_owned(), 89.0, 30.6116, 2724.4),
-                     ("5/2/24".to_owned(), "5/6/24".to_owned(), 182.0, 30.56, 5561.87), 
-                     ("5/3/24".to_owned(), "5/7/24".to_owned(), 440.0, 30.835, 13567.29),
-                     ("5/3/24".to_owned(), "5/7/24".to_owned(), 198.0, 30.835, 6105.28),
-                     ("5/3/24".to_owned(), "5/7/24".to_owned(), 146.0, 30.8603, 4505.56),
-                     ("5/3/24".to_owned(), "5/7/24".to_owned(), 145.0, 30.8626, 4475.04),
-                     ("5/3/24".to_owned(), "5/7/24".to_owned(), 75.0, 30.815, 2311.11),
-                     ("5/6/24".to_owned(), "5/8/24".to_owned(), 458.0, 31.11, 14248.26),
-                     ("5/31/24".to_owned(), "6/3/24".to_owned(), 18.0, 30.22, 543.94),
-                     ("4/3/24".to_owned(), "4/5/24".to_owned(), 31.0, 40.625, 1259.36),
-                     ("4/11/24".to_owned(), "4/15/24".to_owned(), 209.0, 37.44, 7824.89),
-                     ("4/11/24".to_owned(), "4/15/24".to_owned(), 190.0, 37.44, 7113.54),
-                     ("4/16/24".to_owned(), "4/18/24".to_owned(), 310.0, 36.27, 11243.61),
-                     ("4/29/24".to_owned(), "5/1/24".to_owned(), 153.0, 31.87, 4876.07), 
-                     ("4/29/24".to_owned(), "5/1/24".to_owned(), 131.0, 31.87, 4174.93),
-                     ("4/29/24".to_owned(), "5/1/24".to_owned(), 87.0, 31.87, 2772.66),
-                     ("3/11/24".to_owned(), "3/13/24".to_owned(), 38.0, 43.85, 1666.28)],
+                vec![
+                    ("9/3/24".to_owned(), 23.65), // Interest rates
+                    ("8/1/24".to_owned(), 4.34),
+                    ("7/1/24".to_owned(), 3.72),
+                    ("6/3/24".to_owned(), 13.31),
+                    ("5/1/24".to_owned(), 0.62),
+                    ("4/1/24".to_owned(), 1.16),
+                    ("1/2/24".to_owned(), 0.49)
+                ],
+                vec![
+                    ("6/3/24".to_owned(), 57.25, 8.59), // Dividends date, gross, tax_us
+                    ("3/1/24".to_owned(), 380.25, 57.04)
+                ],
+                vec![
+                    (
+                        "9/3/24".to_owned(),
+                        "9/4/24".to_owned(),
+                        17.0,
+                        21.53,
+                        365.99
+                    ), // Sold
+                    (
+                        "9/9/24".to_owned(),
+                        "9/10/24".to_owned(),
+                        14.0,
+                        18.98,
+                        265.71
+                    ),
+                    (
+                        "8/5/24".to_owned(),
+                        "8/6/24".to_owned(),
+                        14.0,
+                        20.21,
+                        282.93
+                    ),
+                    (
+                        "8/20/24".to_owned(),
+                        "8/21/24".to_owned(),
+                        328.0,
+                        21.0247,
+                        6895.89
+                    ),
+                    (
+                        "7/31/24".to_owned(),
+                        "8/1/24".to_owned(),
+                        151.0,
+                        30.44,
+                        4596.31
+                    ),
+                    (
+                        "6/3/24".to_owned(),
+                        "6/4/24".to_owned(),
+                        14.0,
+                        31.04,
+                        434.54
+                    ),
+                    (
+                        "5/1/24".to_owned(),
+                        "5/3/24".to_owned(),
+                        126.0,
+                        30.14,
+                        3797.6
+                    ),
+                    (
+                        "5/1/24".to_owned(),
+                        "5/3/24".to_owned(),
+                        124.0,
+                        30.14,
+                        3737.33
+                    ),
+                    (
+                        "5/1/24".to_owned(),
+                        "5/3/24".to_owned(),
+                        89.0,
+                        30.6116,
+                        2724.4
+                    ),
+                    (
+                        "5/2/24".to_owned(),
+                        "5/6/24".to_owned(),
+                        182.0,
+                        30.56,
+                        5561.87
+                    ),
+                    (
+                        "5/3/24".to_owned(),
+                        "5/7/24".to_owned(),
+                        440.0,
+                        30.835,
+                        13567.29
+                    ),
+                    (
+                        "5/3/24".to_owned(),
+                        "5/7/24".to_owned(),
+                        198.0,
+                        30.835,
+                        6105.28
+                    ),
+                    (
+                        "5/3/24".to_owned(),
+                        "5/7/24".to_owned(),
+                        146.0,
+                        30.8603,
+                        4505.56
+                    ),
+                    (
+                        "5/3/24".to_owned(),
+                        "5/7/24".to_owned(),
+                        145.0,
+                        30.8626,
+                        4475.04
+                    ),
+                    (
+                        "5/3/24".to_owned(),
+                        "5/7/24".to_owned(),
+                        75.0,
+                        30.815,
+                        2311.11
+                    ),
+                    (
+                        "5/6/24".to_owned(),
+                        "5/8/24".to_owned(),
+                        458.0,
+                        31.11,
+                        14248.26
+                    ),
+                    (
+                        "5/31/24".to_owned(),
+                        "6/3/24".to_owned(),
+                        18.0,
+                        30.22,
+                        543.94
+                    ),
+                    (
+                        "4/3/24".to_owned(),
+                        "4/5/24".to_owned(),
+                        31.0,
+                        40.625,
+                        1259.36
+                    ),
+                    (
+                        "4/11/24".to_owned(),
+                        "4/15/24".to_owned(),
+                        209.0,
+                        37.44,
+                        7824.89
+                    ),
+                    (
+                        "4/11/24".to_owned(),
+                        "4/15/24".to_owned(),
+                        190.0,
+                        37.44,
+                        7113.54
+                    ),
+                    (
+                        "4/16/24".to_owned(),
+                        "4/18/24".to_owned(),
+                        310.0,
+                        36.27,
+                        11243.61
+                    ),
+                    (
+                        "4/29/24".to_owned(),
+                        "5/1/24".to_owned(),
+                        153.0,
+                        31.87,
+                        4876.07
+                    ),
+                    (
+                        "4/29/24".to_owned(),
+                        "5/1/24".to_owned(),
+                        131.0,
+                        31.87,
+                        4174.93
+                    ),
+                    (
+                        "4/29/24".to_owned(),
+                        "5/1/24".to_owned(),
+                        87.0,
+                        31.87,
+                        2772.66
+                    ),
+                    (
+                        "3/11/24".to_owned(),
+                        "3/13/24".to_owned(),
+                        38.0,
+                        43.85,
+                        1666.28
+                    ),
+                    (
+                        "2/20/24".to_owned(),
+                        "2/22/24".to_owned(),
+                        150.0,
+                        43.9822,
+                        6597.27
+                    )
+                ],
                 vec![]
             )))
         );

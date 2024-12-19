@@ -1,10 +1,9 @@
 mod csvparser;
+mod ecb;
 mod logging;
 mod pdfparser;
 mod transactions;
 mod xlsxparser;
-
-use chrono;
 
 type ReqwestClient = reqwest::blocking::Client;
 
@@ -150,23 +149,50 @@ pub trait Residency {
         dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
         to: &str,
     ) -> Result<(), String> {
-        // proxies are taken from env vars: http_proxy and https_proxy
-        let http_proxy = std::env::var("http_proxy");
-        let https_proxy = std::env::var("https_proxy");
+        if to == "EUR" {
+            self.get_currency_exchange_rates_ecb(dates, to)
+        } else {
+            self.get_currency_exchange_rates_legacy(dates, to)
+        }
+    }
 
-        // If there is proxy then pick first URL
-        let base_client = ReqwestClient::builder();
-        let client = match &http_proxy {
-            Ok(proxy) => base_client
-                .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
-            Err(_) => base_client,
-        };
-        let client = match &https_proxy {
-            Ok(proxy) => client
-                .proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy")),
-            Err(_) => client,
-        };
-        let client = client.build().expect_and_log("Could not create client");
+    fn get_currency_exchange_rates_ecb(
+        &self,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        _to: &str,
+    ) -> Result<(), String> {
+        dates.iter_mut().try_for_each(|(exchange, val)| {
+            let (_from, date) = match exchange {
+                Exchange::USD(date) => ("usd", date),
+                Exchange::EUR(date) => ("eur", date),
+                Exchange::PLN(date) => ("pln", date),
+            };
+
+            let converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
+                .map_err(|x| format!("Unable to convert date {x}"))?;
+
+            let day_before = converted_date
+                .checked_sub_signed(chrono::Duration::days(1))
+                .ok_or("Error traversing date")?;
+
+            let day_before_str = day_before.format("%Y-%m-%d").to_string();
+
+            let exchange_rate = ecb::get_eur_to_usd_exchange_rate(day_before, day_before)
+                .map_err(|x| format!("Error getting exchange rate from ECB: {x}"))?;
+
+            *val = Some((day_before_str, exchange_rate));
+            Ok::<(), String>(())
+        })?;
+
+        Ok(())
+    }
+
+    fn get_currency_exchange_rates_legacy(
+        &self,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        to: &str,
+    ) -> Result<(), String> {
+        let client = create_client();
 
         // Example URL: https://www.exchange-rates.org/Rate/USD/EUR/2-27-2021
 
@@ -218,6 +244,28 @@ pub trait Residency {
 
         Ok(())
     }
+}
+
+fn create_client() -> reqwest::blocking::Client {
+    // proxies are taken from env vars: http_proxy and https_proxy
+    let http_proxy = std::env::var("http_proxy");
+    let https_proxy = std::env::var("https_proxy");
+
+    // If there is proxy then pick first URL
+    let base_client = ReqwestClient::builder();
+    let client = match &http_proxy {
+        Ok(proxy) => base_client
+            .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
+        Err(_) => base_client,
+    };
+    let client = match &https_proxy {
+        Ok(proxy) => {
+            client.proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy"))
+        }
+        Err(_) => client,
+    };
+    let client = client.build().expect_and_log("Could not create client");
+    client
 }
 
 fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {

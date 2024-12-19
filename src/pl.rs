@@ -364,7 +364,7 @@ mod tests {
 
         let ref_msg = "Warning: Tax paid in US(30 PLN) is higher than the tax that you are to pay in Poland(19 PLN). This usually means that there was a problem with declaration of your residency to avoid double taxation".to_string();
 
-        match (warning) {
+        match warning {
             Some(msg) => assert_eq!(msg, ref_msg),
             None => return Err("Error: expected information on to high tax".to_string()),
         }

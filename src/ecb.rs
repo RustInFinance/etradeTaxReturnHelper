@@ -74,13 +74,19 @@ where
 }
 
 struct EcbResponse {
+    #[allow(dead_code)]
     sender_id: String,
+    #[allow(dead_code)]
     urn: String,
+    #[allow(dead_code)]
     freq: String,
     currency: String,
     currency_denom: String,
+    #[allow(dead_code)]
     title: String,
+    #[allow(dead_code)]
     unit: String,
+    #[allow(dead_code)]
     date: String,
     rate: String,
 }

@@ -2,7 +2,6 @@ use clap::{App, AppSettings, Arg};
 use std::env;
 
 mod de;
-mod ecb;
 mod logging;
 mod nbp;
 mod pl;
@@ -351,7 +350,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -387,7 +386,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -414,7 +413,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -441,7 +440,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -468,7 +467,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -495,7 +494,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 
@@ -520,7 +519,7 @@ mod tests {
                 );
                 Ok(())
             }
-            Err(x) => panic!("Error in taxation process"),
+            Err(x) => panic!("Error in taxation process: {x}"),
         }
     }
 }

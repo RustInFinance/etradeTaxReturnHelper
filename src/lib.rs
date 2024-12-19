@@ -5,8 +5,6 @@ mod pdfparser;
 mod transactions;
 mod xlsxparser;
 
-use chrono;
-
 type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;
@@ -161,16 +159,16 @@ pub trait Residency {
     fn get_currency_exchange_rates_ecb(
         &self,
         dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
-        to: &str,
+        _to: &str,
     ) -> Result<(), String> {
         dates.iter_mut().try_for_each(|(exchange, val)| {
-            let (from, date) = match exchange {
+            let (_from, date) = match exchange {
                 Exchange::USD(date) => ("usd", date),
                 Exchange::EUR(date) => ("eur", date),
                 Exchange::PLN(date) => ("pln", date),
             };
 
-            let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
+            let converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
                 .map_err(|x| format!("Unable to convert date {x}"))?;
 
             let day_before = converted_date

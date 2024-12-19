@@ -194,23 +194,7 @@ pub trait Residency {
         dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
         to: &str,
     ) -> Result<(), String> {
-        // proxies are taken from env vars: http_proxy and https_proxy
-        let http_proxy = std::env::var("http_proxy");
-        let https_proxy = std::env::var("https_proxy");
-
-        // If there is proxy then pick first URL
-        let base_client = ReqwestClient::builder();
-        let client = match &http_proxy {
-            Ok(proxy) => base_client
-                .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
-            Err(_) => base_client,
-        };
-        let client = match &https_proxy {
-            Ok(proxy) => client
-                .proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy")),
-            Err(_) => client,
-        };
-        let client = client.build().expect_and_log("Could not create client");
+        let client = create_client();
 
         // Example URL: https://www.exchange-rates.org/Rate/USD/EUR/2-27-2021
 
@@ -262,6 +246,28 @@ pub trait Residency {
 
         Ok(())
     }
+}
+
+fn create_client() -> reqwest::blocking::Client {
+    // proxies are taken from env vars: http_proxy and https_proxy
+    let http_proxy = std::env::var("http_proxy");
+    let https_proxy = std::env::var("https_proxy");
+
+    // If there is proxy then pick first URL
+    let base_client = ReqwestClient::builder();
+    let client = match &http_proxy {
+        Ok(proxy) => base_client
+            .proxy(reqwest::Proxy::http(proxy).expect_and_log("Error setting HTTP proxy")),
+        Err(_) => base_client,
+    };
+    let client = match &https_proxy {
+        Ok(proxy) => {
+            client.proxy(reqwest::Proxy::https(proxy).expect_and_log("Error setting HTTP proxy"))
+        }
+        Err(_) => client,
+    };
+    let client = client.build().expect_and_log("Could not create client");
+    client
 }
 
 fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {

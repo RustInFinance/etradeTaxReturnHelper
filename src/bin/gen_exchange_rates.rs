@@ -89,19 +89,19 @@ fn main() {
         match exchange {
             Exchange::USD(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {});\n",
+                    "  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {}f64);\n",
                     data, kurs
                 ));
             }
             Exchange::EUR(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {});\n",
+                    "  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {}f64);\n",
                     data, kurs
                 ));
             }
             Exchange::PLN(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {});\n",
+                    "  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {}f64);\n",
                     data, kurs
                 ));
             }

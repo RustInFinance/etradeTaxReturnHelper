@@ -581,7 +581,7 @@ checksum = "b90ca2580b73ab6a1f724b76ca11ab632df820fd6040c336200d2c1df7b3c82c"
 
 [[package]]
 name = "etradeTaxReturnHelper"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "calamine",
  "chrono",
@@ -595,6 +595,7 @@ dependencies = [
  "polars",
  "regex",
  "reqwest",
+ "roxmltree",
  "serde",
  "serde_json",
  "simple_logger",
@@ -1866,6 +1867,12 @@ dependencies = [
  "web-sys",
  "winreg",
 ]
+
+[[package]]
+name = "roxmltree"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rustc-demangle"

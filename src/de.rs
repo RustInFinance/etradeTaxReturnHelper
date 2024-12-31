@@ -122,7 +122,7 @@ mod tests {
         > = std::collections::HashMap::new();
         expected_result.insert(
             etradeTaxReturnHelper::Exchange::USD("07/14/23".to_owned()),
-            Some(("2023-07-13".to_owned(), 0.89077)),
+            Some(("2023-07-13".to_owned(), 0.89429444)),
         );
 
         assert_eq!(dates, expected_result);

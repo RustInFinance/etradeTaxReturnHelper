@@ -359,6 +359,7 @@ pub fn parse_revolut_transactions(
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
         let others = CsvReader::new(std::io::Cursor::new(content2.as_bytes()))
+            .truncate_ragged_lines(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
@@ -1561,6 +1562,31 @@ mod tests {
                 ),
                 (
                     "07/01/24".to_owned(),
+                    crate::Currency::PLN(1.07),
+                    crate::Currency::PLN(0.25),
+                ),
+                (
+                    "09/27/24".to_owned(),
+                    crate::Currency::PLN(1.02),
+                    crate::Currency::PLN(0.25),
+                ),
+                (
+                    "09/27/24".to_owned(),
+                    crate::Currency::PLN(1.71),
+                    crate::Currency::PLN(0.42),
+                ),
+                (
+                    "11/29/24".to_owned(),
+                    crate::Currency::PLN(2.92),
+                    crate::Currency::PLN(0.73),
+                ),
+                (
+                    "12/17/24".to_owned(),
+                    crate::Currency::PLN(0.04),
+                    crate::Currency::PLN(0.0),
+                ),
+                (
+                    "12/31/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
                 ),

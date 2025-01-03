@@ -1222,9 +1222,12 @@ mod tests {
     #[ignore]
     fn test_combined_account_statement() -> Result<(), String> {
         assert_eq!(
-            parse_statement("etrade_data_2024/ClientStatements_110324.pdf"),
+            parse_statement("etrade_data_2024/ClientStatements_010325.pdf"),
             (Ok((
                 vec![
+                    ("12/2/24".to_owned(), 4.88),
+                    ("10/1/24".to_owned(), 24.91),
+                    ("11/1/24".to_owned(), 25.09),
                     ("9/3/24".to_owned(), 23.65), // Interest rates
                     ("8/1/24".to_owned(), 4.34),
                     ("7/1/24".to_owned(), 3.72),
@@ -1238,6 +1241,27 @@ mod tests {
                     ("3/1/24".to_owned(), 380.25, 57.04)
                 ],
                 vec![
+                    (
+                        "12/4/24".to_owned(),
+                        "12/5/24".to_owned(),
+                        30.0,
+                        22.5,
+                        674.98
+                    ),
+                    (
+                        "12/5/24".to_owned(),
+                        "12/6/24".to_owned(),
+                        55.0,
+                        21.96,
+                        1207.76
+                    ),
+                    (
+                        "11/1/24".to_owned(),
+                        "11/4/24".to_owned(),
+                        15.0,
+                        23.32,
+                        349.79
+                    ),
                     (
                         "9/3/24".to_owned(),
                         "9/4/24".to_owned(),

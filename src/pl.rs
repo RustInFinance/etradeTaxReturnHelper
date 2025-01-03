@@ -257,7 +257,7 @@ impl etradeTaxReturnHelper::Residency for PL {
             cost_sold
         ));
         if tax_div > tax_pl {
-            (presentation,Some(format!("Warning: Tax paid in US({tax_div} PLN) is higher than the tax that you are to pay in Poland({tax_pl} PLN). This usually means that there was a problem with declaration of your residency to avoid double taxation")))
+            (presentation,Some(format!("Warning: Tax paid in US({tax_div} PLN) is higher than the tax that you are to pay in Poland({tax_pl} PLN). This either means that there was a problem with declaration of your residency to avoid double taxation or you are having income from countries that are having higher tax at source than the one used in Poland(19%)")))
         } else {
             (presentation, None)
         }
@@ -362,7 +362,7 @@ mod tests {
             .zip(&ref_results)
             .for_each(|(a, b)| assert_eq!(a, b));
 
-        let ref_msg = "Warning: Tax paid in US(30 PLN) is higher than the tax that you are to pay in Poland(19 PLN). This usually means that there was a problem with declaration of your residency to avoid double taxation".to_string();
+        let ref_msg = "Warning: Tax paid in US(30 PLN) is higher than the tax that you are to pay in Poland(19 PLN). This either means that there was a problem with declaration of your residency to avoid double taxation or you are having income from countries that are having higher tax at source than the one used in Poland(19%)".to_string();
 
         match warning {
             Some(msg) => assert_eq!(msg, ref_msg),

@@ -359,6 +359,7 @@ pub fn parse_revolut_transactions(
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
         let others = CsvReader::new(std::io::Cursor::new(content2.as_bytes()))
+            .truncate_ragged_lines(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
@@ -1534,6 +1535,67 @@ mod tests {
 
         assert_eq!(
             parse_revolut_transactions("revolut_data/trading-pnl-statement_2024-01-robo.csv"),
+            expected_result
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_investment_with_commas_gain_and_losses_dividends() -> Result<(), String> {
+        let expected_result = Ok((
+            vec![
+                (
+                    "06/04/24".to_owned(),
+                    crate::Currency::PLN(2.80),
+                    crate::Currency::PLN(0.68),
+                ),
+                (
+                    "06/20/24".to_owned(),
+                    crate::Currency::PLN(0.34),
+                    crate::Currency::PLN(0.08),
+                ),
+                (
+                    "06/28/24".to_owned(),
+                    crate::Currency::PLN(3.79),
+                    crate::Currency::PLN(0.94),
+                ),
+                (
+                    "07/01/24".to_owned(),
+                    crate::Currency::PLN(1.07),
+                    crate::Currency::PLN(0.25),
+                ),
+                (
+                    "09/27/24".to_owned(),
+                    crate::Currency::PLN(1.02),
+                    crate::Currency::PLN(0.25),
+                ),
+                (
+                    "09/27/24".to_owned(),
+                    crate::Currency::PLN(1.71),
+                    crate::Currency::PLN(0.42),
+                ),
+                (
+                    "11/29/24".to_owned(),
+                    crate::Currency::PLN(2.92),
+                    crate::Currency::PLN(0.73),
+                ),
+                (
+                    "12/17/24".to_owned(),
+                    crate::Currency::PLN(0.04),
+                    crate::Currency::PLN(0.0),
+                ),
+                (
+                    "12/31/24".to_owned(),
+                    crate::Currency::PLN(1.07),
+                    crate::Currency::PLN(0.25),
+                ),
+            ],
+            vec![],
+        ));
+
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/trading-pnl-statement_2024-01-robo-2.csv"),
             expected_result
         );
 

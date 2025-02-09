@@ -18,6 +18,34 @@ Podatek ogółem,0 PLN
 Opłaty ogółem,0 PLN
 Saldo końcowe,"3 760,87 PLN"
 
+Summary for Brokerage Account - EUR
+Portfolio  created on 6 lis 2022
+
+
+Sells summary,Amount
+Wpływy brutto,"6 862,18€"
+Podstawa kosztowa,"6 801,34€"
+Zrealizowany zysk/strata brutto,"60,84€"
+
+Other Income and Fees summary,Amount
+Dywidendy,"70,63€"
+Podatek potrącany u źródła,"18,63€"
+Kwota,52€
+
+Summary for Brokerage Account - USD
+Portfolio  created on 6 lis 2022
+
+
+Sells summary,Amount
+Wpływy brutto,"41 983,05$"
+Podstawa kosztowa,"36 623,01$"
+Zrealizowany zysk/strata brutto,"5 360,04$"
+
+Other Income and Fees summary,Amount
+Dywidendy,"4 611,72$"
+Podatek potrącany u źródła,"599,96$"
+Kwota,"4 011,76$"
+
 Transactions for Savings Accounts - EUR
 Date,Description,Money out,Money in,Balance
 1 sty 2024,Interest earned,,"0,26€","8 829,39€"
@@ -980,3 +1008,64 @@ Date,Description,Money out,Money in,Balance
 30 gru 2024,Withdrawing savings,132 PLN,,"3 760,42 PLN"
 30 gru 2024,Depositing savings,,"0,02 PLN","3 760,44 PLN"
 31 gru 2024,Interest earned,,"0,43 PLN","3 760,87 PLN"
+
+Transactions for Brokerage Account sells - EUR
+Portfolio  created on 6 lis 2022
+Date acquired,Date sold,Security name,Symbol,ISIN,Country,Qty,Cost basis,Cost basis base currency,Cost basis rate,Gross proceeds,Gross proceeds base currency,Gross proceeds rate,Gross PnL,Gross PnL base currency,Fees,Fees  base currency
+29 lip 2024,28 paź 2024,European Union 0.8% 07/25,EU000A3K4DJ5,EU000A3K4DJ5,BE,3100,"€3,036.14","13,037.94 PLN",4.29425000441592,"€3,069.14","13,348.22 PLN",4.349175002148144,€33,310.28 PLN,€15.26,65.94 PLN
+9 wrz 2024,21 lis 2024,ABN AMRO Bank NV 1% 04/25,XS1218821756,XS1218821756,NL,3.8,"€3,765.20","16,097.86 PLN",4.275435002225751,"€3,793.04","16,477.91 PLN",4.344250010036551,€27.84,380.05 PLN,€18.89,81.41 PLN
+
+Transactions for Brokerage Account sells - USD
+Portfolio  created on 6 lis 2022
+Date acquired,Date sold,Security name,Symbol,ISIN,Country,Qty,Cost basis,Cost basis base currency,Cost basis rate,Gross proceeds,Gross proceeds base currency,Gross proceeds rate,Gross PnL,Gross PnL base currency,Fees,Fees  base currency
+20 lis 2023,12 sie 2024,Exxon Mobil,XOM,US30231G1022,US,48.501169,"US$5,000","19,863.25 PLN",3.97265,"US$5,804.62","22,865.17 PLN",3.9391333455,US$804.62,"3,001.92 PLN",US$0.17,0.66 PLN
+8 gru 2023,14 paź 2024,Truist Financial Corp,TFC,US89832Q1094,US,191.17647058,"US$6,500","26,189.75 PLN",4.029193565,"US$8,329.79","32,773.09 PLN",3.9344440425,"US$1,829.79","6,583.34 PLN",US$0.27,1.06 PLN
+8 sty 2024,14 paź 2024,Truist Financial Corp,TFC,US89832Q1094,US,106.72358591,"US$4,000","15,830.44 PLN",3.95761,"US$4,650.07","18,295.44 PLN",3.9344440425,US$650.07,"2,465 PLN",US$0.15,0.59 PLN
+11 cze 2024,14 paź 2024,Truist Financial Corp,TFC,US89832Q1094,US,3.63994351,US$129.94,525.08 PLN,4.0410148975,US$158.60,624 PLN,3.9344440425,US$28.66,98.92 PLN,US$0,0 PLN
+13 mar 2024,14 paź 2024,Arbor Realty Trust,ABR,US0389231087,US,289.88176964,"US$3,800","14,858.61 PLN",3.9101615995,"US$4,400.76","17,314.54 PLN",3.9344440425,US$600.76,"2,455.93 PLN",US$0.17,0.66 PLN
+23 paź 2023,14 paź 2024,Amcor,AMCR,JE00BJ1F3079,JE,23.52941176,US$200,835.88 PLN,4.179405,US$265.91,"1,046.20 PLN",3.9344440425,US$65.91,210.32 PLN,US$0.01,0.03 PLN
+22 lut 2024,14 paź 2024,Amcor,AMCR,JE00BJ1F3079,JE,499.52225841,"US$4,600","18,375.31 PLN",3.9946330505,"US$5,645.20","22,210.72 PLN",3.9344440425,"US$1,045.20","3,835.41 PLN",US$0.25,0.98 PLN
+12 lip 2024,14 paź 2024,Amcor,AMCR,JE00BJ1F3079,JE,6.57894736,US$65,253.73 PLN,3.903580038500001,US$74.35,292.52 PLN,3.9344440425,US$9.35,38.79 PLN,US$0,0 PLN
+3 wrz 2024,16 paź 2024,European Investment Bank 2.5% 10/24,US298785GQ39,US298785GQ39,LU,0.8,US$805.54,"3,121.09 PLN",3.8745406705,US$800,"3,167.11 PLN",3.958895281,-US$5.54,46.02 PLN,US$2.01,7.78 PLN
+22 sie 2024,17 paź 2024,Canadian Imperial Bank of Commerce 5.144% 04/25,US13607LNF66,US13607LNF66,CA,6.4,"US$6,522.47","25,135.50 PLN",3.853679381,"US$6,567.78","26,130.41 PLN",3.978576544,US$45.31,994.91 PLN,US$32.73,128.17 PLN
+11 cze 2024,4 lis 2024,Truist Financial Corp,TFC,US89832Q1094,US,0.00179318,US$0.06,0.24 PLN,4.0410148975,US$0.08,0.32 PLN,4.006474371,US$0.02,0.08 PLN,US$0.02,0.08 PLN
+13 sie 2024,16 gru 2024,Cogent Communications Holdings,CCOI,US19239V3024,US,69.39597501,"US$5,000","19,503.25 PLN",3.900650242499998,"US$5,285.89","21,394.10 PLN",4.0473994555,US$285.89,"1,890.85 PLN",US$0.16,0.64 PLN
+
+Transactions for Brokerage Account dividends - EUR
+Portfolio  created on 6 lis 2022
+Date,Security name,Symbol,ISIN,Country,Gross amount,Gross amount base currency,Gross amount rate,Withholding tax,Withholding tax base currency,Net amount,Net amount base currency
+26 sie 2024,Mercedes-Benz International Finance BV 2% 08/26 dividend,DE000A289XJ2,DE000A289XJ2,DE,€70.63,302.43 PLN,,€18.63,,€52,222.65 PLN
+
+Transactions for Brokerage Account dividends - USD
+Portfolio  created on 6 lis 2022
+Date,Security name,Symbol,ISIN,Country,Gross amount,Gross amount base currency,Gross amount rate,Withholding tax,Withholding tax base currency,Net amount,Net amount base currency
+4 mar 2024,Truist Financial Corp dividend,TFC,US89832Q1094,US,US$154.90,617 PLN,,US$23.24,,US$131.66,524.43 PLN
+21 mar 2024,Amcor dividend,AMCR,JE00BJ1F3079,JE,US$65.38,259.17 PLN,,US$0,,US$65.38,259.17 PLN
+25 mar 2024,Pioneer Natural Resources dividend,PXD,US7237871071,US,US$53.44,212.39 PLN,,US$8.02,,US$45.42,180.52 PLN
+16 maj 2024,EPR Properties dividend,EPR,US26884U1097,US,US$178.64,700.17 PLN,,US$26.80,,US$151.84,595.13 PLN
+31 maj 2024,UPS dividend,UPS,US9113121068,US,US$222.05,875.82 PLN,,US$33.31,,US$188.74,744.44 PLN
+3 cze 2024,Arbor Realty Trust dividend,ABR,US0389231087,US,US$124.64,488.26 PLN,,US$18.70,,US$105.94,415 PLN
+4 cze 2024,Truist Financial Corp dividend,TFC,US89832Q1094,US,US$154.90,613.20 PLN,,US$23.24,,US$131.66,521.20 PLN
+11 cze 2024,Exxon Mobil dividend,XOM,US30231G1022,US,US$46.07,186.16 PLN,,US$6.91,,US$39.16,158.24 PLN
+13 cze 2024,Amcor dividend,AMCR,JE00BJ1F3079,JE,US$65.38,264.74 PLN,,US$0,,US$65.38,264.74 PLN
+18 cze 2024,EPR Properties dividend,EPR,US26884U1097,US,US$212.47,858.33 PLN,,US$31.87,,US$180.60,729.58 PLN
+12 lip 2024,Best Buy dividend,BBY,US0865161014,US,US$107.98,421.50 PLN,,US$16.20,,US$91.78,358.27 PLN
+16 lip 2024,EPR Properties dividend,EPR,US26884U1097,US,US$212.47,834.55 PLN,,US$31.87,,US$180.60,709.37 PLN
+16 sie 2024,EPR Properties dividend,EPR,US26884U1097,US,US$215.71,834.79 PLN,,US$32.36,,US$183.35,709.56 PLN
+29 sie 2024,Bank of Montreal dividend,BMO,CA0636711016,CA,US$207.20,801.25 PLN,,US$0,,US$207.20,801.25 PLN
+30 sie 2024,ConAgra Foods dividend,CAG,US2058871029,US,US$225.64,875.40 PLN,,US$33.85,,US$191.79,744.07 PLN
+3 wrz 2024,Arbor Realty Trust dividend,ABR,US0389231087,US,US$124.64,482.92 PLN,,US$18.70,,US$105.94,410.46 PLN
+4 wrz 2024,Truist Financial Corp dividend,TFC,US89832Q1094,US,US$156.80,604.90 PLN,,US$23.52,,US$133.28,514.16 PLN
+6 wrz 2024,UPS dividend,UPS,US9113121068,US,US$224.43,866.96 PLN,,US$33.66,,US$190.77,736.93 PLN
+9 wrz 2024,Cogent Communications Holdings dividend,CCOI,US19239V3024,US,US$68.35,264.80 PLN,,US$10.25,,US$58.10,225.09 PLN
+17 wrz 2024,EPR Properties dividend,EPR,US26884U1097,US,US$222.04,853.28 PLN,,US$33.31,,US$188.73,725.27 PLN
+27 wrz 2024,Amcor dividend,AMCR,JE00BJ1F3079,JE,US$66.20,253.81 PLN,,US$0,,US$66.20,253.81 PLN
+11 paź 2024,Best Buy dividend,BBY,US0865161014,US,US$108.98,428.07 PLN,,US$16.35,,US$92.63,363.85 PLN
+16 paź 2024,EPR Properties dividend,EPR,US26884U1097,US,US$222.04,879.03 PLN,,US$33.31,,US$188.73,747.16 PLN
+16 paź 2024,European Investment Bank 2.5% 10/24 dividend,US298785GQ39,US298785GQ39,LU,US$10,39.58 PLN,,US$0,,US$10,39.58 PLN
+18 lis 2024,EPR Properties dividend,EPR,US26884U1097,US,US$222.04,904.37 PLN,,US$33.31,,US$188.73,768.70 PLN
+27 lis 2024,Bank of Montreal dividend,BMO,CA0636711016,CA,US$198.18,807.51 PLN,,US$0,,US$198.18,807.51 PLN
+29 lis 2024,ConAgra Foods dividend,CAG,US2058871029,US,US$225.64,919.14 PLN,,US$33.85,,US$191.79,781.25 PLN
+6 gru 2024,UPS dividend,UPS,US9113121068,US,US$224.43,907.29 PLN,,US$33.66,,US$190.77,771.21 PLN
+9 gru 2024,Cogent Communications Holdings dividend,CCOI,US19239V3024,US,US$69.04,278.50 PLN,,US$10.36,,US$58.68,236.71 PLN
+17 gru 2024,EPR Properties dividend,EPR,US26884U1097,US,US$222.04,903.35 PLN,,US$33.31,,US$188.73,767.83 PLN

@@ -12,8 +12,9 @@ Project that parse e-trade and revolut account statements and Gain and Losses do
         3. Download all `ACCOUNT STATEMENT`  and `Single Account Statement` documents
     b. Revolut:
    
-        1. Download from your Revolut mobile app "Profit and Losses" documents in CSV format in you investment account.
-        2. Download from your Revolut mobile app Statement account documents in CSV format in saving account.
+        1. Go to your profile 
+        2. Click Statements and documents 
+        3. Download Consolidated statement for a year you are filling your tax return form for.
 4. Run: 
     1. `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf"> <Gain and Loss XLSX document>`
     2. Alternatively you can just run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):

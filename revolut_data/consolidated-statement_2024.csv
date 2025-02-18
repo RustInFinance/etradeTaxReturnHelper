@@ -1,50 +1,50 @@
 Summary for Savings Accounts - EUR
 Description,Amount
-Saldo początkowe,"8 829,13€"
-Suma wpłat,"13 056,24€"
-Suma wypłat,"21 967,74€"
-Łączna kwota zarobionych odsetek,"82,37€"
+Saldo początkowe,"1 234,56€"
+Suma wpłat,"12 345,64€"
+Suma wypłat,"11 111,11€"
+Łączna kwota zarobionych odsetek,"11,11€"
 Podatek ogółem,0€
 Opłaty ogółem,0€
 Saldo końcowe,0€
 
 Summary for Savings Accounts - PLN
 Description,Amount
-Saldo początkowe,"10 130,50 PLN"
-Suma wpłat,"228 577,90 PLN"
-Suma wypłat,"235 670,58 PLN"
-Łączna kwota zarobionych odsetek,"723,05 PLN"
+Saldo początkowe,"11 111,11 PLN"
+Suma wpłat,"555 555,55 PLN"
+Suma wypłat,"555 555,55 PLN"
+Łączna kwota zarobionych odsetek,"111,11 PLN"
 Podatek ogółem,0 PLN
 Opłaty ogółem,0 PLN
-Saldo końcowe,"3 760,87 PLN"
+Saldo końcowe,"1 111,11 PLN"
 
 Summary for Brokerage Account - EUR
 Portfolio  created on 6 lis 2022
 
 
 Sells summary,Amount
-Wpływy brutto,"6 862,18€"
-Podstawa kosztowa,"6 801,34€"
-Zrealizowany zysk/strata brutto,"60,84€"
+Wpływy brutto,"1 111,11€"
+Podstawa kosztowa,"1 111,11€"
+Zrealizowany zysk/strata brutto,"11,11€"
 
 Other Income and Fees summary,Amount
-Dywidendy,"70,63€"
-Podatek potrącany u źródła,"18,63€"
-Kwota,52€
+Dywidendy,"11,11€"
+Podatek potrącany u źródła,"11,11€"
+Kwota,11€
 
 Summary for Brokerage Account - USD
 Portfolio  created on 6 lis 2022
 
 
 Sells summary,Amount
-Wpływy brutto,"41 983,05$"
-Podstawa kosztowa,"36 623,01$"
-Zrealizowany zysk/strata brutto,"5 360,04$"
+Wpływy brutto,"11 111,11$"
+Podstawa kosztowa,"11 111,11$"
+Zrealizowany zysk/strata brutto,"1 111,11$"
 
 Other Income and Fees summary,Amount
-Dywidendy,"4 611,72$"
-Podatek potrącany u źródła,"599,96$"
-Kwota,"4 011,76$"
+Dywidendy,"1 111,11$"
+Podatek potrącany u źródła,"111,11$"
+Kwota,"1 111,11$"
 
 Transactions for Savings Accounts - EUR
 Date,Description,Money out,Money in,Balance

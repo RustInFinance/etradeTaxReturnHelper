@@ -12,8 +12,6 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: making refactoring so that when no more lines in CSV then we again conclude processing
-//TODO: Enable UT for consolidated tax document
 //TODO: add Bit coin from consolidated tax document UT
 // TODO: Add revolut sold transactions settlement date when it is available in CSV documents
 // TODO: Revolut sold tranasactions in EUR currency

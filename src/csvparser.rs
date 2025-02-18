@@ -386,8 +386,6 @@ fn process_tax_consolidated_data(
             incomes.extend(lincomes);
             taxes.extend(ltaxes);
         }
-
-        _ => todo!("Error: Unimplemented type of Transactions in CSV document"),
     }
     Ok(())
 }
@@ -402,7 +400,7 @@ pub fn parse_revolut_transactions(
     (
         Vec<(String, crate::Currency, crate::Currency)>,
         Vec<(String, String, crate::Currency, crate::Currency)>,
-    ), // TODO: fees from sold
+    ),
     String,
 > {
     let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency)> = vec![];
@@ -525,7 +523,6 @@ pub fn parse_revolut_transactions(
                 std::str::from_utf8(&[DELIMITER])
                     .map_err(|_| "ERROR: Unable to convert delimiter to string".to_string())?,
             );
-            // TODO: add support for situation when we read last line
             if line.starts_with("Transactions for") {
                 process_tax_consolidated_data(
                     &state,
@@ -591,7 +588,6 @@ pub fn parse_revolut_transactions(
             &mut incomes,
             &mut taxes,
         )?;
-
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}".to_string());
     }
@@ -783,33 +779,89 @@ mod tests {
     fn test_parse_revolut_transactions_consolidated() -> Result<(), String> {
         let expected_result = Ok((
             vec![
+                // EUR interests
                 (
-                    "09/22/23".to_owned(),
-                    crate::Currency::EUR(0.24),
+                    "01/01/24".to_owned(),
+                    crate::Currency::EUR(0.26),
                     crate::Currency::EUR(0.00),
                 ),
                 (
-                    "09/23/23".to_owned(),
+                    "04/12/24".to_owned(),
                     crate::Currency::EUR(0.24),
                     crate::Currency::EUR(0.00),
                 ),
+                // PLN interests
                 (
-                    "09/24/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
+                    "01/04/24".to_owned(),
+                    crate::Currency::PLN(0.86),
+                    crate::Currency::PLN(0.00),
                 ),
                 (
-                    "10/09/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
+                    "05/31/24".to_owned(),
+                    crate::Currency::PLN(1.26),
+                    crate::Currency::PLN(0.00),
+                ),
+                // Euro dividends
+                (
+                    "08/26/24".to_owned(),
+                    crate::Currency::PLN(302.43),
+                    crate::Currency::PLN(302.43 - 222.65),
+                ),
+                // USD dividends
+                (
+                    "03/04/24".to_owned(),
+                    crate::Currency::PLN(617.00),
+                    crate::Currency::PLN(617.00 - 524.43),
                 ),
                 (
-                    "10/20/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
+                    "03/21/24".to_owned(),
+                    crate::Currency::PLN(259.17),
+                    crate::Currency::PLN(0.0),
+                ),
+                (
+                    "12/17/24".to_owned(),
+                    crate::Currency::PLN(903.35),
+                    crate::Currency::PLN(903.35 - 767.83),
                 ),
             ],
-            vec![],
+            vec![
+                (
+                    "07/29/24".to_owned(),
+                    "10/28/24".to_owned(),
+                    crate::Currency::PLN(13037.94 + 65.94),
+                    crate::Currency::PLN(13348.22),
+                ),
+                (
+                    "09/09/24".to_owned(),
+                    "11/21/24".to_owned(),
+                    crate::Currency::PLN(16097.86 + 81.41),
+                    crate::Currency::PLN(16477.91),
+                ),
+                (
+                    "11/20/23".to_owned(),
+                    "08/12/24".to_owned(),
+                    crate::Currency::PLN(19863.25 + 0.66),
+                    crate::Currency::PLN(22865.17),
+                ),
+                (
+                    "06/11/24".to_owned(),
+                    "10/14/24".to_owned(),
+                    crate::Currency::PLN(525.08 + 0.0),
+                    crate::Currency::PLN(624.00),
+                ),
+                (
+                    "10/23/23".to_owned(),
+                    "10/14/24".to_owned(),
+                    crate::Currency::PLN(835.88 + 0.03),
+                    crate::Currency::PLN(1046.20),
+                ),
+                (
+                    "08/22/24".to_owned(),
+                    "10/17/24".to_owned(),
+                    crate::Currency::PLN(25135.50 + 128.17),
+                    crate::Currency::PLN(26130.41),
+                ),
+            ],
         ));
         assert_eq!(
             parse_revolut_transactions("revolut_data/consolidated-statement_2024.csv"),

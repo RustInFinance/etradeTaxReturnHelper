@@ -80,7 +80,7 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
 }
 
 fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let mut df_transactions = if df.get_column_names().contains(&"Currency") {
+    let df_transactions = if df.get_column_names().contains(&"Currency") {
         df.select(["Date", "Gross amount", "Withholding tax", "Currency"])
     } else {
         df.select([
@@ -95,7 +95,7 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
 }
 
 fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let mut df_transactions = if df.get_column_names().contains(&"Currency") {
+    let df_transactions = if df.get_column_names().contains(&"Currency") {
         df.select([
             "Date acquired",
             "Date sold",

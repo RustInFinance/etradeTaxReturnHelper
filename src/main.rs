@@ -12,9 +12,7 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
-// TODO: Add revolut sold transactions settlement date when it is available in CSV documents
-// TODO: Revolut sold tranasactions in EUR currency
-// TODO: Add fees to revolut sold transactions when CSV contains such a data
+//TODO: add Bit coin from consolidated tax document UT
 // TODO: remove support for account statement of investment account of revolut
 // TODO: When there is no proxy (on intel account) there are problems (UT do not work
 // getting_Exchange_rate)

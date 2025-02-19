@@ -4,6 +4,16 @@ use nom::{
 };
 use polars::prelude::*;
 
+enum ParsingState {
+    None,
+    InterestsEUR(String),
+    InterestsPLN(String),
+    SellEUR(String),
+    SellUSD(String),
+    DividendsEUR(String),
+    DividendsUSD(String),
+}
+
 fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::Currency, String> {
     log::info!("Entry cacheline: {cashline}");
     log::info!("Entry currency: {currency}");
@@ -38,16 +48,23 @@ fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::C
 fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     // We need to erase "," before processing it by parser
     log::info!("Entry moneyin/total amount line: {cashline}");
-    let cashline_string: String = cashline.to_string().replace(",", "");
+    // replace "," to "." only if there are is no "." already
+    // otherwise remove ','
+    let cashline_string: String = if cashline.contains(',') && cashline.contains(".") {
+        cashline.to_string().replace(",", "")
+    } else {
+        cashline.to_string().replace(",", ".")
+    };
+    let cashline_string: String = cashline_string.replace(" ", "");
     log::info!("Processed moneyin/total amount line: {cashline_string}");
-    let mut euro_parser = tuple((tag("+€"), double::<&str, Error<_>>));
+    let mut euro_parser = tuple((double::<&str, Error<_>>, tag("€")));
     let mut usd_parser = tuple((many_m_n(0, 1, tag("-")), tag("$"), double::<&str, Error<_>>));
-    let mut pln_parser = tuple((tag("+"), double::<&str, Error<_>>, take(1usize), tag("PLN")));
+    let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
     match euro_parser(cashline_string.as_str()) {
-        Ok((_, (_, value))) => return Ok(crate::Currency::EUR(value)),
+        Ok((_, (value, _))) => return Ok(crate::Currency::EUR(value)),
         Err(_) => match pln_parser(cashline_string.as_str()) {
-            Ok((_, (_, value, _, _))) => return Ok(crate::Currency::PLN(value)),
+            Ok((_, (value, _))) => return Ok(crate::Currency::PLN(value)),
             Err(_) => match usd_parser(cashline_string.as_str()) {
                 Ok((_, (sign, _, value))) => {
                     if sign.len() == 1 {
@@ -63,23 +80,39 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
 }
 
 fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let df_transactions = df
-        .select(["Date", "Gross amount", "Withholding tax", "Currency"])
-        .map_err(|_| "Error: Unable to select dividend data")?;
+    let df_transactions = if df.get_column_names().contains(&"Currency") {
+        df.select(["Date", "Gross amount", "Withholding tax", "Currency"])
+    } else {
+        df.select([
+            "Date",
+            "Gross amount base currency",
+            "Net amount base currency",
+        ])
+    }
+    .map_err(|_| "Error: Unable to select collumns in Revolut dividends transactions")?;
 
     Ok(df_transactions)
 }
 
 fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
-    let df_transactions = df
-        .select([
+    let df_transactions = if df.get_column_names().contains(&"Currency") {
+        df.select([
             "Date acquired",
             "Date sold",
             "Cost basis",
             "Gross proceeds",
             "Currency",
         ])
-        .map_err(|_| "Error: Unable to select sold data")?;
+    } else {
+        df.select([
+            "Date acquired",
+            "Date sold",
+            "Cost basis base currency",
+            "Gross proceeds base currency",
+            "Fees  base currency",
+        ])
+    }
+    .map_err(|_| "Error: Unable to select collumns in Revolut sold transactions")?;
 
     Ok(df_transactions)
 }
@@ -109,10 +142,14 @@ fn extract_investment_gains_and_costs_transactions(
 
 fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
     // 1. Get rows with transactions
-    let mut df_transactions = df
-        .select(&["Completed Date", "Description", "Money in"])
-        .map_err(|_| "Error: Unable to select description")?;
+    let mut df_transactions = if df.get_column_names().contains(&"Completed Date") {
+        df.select(&["Description", "Money in", "Completed Date"])
+    } else {
+        df.select(&["Description", "Money in", "Date"])
+    }
+    .map_err(|_| "Error: Unable to select collumns in Revolut Interests rate transactions")?;
 
+    // This code maps diffrent Description types related to interests into "odsetki"
     let intrest_rate = df_transactions
         .column("Description")
         .map_err(|_| "Error: Unable to get Description")?
@@ -120,7 +157,10 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
         .map(|x| {
             let m = match x {
                 AnyValue::Utf8(x) => {
-                    if x.contains("Odsetki brutto") || x.contains("Gross interest") {
+                    if x.contains("Odsetki brutto")
+                        || x.contains("Gross interest")
+                        || x.contains("Interest earned")
+                    {
                         Some("odsetki")
                     } else {
                         None
@@ -162,8 +202,22 @@ fn parse_investment_transaction_dates(
         .map_err(|_| "Error: Unable to convert to utf8")?;
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
+            let d = d
+                .replace(" sty ", " Jan ")
+                .replace(" lut ", " Feb ")
+                .replace(" mar ", " Mar ")
+                .replace(" kwi ", " Apr ")
+                .replace(" maj ", " May ")
+                .replace(" cze ", " Jun ")
+                .replace(" lip ", " Jul ")
+                .replace(" sie ", " Aug ")
+                .replace(" wrz ", " Sep ")
+                .replace(" paź ", " Oct ")
+                .replace(" lis ", " Nov ")
+                .replace(" gru ", " Dec ");
             let cd = chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%dT%H:%M:%S%.fZ")
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d"))
+                .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%e %b %Y"))
                 .map_err(|_| "Error converting cell to NaiveDate")?
                 .format("%m/%d/%y")
                 .to_string();
@@ -175,29 +229,7 @@ fn parse_investment_transaction_dates(
     Ok(dates)
 }
 
-fn parse_transaction_dates(df: &DataFrame) -> Result<Vec<String>, &'static str> {
-    let completed_date = df
-        .column("Completed Date")
-        .map_err(|_| "Error: Unable to select Complete Date")?;
-    let mut dates: Vec<String> = vec![];
-    let possible_dates = completed_date
-        .utf8()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
-    possible_dates.into_iter().try_for_each(|x| {
-        if let Some(d) = x {
-            let cd = chrono::NaiveDate::parse_from_str(&d, "%e %b %Y")
-                .map_err(|_| "Error converting cell to NaiveDate")?
-                .format("%m/%d/%y")
-                .to_string();
-            dates.push(cd);
-        }
-        Ok::<(), &str>(())
-    })?;
-
-    Ok(dates)
-}
-
-fn parse_incomes(df: DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'static str> {
+fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'static str> {
     let mut incomes: Vec<crate::Currency> = vec![];
     let moneyin = df
         .column(col)
@@ -207,7 +239,7 @@ fn parse_incomes(df: DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'sta
         .map_err(|_| "Error: Unable to convert to utf8")?;
     possible_incomes.into_iter().try_for_each(|x| {
         if let Some(d) = x {
-            incomes.push(extract_cash(d)?);
+            incomes.push(extract_cash(&d)?);
         }
         Ok::<(), &str>(())
     })?;
@@ -266,6 +298,97 @@ fn parse_income_with_currency(
     Ok(incomes)
 }
 
+/// Process gathered financial operations from revolut consolidated tax document
+fn process_tax_consolidated_data(
+    state: &ParsingState,
+    delimiter: u8,
+    dates: &mut Vec<String>,
+    acquired_dates: &mut Vec<String>,
+    sold_dates: &mut Vec<String>,
+    costs: &mut Vec<crate::Currency>,
+    gross: &mut Vec<crate::Currency>,
+    incomes: &mut Vec<crate::Currency>,
+    taxes: &mut Vec<crate::Currency>,
+) -> Result<(), String> {
+    match state {
+        ParsingState::None => {}
+        ParsingState::InterestsEUR(s) | ParsingState::InterestsPLN(s) => {
+            log::trace!("String to parse of Interests: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV: {e}"))?;
+            log::info!("Content of Interests: {df}");
+            let filtred_df = extract_intrest_rate_transactions(&df)?;
+            dates.extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+            let lincomes = parse_incomes(&filtred_df, "Money in")?;
+            let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
+            taxes.extend(ltaxes);
+            incomes.extend(lincomes);
+        }
+        ParsingState::SellEUR(s) | ParsingState::SellUSD(s) => {
+            log::trace!("String to parse of Sells: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV: {e}"))?;
+            log::trace!("Content of Sells: {df}");
+            let filtred_df = extract_sold_transactions(&df)?;
+            log::info!("Filtered Sold Data of interest: {filtred_df}");
+            let lacquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
+            log::info!("dates:: {:?}", acquired_dates);
+            let lsold_dates = parse_investment_transaction_dates(&filtred_df, "Date sold")?;
+
+            // For each sold data has to be one acquire date
+            if lacquired_dates.len() != lsold_dates.len() {
+                return Err("ERROR: Different number of acquired and sold dates".to_string());
+            }
+            sold_dates.extend(lsold_dates);
+            acquired_dates.extend(lacquired_dates);
+            let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
+            gross.extend(parse_incomes(&filtred_df, "Gross proceeds base currency")?);
+            let fees = parse_incomes(&filtred_df, "Fees  base currency")?;
+
+            // Add fees to costs
+            let lcosts: Vec<crate::Currency> = lcosts
+                .iter()
+                .zip(fees)
+                .map(|(x, y)| x.derive(x.value() + y.value()))
+                .collect();
+            costs.extend(lcosts);
+        }
+        ParsingState::DividendsEUR(s) | ParsingState::DividendsUSD(s) => {
+            log::trace!("String to parse of Dividends: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV: {e}"))?;
+            log::info!("Content of Dividends: {df}");
+            let filtred_df = extract_dividends_transactions(&df)?;
+            log::info!("Filtered Dividend Data of interest: {filtred_df}");
+            dates.extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+
+            // parse income
+            let lincomes = parse_incomes(&filtred_df, "Gross amount base currency")?;
+            // parse taxes
+            let net = parse_incomes(&filtred_df, "Net amount base currency")?;
+
+            // Add Tax in base currency is missing so We need
+            // to calculate it based on net income e.g. gross - net = tax
+            let ltaxes: Vec<crate::Currency> = lincomes
+                .iter()
+                .zip(net)
+                .map(|(x, y)| x.derive(x.value() - y.value()))
+                .collect();
+            incomes.extend(lincomes);
+            taxes.extend(ltaxes);
+        }
+    }
+    Ok(())
+}
 /// Parse revolut CSV documents (savings account and trading)
 /// returns: (
 /// dividend transactions in a form: date, gross income , tax taken
@@ -277,19 +400,22 @@ pub fn parse_revolut_transactions(
     (
         Vec<(String, crate::Currency, crate::Currency)>,
         Vec<(String, String, crate::Currency, crate::Currency)>,
-    ), // TODO: fees from sold
+    ),
     String,
 > {
     let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency)> = vec![];
     let mut sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
 
-    let dates: Vec<String>;
+    let mut dates: Vec<String> = vec![];
     let mut acquired_dates: Vec<String> = vec![];
     let mut sold_dates: Vec<String> = vec![];
     let mut costs: Vec<crate::Currency> = vec![];
     let mut gross: Vec<crate::Currency> = vec![];
-    let incomes: Vec<crate::Currency>;
-    let taxes: Vec<crate::Currency>;
+    let mut incomes: Vec<crate::Currency> = vec![];
+    let mut taxes: Vec<crate::Currency> = vec![];
+
+    const DELIMITER: u8 = b';';
+
     //let mut rdr = csv::Reader::from_path(csvtoparse).map_err(|_| "Error: opening CSV")?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -312,9 +438,9 @@ pub fn parse_revolut_transactions(
 
         log::info!("Filtered data of Interest: {filtred_df}");
 
-        dates = parse_transaction_dates(&filtred_df)?;
+        dates = parse_investment_transaction_dates(&filtred_df, "Completed Date")?;
 
-        incomes = parse_incomes(filtred_df, "Money in")?;
+        incomes = parse_incomes(&filtred_df, "Money in")?;
         // Taxes are not automatically taken from savings account
         // so we will put zeros as tax taken
         taxes = incomes.iter().map(|i| i.derive(0.0)).collect();
@@ -330,7 +456,7 @@ pub fn parse_revolut_transactions(
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
         dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
-        incomes = parse_incomes(filtred_df, "Total Amount")?;
+        incomes = parse_incomes(&filtred_df, "Total Amount")?;
         taxes = incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
         let mut content1 = String::new();
@@ -385,6 +511,83 @@ pub fn parse_revolut_transactions(
         incomes = parse_income_with_currency(&filtred_df, "Gross amount", "Currency")?;
         // parse taxes
         taxes = parse_income_with_currency(&filtred_df, "Withholding tax", "Currency")?;
+    } else if result
+        .iter()
+        .any(|field| field.starts_with("Summary for") == true)
+    {
+        let mut state = ParsingState::None;
+
+        for result in rdr.records() {
+            let record = result.map_err(|e| format!("Error reading CSV: {e}"))?;
+            let line = record.into_iter().collect::<Vec<&str>>().join(
+                std::str::from_utf8(&[DELIMITER])
+                    .map_err(|_| "ERROR: Unable to convert delimiter to string".to_string())?,
+            );
+            if line.starts_with("Transactions for") {
+                process_tax_consolidated_data(
+                    &state,
+                    DELIMITER,
+                    &mut dates,
+                    &mut acquired_dates,
+                    &mut sold_dates,
+                    &mut costs,
+                    &mut gross,
+                    &mut incomes,
+                    &mut taxes,
+                )?;
+
+                if line.contains("Savings Accounts - EUR") {
+                    log::info!("Starting to collect: EUR interests");
+                    state = ParsingState::InterestsEUR(String::new());
+                } else if line.contains("Savings Accounts - PLN") {
+                    log::info!("Starting to collect: PLN interests");
+                    state = ParsingState::InterestsPLN(String::new());
+                } else if line.contains("Brokerage Account sells - EUR") {
+                    log::info!("Starting to collect: EUR Sells");
+                    state = ParsingState::SellEUR(String::new());
+                } else if line.contains("Brokerage Account sells - USD") {
+                    log::info!("Starting to collect: USD Sells");
+                    state = ParsingState::SellUSD(String::new());
+                } else if line.contains("Brokerage Account dividends - EUR") {
+                    log::info!("Starting to collect: EUR dividends");
+                    state = ParsingState::DividendsEUR(String::new());
+                } else if line.contains("Brokerage Account dividends - USD") {
+                    log::info!("Starting to collect: USD dividends");
+                    state = ParsingState::DividendsUSD(String::new());
+                } else {
+                    return Err("ERROR: Unsupported CSV type of document".to_string());
+                }
+            } else {
+                match &mut state {
+                    ParsingState::None => (),
+                    ParsingState::SellEUR(s)
+                    | ParsingState::SellUSD(s)
+                    | ParsingState::DividendsEUR(s)
+                    | ParsingState::DividendsUSD(s) => {
+                        // Skip a line with info on protfolio creation
+                        if line.contains("Portfolio") == false {
+                            s.push_str(&line);
+                            s.push('\n');
+                        }
+                    }
+                    ParsingState::InterestsEUR(s) | ParsingState::InterestsPLN(s) => {
+                        s.push_str(&line);
+                        s.push('\n');
+                    }
+                }
+            }
+        }
+        process_tax_consolidated_data(
+            &state,
+            DELIMITER,
+            &mut dates,
+            &mut acquired_dates,
+            &mut sold_dates,
+            &mut costs,
+            &mut gross,
+            &mut incomes,
+            &mut taxes,
+        )?;
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}".to_string());
     }
@@ -417,23 +620,18 @@ mod tests {
 
     #[test]
     fn test_extract_cash() -> Result<(), String> {
-        assert_eq!(extract_cash("+€0.07"), Ok(crate::Currency::EUR(0.07)));
-        assert_eq!(extract_cash("+€6,000"), Ok(crate::Currency::EUR(6000.00)));
-        assert_eq!(extract_cash("+€600"), Ok(crate::Currency::EUR(600.00)));
-        assert_eq!(
-            extract_cash("+€6,000.45"),
-            Ok(crate::Currency::EUR(6000.45))
-        );
+        assert_eq!(extract_cash("0,07€"), Ok(crate::Currency::EUR(0.07)));
+        assert_eq!(extract_cash("6 000€"), Ok(crate::Currency::EUR(6000.00)));
+        assert_eq!(extract_cash("600,34€"), Ok(crate::Currency::EUR(600.34)));
 
-        assert_eq!(extract_cash("+1.06 PLN"), Ok(crate::Currency::PLN(1.06)));
+        assert_eq!(extract_cash("1,06 PLN"), Ok(crate::Currency::PLN(1.06)));
         assert_eq!(
-            extract_cash("+4,000 PLN"),
-            Ok(crate::Currency::PLN(4000.00))
+            extract_cash("500 000.45 PLN"),
+            Ok(crate::Currency::PLN(500000.45))
         );
-        assert_eq!(extract_cash("+500 PLN"), Ok(crate::Currency::PLN(500.00)));
         assert_eq!(
-            extract_cash("+4,000.32 PLN"),
-            Ok(crate::Currency::PLN(4000.32))
+            extract_cash("13,037.94 PLN"),
+            Ok(crate::Currency::PLN(13037.94))
         );
 
         assert_eq!(extract_cash("$2.94"), Ok(crate::Currency::USD(2.94)));
@@ -443,17 +641,36 @@ mod tests {
 
     #[test]
     fn test_parse_incomes() -> Result<(), String> {
-        let moneyin = Series::new("Money in", vec!["+€6,000", "+€3,000"]);
+        let moneyin = Series::new("Money in", vec!["6000€", "3000€"]);
         let description = Series::new("Description", vec!["odsetki", "odsetki"]);
 
         let df =
             DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
 
         assert_eq!(
-            parse_incomes(df, "Money in"),
+            parse_incomes(&df, "Money in"),
             Ok(vec![
                 crate::Currency::EUR(6000.00),
                 crate::Currency::EUR(3000.00)
+            ])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_incomes_pl() -> Result<(), String> {
+        let moneyin = Series::new("Money in", vec!["0,27€", "5 452,74€"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df =
+            DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(
+            parse_incomes(&df, "Money in"),
+            Ok(vec![
+                crate::Currency::EUR(0.27),
+                crate::Currency::EUR(5452.74)
             ])
         );
 
@@ -469,7 +686,7 @@ mod tests {
             DataFrame::new(vec![description, moneyin]).map_err(|_| "Error creating DataFrame")?;
 
         assert_eq!(
-            parse_incomes(df, "Total Amount"),
+            parse_incomes(&df, "Total Amount"),
             Ok(vec![
                 crate::Currency::USD(2.94),
                 crate::Currency::USD(-0.51)
@@ -491,7 +708,26 @@ mod tests {
         let expected_second_date = "09/01/23".to_owned();
 
         assert_eq!(
-            parse_transaction_dates(&df),
+            parse_investment_transaction_dates(&df, "Completed Date"),
+            Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_transaction_dates_pl() -> Result<(), String> {
+        let completed_dates = Series::new("Date", vec!["25 sty 2023", "1 wrz 2023"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df = DataFrame::new(vec![description, completed_dates])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        let expected_first_date = "01/25/23".to_owned();
+        let expected_second_date = "09/01/23".to_owned();
+
+        assert_eq!(
+            parse_investment_transaction_dates(&df, "Date"),
             Ok(vec![expected_first_date, expected_second_date])
         );
 
@@ -540,968 +776,97 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_revolut_transactions_eur() -> Result<(), String> {
+    fn test_parse_revolut_transactions_consolidated() -> Result<(), String> {
         let expected_result = Ok((
             vec![
+                // EUR interests
                 (
-                    "08/24/23".to_owned(),
-                    crate::Currency::EUR(0.05),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/25/23".to_owned(),
-                    crate::Currency::EUR(0.07),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/26/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/27/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/28/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/29/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/30/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "08/31/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/01/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/02/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/03/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/04/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/05/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/06/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/07/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/08/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/09/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/10/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/11/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/12/23".to_owned(),
-                    crate::Currency::EUR(0.06),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/13/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/14/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/15/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/16/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/17/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/18/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/19/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/20/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/21/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/22/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/23/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/24/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/25/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/26/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/27/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/28/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/29/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "09/30/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/01/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/02/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/03/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/04/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/05/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/06/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/07/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/08/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/09/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/10/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/11/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/12/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/13/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/14/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/15/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/16/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/17/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/18/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/19/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/20/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/21/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/22/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/23/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/24/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/25/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/26/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/27/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/28/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/29/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/30/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "10/31/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/01/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/02/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/03/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/04/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/05/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/06/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/07/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/08/23".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/09/23".to_owned(),
-                    crate::Currency::EUR(0.25),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/10/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/11/23".to_owned(),
+                    "01/01/24".to_owned(),
                     crate::Currency::EUR(0.26),
                     crate::Currency::EUR(0.00),
                 ),
                 (
-                    "11/12/23".to_owned(),
-                    crate::Currency::EUR(0.27),
+                    "04/12/24".to_owned(),
+                    crate::Currency::EUR(0.24),
                     crate::Currency::EUR(0.00),
                 ),
+                // PLN interests
                 (
-                    "11/13/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
+                    "01/04/24".to_owned(),
+                    crate::Currency::PLN(0.86),
+                    crate::Currency::PLN(0.00),
                 ),
                 (
-                    "11/14/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
+                    "05/31/24".to_owned(),
+                    crate::Currency::PLN(1.26),
+                    crate::Currency::PLN(0.00),
+                ),
+                // Euro dividends
+                (
+                    "08/26/24".to_owned(),
+                    crate::Currency::PLN(302.43),
+                    crate::Currency::PLN(302.43 - 222.65),
+                ),
+                // USD dividends
+                (
+                    "03/04/24".to_owned(),
+                    crate::Currency::PLN(617.00),
+                    crate::Currency::PLN(617.00 - 524.43),
                 ),
                 (
-                    "11/15/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
+                    "03/21/24".to_owned(),
+                    crate::Currency::PLN(259.17),
+                    crate::Currency::PLN(0.0),
                 ),
                 (
-                    "11/16/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
+                    "12/17/24".to_owned(),
+                    crate::Currency::PLN(903.35),
+                    crate::Currency::PLN(903.35 - 767.83),
+                ),
+            ],
+            vec![
+                (
+                    "07/29/24".to_owned(),
+                    "10/28/24".to_owned(),
+                    crate::Currency::PLN(13037.94 + 65.94),
+                    crate::Currency::PLN(13348.22),
                 ),
                 (
-                    "11/17/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/18/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/19/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
+                    "09/09/24".to_owned(),
+                    "11/21/24".to_owned(),
+                    crate::Currency::PLN(16097.86 + 81.41),
+                    crate::Currency::PLN(16477.91),
                 ),
                 (
                     "11/20/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
+                    "08/12/24".to_owned(),
+                    crate::Currency::PLN(19863.25 + 0.66),
+                    crate::Currency::PLN(22865.17),
                 ),
                 (
-                    "11/21/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/22/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/23/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/24/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/25/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/26/23".to_owned(),
-                    crate::Currency::EUR(0.27),
-                    crate::Currency::EUR(0.00),
-                ),
-                (
-                    "11/27/23".to_owned(),
-                    crate::Currency::EUR(0.26),
-                    crate::Currency::EUR(0.00),
-                ),
-            ],
-            vec![],
-        ));
-
-        assert_eq!(
-            parse_revolut_transactions("revolut_data/Revolut_21sie2023_27lis2023.csv"),
-            expected_result
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_revolut_transactions_pln() -> Result<(), String> {
-        let expected_result = Ok((
-            vec![
-                (
-                    "08/29/23".to_owned(),
-                    crate::Currency::PLN(0.44),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "08/30/23".to_owned(),
-                    crate::Currency::PLN(0.45),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "08/31/23".to_owned(),
-                    crate::Currency::PLN(0.44),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/01/23".to_owned(),
-                    crate::Currency::PLN(0.45),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/02/23".to_owned(),
-                    crate::Currency::PLN(0.44),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/03/23".to_owned(),
-                    crate::Currency::PLN(0.44),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/04/23".to_owned(),
-                    crate::Currency::PLN(0.45),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/05/23".to_owned(),
-                    crate::Currency::PLN(0.77),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/06/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/07/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/08/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/09/23".to_owned(),
-                    crate::Currency::PLN(0.77),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/10/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/11/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/12/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/13/23".to_owned(),
-                    crate::Currency::PLN(0.77),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/14/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/15/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/16/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/17/23".to_owned(),
-                    crate::Currency::PLN(0.78),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/18/23".to_owned(),
-                    crate::Currency::PLN(0.77),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/19/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/20/23".to_owned(),
-                    crate::Currency::PLN(1.01),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/21/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/22/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/23/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/24/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/25/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/26/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/27/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/28/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/29/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "09/30/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/01/23".to_owned(),
-                    crate::Currency::PLN(1.01),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/02/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/03/23".to_owned(),
-                    crate::Currency::PLN(1.0),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/04/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/05/23".to_owned(),
-                    crate::Currency::PLN(1.05),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/06/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/07/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/08/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/09/23".to_owned(),
-                    crate::Currency::PLN(1.05),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/10/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/11/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/12/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/13/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/14/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/15/23".to_owned(),
-                    crate::Currency::PLN(1.05),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/16/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/17/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/18/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/19/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/20/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/21/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/22/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
+                    "06/11/24".to_owned(),
+                    "10/14/24".to_owned(),
+                    crate::Currency::PLN(525.08 + 0.0),
+                    crate::Currency::PLN(624.00),
                 ),
                 (
                     "10/23/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
+                    "10/14/24".to_owned(),
+                    crate::Currency::PLN(835.88 + 0.03),
+                    crate::Currency::PLN(1046.20),
                 ),
                 (
-                    "10/24/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/25/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/26/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/27/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/28/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/29/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/30/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "10/31/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/01/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/02/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/03/23".to_owned(),
-                    crate::Currency::PLN(1.06),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/04/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/05/23".to_owned(),
-                    crate::Currency::PLN(1.11),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/06/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/07/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/08/23".to_owned(),
-                    crate::Currency::PLN(1.11),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/09/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/10/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/11/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/12/23".to_owned(),
-                    crate::Currency::PLN(1.11),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/13/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/14/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/15/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/16/23".to_owned(),
-                    crate::Currency::PLN(1.11),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/17/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/18/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/19/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/20/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/21/23".to_owned(),
-                    crate::Currency::PLN(1.12),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/22/23".to_owned(),
-                    crate::Currency::PLN(0.82),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/23/23".to_owned(),
-                    crate::Currency::PLN(0.83),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/24/23".to_owned(),
-                    crate::Currency::PLN(0.83),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/25/23".to_owned(),
-                    crate::Currency::PLN(0.83),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/26/23".to_owned(),
-                    crate::Currency::PLN(0.83),
-                    crate::Currency::PLN(0.00),
-                ),
-                (
-                    "11/27/23".to_owned(),
-                    crate::Currency::PLN(0.83),
-                    crate::Currency::PLN(0.00),
+                    "08/22/24".to_owned(),
+                    "10/17/24".to_owned(),
+                    crate::Currency::PLN(25135.50 + 128.17),
+                    crate::Currency::PLN(26130.41),
                 ),
             ],
-            vec![],
         ));
         assert_eq!(
-            parse_revolut_transactions("revolut_data/Revolut_30cze2023_27lis2023.csv"),
+            parse_revolut_transactions("revolut_data/consolidated-statement_2024.csv"),
             expected_result
         );
-
         Ok(())
     }
 

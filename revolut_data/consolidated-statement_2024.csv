@@ -1,0 +1,84 @@
+Summary for Savings Accounts - EUR
+Description,Amount
+Saldo początkowe,"1 234,56€"
+Suma wpłat,"12 345,64€"
+Suma wypłat,"11 111,11€"
+Łączna kwota zarobionych odsetek,"11,11€"
+Podatek ogółem,0€
+Opłaty ogółem,0€
+Saldo końcowe,0€
+
+Summary for Savings Accounts - PLN
+Description,Amount
+Saldo początkowe,"11 111,11 PLN"
+Suma wpłat,"555 555,55 PLN"
+Suma wypłat,"555 555,55 PLN"
+Łączna kwota zarobionych odsetek,"111,11 PLN"
+Podatek ogółem,0 PLN
+Opłaty ogółem,0 PLN
+Saldo końcowe,"1 111,11 PLN"
+
+Summary for Brokerage Account - EUR
+Portfolio  created on 6 lis 2022
+
+
+Sells summary,Amount
+Wpływy brutto,"1 111,11€"
+Podstawa kosztowa,"1 111,11€"
+Zrealizowany zysk/strata brutto,"11,11€"
+
+Other Income and Fees summary,Amount
+Dywidendy,"11,11€"
+Podatek potrącany u źródła,"11,11€"
+Kwota,11€
+
+Summary for Brokerage Account - USD
+Portfolio  created on 6 lis 2022
+
+
+Sells summary,Amount
+Wpływy brutto,"11 111,11$"
+Podstawa kosztowa,"11 111,11$"
+Zrealizowany zysk/strata brutto,"1 111,11$"
+
+Other Income and Fees summary,Amount
+Dywidendy,"1 111,11$"
+Podatek potrącany u źródła,"111,11$"
+Kwota,"1 111,11$"
+
+Transactions for Savings Accounts - EUR
+Date,Description,Money out,Money in,Balance
+1 sty 2024,Interest earned,,"0,26€","8 829,39€"
+12 kwi 2024,Interest earned,,"0,24€","6 552,57€"
+20 lis 2024,Withdrawing savings,"5 452,74€",,0€
+
+Transactions for Savings Accounts - PLN
+Date,Description,Money out,Money in,Balance
+4 sty 2024,Interest earned,,"0,86 PLN","10 533,85 PLN"
+31 maj 2024,Interest earned,,"1,26 PLN","12 097,87 PLN"
+
+Transactions for Brokerage Account sells - EUR
+Portfolio  created on 6 lis 2022
+Date acquired,Date sold,Security name,Symbol,ISIN,Country,Qty,Cost basis,Cost basis base currency,Cost basis rate,Gross proceeds,Gross proceeds base currency,Gross proceeds rate,Gross PnL,Gross PnL base currency,Fees,Fees  base currency
+29 lip 2024,28 paź 2024,European Union 0.8% 07/25,EU000A3K4DJ5,EU000A3K4DJ5,BE,3100,"€3,036.14","13,037.94 PLN",4.29425000441592,"€3,069.14","13,348.22 PLN",4.349175002148144,€33,310.28 PLN,€15.26,65.94 PLN
+9 wrz 2024,21 lis 2024,ABN AMRO Bank NV 1% 04/25,XS1218821756,XS1218821756,NL,3.8,"€3,765.20","16,097.86 PLN",4.275435002225751,"€3,793.04","16,477.91 PLN",4.344250010036551,€27.84,380.05 PLN,€18.89,81.41 PLN
+
+Transactions for Brokerage Account sells - USD
+Portfolio  created on 6 lis 2022
+Date acquired,Date sold,Security name,Symbol,ISIN,Country,Qty,Cost basis,Cost basis base currency,Cost basis rate,Gross proceeds,Gross proceeds base currency,Gross proceeds rate,Gross PnL,Gross PnL base currency,Fees,Fees  base currency
+20 lis 2023,12 sie 2024,Exxon Mobil,XOM,US30231G1022,US,48.501169,"US$5,000","19,863.25 PLN",3.97265,"US$5,804.62","22,865.17 PLN",3.9391333455,US$804.62,"3,001.92 PLN",US$0.17,0.66 PLN
+11 cze 2024,14 paź 2024,Truist Financial Corp,TFC,US89832Q1094,US,3.63994351,US$129.94,525.08 PLN,4.0410148975,US$158.60,624 PLN,3.9344440425,US$28.66,98.92 PLN,US$0,0 PLN
+23 paź 2023,14 paź 2024,Amcor,AMCR,JE00BJ1F3079,JE,23.52941176,US$200,835.88 PLN,4.179405,US$265.91,"1,046.20 PLN",3.9344440425,US$65.91,210.32 PLN,US$0.01,0.03 PLN
+22 sie 2024,17 paź 2024,Canadian Imperial Bank of Commerce 5.144% 04/25,US13607LNF66,US13607LNF66,CA,6.4,"US$6,522.47","25,135.50 PLN",3.853679381,"US$6,567.78","26,130.41 PLN",3.978576544,US$45.31,994.91 PLN,US$32.73,128.17 PLN
+
+Transactions for Brokerage Account dividends - EUR
+Portfolio  created on 6 lis 2022
+Date,Security name,Symbol,ISIN,Country,Gross amount,Gross amount base currency,Gross amount rate,Withholding tax,Withholding tax base currency,Net amount,Net amount base currency
+26 sie 2024,Mercedes-Benz International Finance BV 2% 08/26 dividend,DE000A289XJ2,DE000A289XJ2,DE,€70.63,302.43 PLN,,€18.63,,€52,222.65 PLN
+
+Transactions for Brokerage Account dividends - USD
+Portfolio  created on 6 lis 2022
+Date,Security name,Symbol,ISIN,Country,Gross amount,Gross amount base currency,Gross amount rate,Withholding tax,Withholding tax base currency,Net amount,Net amount base currency
+4 mar 2024,Truist Financial Corp dividend,TFC,US89832Q1094,US,US$154.90,617 PLN,,US$23.24,,US$131.66,524.43 PLN
+21 mar 2024,Amcor dividend,AMCR,JE00BJ1F3079,JE,US$65.38,259.17 PLN,,US$0,,US$65.38,259.17 PLN
+17 gru 2024,EPR Properties dividend,EPR,US26884U1097,US,US$222.04,903.35 PLN,,US$33.31,,US$188.73,767.83 PLN

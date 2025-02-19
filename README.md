@@ -14,7 +14,12 @@ Project that parse e-trade and revolut account statements and Gain and Losses do
    
         1. Go to your profile 
         2. Click Statements and documents 
-        3. Download Consolidated statement for a year you are filling your tax return form for.
+        3. Download Consolidated statement for a year you are filling your tax return form for:
+  ![image](https://github.com/user-attachments/assets/a3a244fd-5dd8-4650-9d6b-377adc878f8f)
+
+
+
+
 4. Run: 
     1. `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf"> <Gain and Loss XLSX document>`
     2. Alternatively you can just run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):

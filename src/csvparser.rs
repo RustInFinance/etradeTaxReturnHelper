@@ -6,6 +6,7 @@ use polars::prelude::*;
 
 enum ParsingState {
     None,
+    Crypto(String),
     InterestsEUR(String),
     InterestsPLN(String),
     SellEUR(String),
@@ -59,6 +60,7 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     log::info!("Processed moneyin/total amount line: {cashline_string}");
     let mut euro_parser = tuple((double::<&str, Error<_>>, tag("€")));
     let mut usd_parser = tuple((many_m_n(0, 1, tag("-")), tag("$"), double::<&str, Error<_>>));
+    let mut usd_parser2 = tuple((many_m_n(0, 1, tag("-")), double::<&str, Error<_>>, tag("$")));
     let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
     match euro_parser(cashline_string.as_str()) {
@@ -73,7 +75,16 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
                         return Ok(crate::Currency::USD(value));
                     }
                 }
-                Err(_) => return Err("Error converting: {cashline_string}"),
+                Err(_) => match usd_parser2(cashline_string.as_str()) {
+                    Ok((_, (sign, value, _))) => {
+                        if sign.len() == 1 {
+                            return Ok(crate::Currency::USD(-value));
+                        } else {
+                            return Ok(crate::Currency::USD(value));
+                        }
+                    }
+                    Err(_) => return Err("Error converting: {cashline_string}"),
+                },
             },
         },
     }
@@ -386,6 +397,27 @@ fn process_tax_consolidated_data(
             incomes.extend(lincomes);
             taxes.extend(ltaxes);
         }
+        ParsingState::Crypto(s) => {
+            log::trace!("String to parse of Crypto: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV: {e}"))?;
+            log::info!("Content of Crypto: {df}");
+            let lacquired_dates = parse_investment_transaction_dates(&df, "Date acquired")?;
+            log::trace!("acquired dates:: {:?}", lacquired_dates);
+            let lsold_dates = parse_investment_transaction_dates(&df, "Date sold")?;
+            log::trace!("sold dates:: {:?}", lsold_dates);
+            // For each sold data has to be one acquire date
+            if lacquired_dates.len() != lsold_dates.len() {
+                return Err("ERROR: Different number of acquired and sold dates".to_string());
+            }
+            sold_dates.extend(lsold_dates);
+            acquired_dates.extend(lacquired_dates);
+            costs.extend(parse_incomes(&df, "Cost basis")?);
+            gross.extend(parse_incomes(&df, "Gross proceeds")?);
+        }
     }
     Ok(())
 }
@@ -554,6 +586,9 @@ pub fn parse_revolut_transactions(
                 } else if line.contains("Brokerage Account dividends - USD") {
                     log::info!("Starting to collect: USD dividends");
                     state = ParsingState::DividendsUSD(String::new());
+                } else if line.contains("Crypto") {
+                    log::info!("Starting to collect: Crypto transactions");
+                    state = ParsingState::Crypto(String::new());
                 } else {
                     return Err("ERROR: Unsupported CSV type of document".to_string());
                 }
@@ -570,7 +605,9 @@ pub fn parse_revolut_transactions(
                             s.push('\n');
                         }
                     }
-                    ParsingState::InterestsEUR(s) | ParsingState::InterestsPLN(s) => {
+                    ParsingState::InterestsEUR(s)
+                    | ParsingState::InterestsPLN(s)
+                    | ParsingState::Crypto(s) => {
                         s.push_str(&line);
                         s.push('\n');
                     }
@@ -636,6 +673,9 @@ mod tests {
 
         assert_eq!(extract_cash("$2.94"), Ok(crate::Currency::USD(2.94)));
         assert_eq!(extract_cash("-$0.51"), Ok(crate::Currency::USD(-0.51)));
+
+        assert_eq!(extract_cash("63,28$"), Ok(crate::Currency::USD(63.28)));
+        assert_eq!(extract_cash("0$"), Ok(crate::Currency::USD(0.0)));
         Ok(())
     }
 
@@ -770,6 +810,94 @@ mod tests {
         assert_eq!(
             parse_investment_transaction_dates(&df, "Date"),
             Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_transactions_consolidated_crypto() -> Result<(), String> {
+        let expected_result = Ok((
+            vec![],
+            vec![
+                (
+                    "02/14/20".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(50.97),
+                    crate::Currency::USD(63.28),
+                ),
+                (
+                    "02/25/23".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.74),
+                ),
+                (
+                    "02/25/23".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.37),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.15),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.16),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.13),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.13),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.12),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.14),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.14),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.14),
+                ),
+                (
+                    "06/09/24".to_owned(),
+                    "12/06/24".to_owned(),
+                    crate::Currency::USD(0.0),
+                    crate::Currency::USD(0.15),
+                ),
+            ],
+        ));
+
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/crypt.csv"),
+            expected_result
         );
 
         Ok(())

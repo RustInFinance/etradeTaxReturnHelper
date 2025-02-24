@@ -673,6 +673,9 @@ mod tests {
 
         assert_eq!(extract_cash("$2.94"), Ok(crate::Currency::USD(2.94)));
         assert_eq!(extract_cash("-$0.51"), Ok(crate::Currency::USD(-0.51)));
+
+        assert_eq!(extract_cash("63,28$"), Ok(crate::Currency::USD(63.28)));
+        assert_eq!(extract_cash("0$"), Ok(crate::Currency::USD(0.0)));
         Ok(())
     }
 

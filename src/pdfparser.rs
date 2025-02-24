@@ -22,6 +22,8 @@ enum TransactionType {
 
 #[derive(Debug, PartialEq)]
 enum ParserState {
+    SearchingYear,
+    ProcessingYear,
     SearchingCashFlowBlock,
     SearchingTransactionEntry,
     ProcessingTransaction(TransactionType),
@@ -578,6 +580,10 @@ where
                                 for e in c {
                                     if let Primitive::String(actual_string) = e {
                                         match state {
+                                            ParserState::SearchingYear
+                                            | ParserState::ProcessingYear => {
+                                                log::error!("Brokerage documents do not have \"For the Period\" block!")
+                                            }
                                             ParserState::SearchingCashFlowBlock => {
                                                 log::error!("Brokerage documents do not have cashflow  block!")
                                             }
@@ -770,16 +776,15 @@ fn check_if_transaction(
     Ok(state)
 }
 
-/// Get las two digits of year from pattern like:  "(AS OF 12/31/23)"
+/// Get last two digits of year from pattern like:  "31, 2023)"
 fn yield_year(rust_string: &str) -> Option<String> {
-    let period_pattern = regex::Regex::new(r"\d{2}\)").unwrap();
-    match period_pattern.find(rust_string) {
-        Some(x) => {
-            let year_str = x.as_str();
-            let last_two_digits = &year_str[..year_str.len() - 1];
-            Some(last_two_digits.to_string())
-        }
-        None => None,
+    let re = regex::Regex::new(r"\b\d{4}\b")
+        .expect("Unable to create regular expression to capture fiscal year");
+    let maybe = re.find(rust_string);
+    if let Some(year) = maybe {
+        Some(year.as_str()[year.len() - 2..].to_string())
+    } else {
+        None
     }
 }
 
@@ -802,7 +807,7 @@ where
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
-    let mut state = ParserState::SearchingCashFlowBlock;
+    let mut state = ParserState::SearchingYear;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
         std::collections::VecDeque::new();
     let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
@@ -832,22 +837,32 @@ where
                                 // Ignore empty tokens
                                 if rust_string != "" {
                                     match state {
-                                        ParserState::SearchingCashFlowBlock => {
-                                            // Pattern to match "(AS OF <date in a format like 12/31/23>)"
-                                            let date_pattern = regex::Regex::new(r"\(AS OF (\d{1,2}\/\d{1,2}\/\d{2})\)").map_err(|_| "Unable to create regular expression to capture fiscal year")?;
+                                        ParserState::SearchingYear => {
+                                            // Pattern to match "For the Period"
+                                            let date_pattern = regex::Regex::new(r"(?i)For the Period").map_err(|_| "Unable to create regular expression to capture fiscal year")?;
 
+                                            if date_pattern.find(rust_string.as_str()).is_some()
+                                                && year.is_none()
+                                            {
+                                                log::info!("Found pattern: \"For the Period\". Starting to parsing year");
+                                                state = ParserState::ProcessingYear;
+                                            }
+                                        }
+                                        ParserState::ProcessingYear => {
+                                            log::trace!("Parsing year. Token: {rust_string}");
+                                            year = yield_year(&rust_string);
+                                            if year.is_some() {
+                                                log::info!("Parsed year: {year:?}");
+                                                state = ParserState::SearchingCashFlowBlock;
+                                            }
+                                        }
+                                        ParserState::SearchingCashFlowBlock => {
                                             // When we find "CASH FLOW ACTIVITY BY DATE" then
                                             // it is a starting point of transactions we are
                                             // interested in
                                             if rust_string == "CASH FLOW ACTIVITY BY DATE" {
                                                 state = ParserState::SearchingTransactionEntry;
                                                 log::info!("Parsing account statement: \"CASH FLOW ACTIVITY BY DATE\" detected. Start to parse transactions");
-                                            } else if date_pattern.is_match(rust_string.as_str())
-                                                && year.is_none()
-                                            {
-                                                // If we find (AS OF <date e.g. 12/01/2023>))
-                                                // get year (last two digits out of it)
-                                                year = yield_year(&rust_string);
                                             }
                                         }
                                         ParserState::SearchingTransactionEntry => {
@@ -1124,7 +1139,7 @@ mod tests {
 
     #[test]
     fn test_yield_year() -> Result<(), String> {
-        let rust_string = "(AS OF 12/31/23)";
+        let rust_string = "31, 2023";
         assert_eq!(yield_year(&rust_string), Some("23".to_owned()));
         Ok(())
     }

@@ -227,20 +227,17 @@ fn parse_investment_transaction_dates(
 }
 
 fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, String> {
-    let mut incomes: Vec<crate::Currency> = vec![];
     let moneyin = df
         .column(col)
         .map_err(|_| format!("Error: Unable to select Money In column '{}'", col))?;
     let possible_incomes = moneyin
         .utf8()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
-    possible_incomes.into_iter().try_for_each(|x| {
-        if let Some(d) = x {
-            incomes.push(extract_cash(&d)?);
-        }
-        Ok::<(), String>(())
-    })?;
-    Ok(incomes)
+
+    possible_incomes.into_iter()
+    .filter_map(|x| x)
+    .map(|d| extract_cash(&d))
+    .collect()
 }
 
 fn parse_income_with_currency(

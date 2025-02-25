@@ -46,7 +46,7 @@ fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::C
     }
 }
 
-fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
+fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     // We need to erase "," before processing it by parser
     log::info!("Entry moneyin/total amount line: {cashline}");
     // replace "," to "." only if there are is no "." already
@@ -63,30 +63,16 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, &'static str> {
     let mut usd_parser2 = tuple((many_m_n(0, 1, tag("-")), double::<&str, Error<_>>, tag("$")));
     let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
-    match euro_parser(cashline_string.as_str()) {
-        Ok((_, (value, _))) => return Ok(crate::Currency::EUR(value)),
-        Err(_) => match pln_parser(cashline_string.as_str()) {
-            Ok((_, (value, _))) => return Ok(crate::Currency::PLN(value)),
-            Err(_) => match usd_parser(cashline_string.as_str()) {
-                Ok((_, (sign, _, value))) => {
-                    if sign.len() == 1 {
-                        return Ok(crate::Currency::USD(-value));
-                    } else {
-                        return Ok(crate::Currency::USD(value));
-                    }
-                }
-                Err(_) => match usd_parser2(cashline_string.as_str()) {
-                    Ok((_, (sign, value, _))) => {
-                        if sign.len() == 1 {
-                            return Ok(crate::Currency::USD(-value));
-                        } else {
-                            return Ok(crate::Currency::USD(value));
-                        }
-                    }
-                    Err(_) => return Err("Error converting: {cashline_string}"),
-                },
-            },
-        },
+    if let Ok((_, (value, _))) = euro_parser(cashline_string.as_str()) {
+      return Ok(crate::Currency::EUR(value));
+    } else if let Ok((_, (value, _))) = pln_parser(cashline_string.as_str()) {
+      return Ok(crate::Currency::PLN(value));
+    } else if let Ok((_, (sign, _, value))) = usd_parser(cashline_string.as_str()) {
+      return Ok(crate::Currency::USD(if sign.len() == 1 { -value } else { value }));
+    } else if let Ok((_, (sign, value, _))) = usd_parser2(cashline_string.as_str()) {
+      return Ok(crate::Currency::USD(if sign.len() == 1 { -value } else { value }));
+    } else {
+      return Err(format!("Error converting: {cashline_string}"));
     }
 }
 
@@ -240,19 +226,19 @@ fn parse_investment_transaction_dates(
     Ok(dates)
 }
 
-fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, &'static str> {
+fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, String> {
     let mut incomes: Vec<crate::Currency> = vec![];
     let moneyin = df
         .column(col)
-        .map_err(|_| "Error: Unable to select Money In")?;
+        .map_err(|_| format!("Error: Unable to select Money In column '{}'", col))?;
     let possible_incomes = moneyin
         .utf8()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
+        .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
     possible_incomes.into_iter().try_for_each(|x| {
         if let Some(d) = x {
             incomes.push(extract_cash(&d)?);
         }
-        Ok::<(), &str>(())
+        Ok::<(), String>(())
     })?;
     Ok(incomes)
 }

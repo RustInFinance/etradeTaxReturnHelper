@@ -64,15 +64,23 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
     if let Ok((_, (value, _))) = euro_parser(cashline_string.as_str()) {
-      return Ok(crate::Currency::EUR(value));
+        return Ok(crate::Currency::EUR(value));
     } else if let Ok((_, (value, _))) = pln_parser(cashline_string.as_str()) {
-      return Ok(crate::Currency::PLN(value));
+        return Ok(crate::Currency::PLN(value));
     } else if let Ok((_, (sign, _, value))) = usd_parser(cashline_string.as_str()) {
-      return Ok(crate::Currency::USD(if sign.len() == 1 { -value } else { value }));
+        return Ok(crate::Currency::USD(if sign.len() == 1 {
+            -value
+        } else {
+            value
+        }));
     } else if let Ok((_, (sign, value, _))) = usd_parser2(cashline_string.as_str()) {
-      return Ok(crate::Currency::USD(if sign.len() == 1 { -value } else { value }));
+        return Ok(crate::Currency::USD(if sign.len() == 1 {
+            -value
+        } else {
+            value
+        }));
     } else {
-      return Err(format!("Error converting: {cashline_string}"));
+        return Err(format!("Error converting: {cashline_string}"));
     }
 }
 
@@ -234,10 +242,11 @@ fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, Stri
         .utf8()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
 
-    possible_incomes.into_iter()
-    .filter_map(|x| x)
-    .map(|d| extract_cash(&d))
-    .collect()
+    possible_incomes
+        .into_iter()
+        .filter_map(|x| x)
+        .map(|d| extract_cash(&d))
+        .collect()
 }
 
 fn parse_income_with_currency(

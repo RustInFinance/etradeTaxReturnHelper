@@ -101,7 +101,7 @@ mod tests {
     fn test_parse_gain_and_losses() -> Result<(), String> {
         assert_eq!(
             parse_gains_and_losses("data/G&L_Collapsed.xlsx"),
-            Ok((vec![
+            Ok(vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -116,7 +116,7 @@ mod tests {
                     29.28195,
                     43.67
                 )
-            ]))
+            ])
         );
         assert_eq!(
             parse_gains_and_losses("data/G&L_Expanded.xlsx"),

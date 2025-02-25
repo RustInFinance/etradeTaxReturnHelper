@@ -406,7 +406,7 @@ fn process_tax_consolidated_data(
 }
 /// Parse revolut CSV documents (savings account and trading)
 /// returns: (
-/// dividend transactions in a form: date, gross income , tax taken
+/// dividend transactions in a form: date, gross income, tax taken
 /// sold transactions in a form date acquired, date sold, cost basis, gross income
 /// )
 pub fn parse_revolut_transactions(
@@ -510,7 +510,7 @@ pub fn parse_revolut_transactions(
         log::info!("Filtered Sold Data of interest: {filtred_df}");
         acquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
         sold_dates = parse_investment_transaction_dates(&filtred_df, "Date sold")?;
-        // For each sold data has to be one acquire date
+        // For each sold date there has to be one acquire date
         if acquired_dates.len() != sold_dates.len() {
             return Err("ERROR: Different number of acquired and sold dates".to_string());
         }

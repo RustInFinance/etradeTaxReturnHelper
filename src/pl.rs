@@ -66,7 +66,7 @@ fn get_exchange_rates_from_cache(
             return Ok::<(), String>(());
         }
 
-        let (from, date) = match exchange {
+        let (_from, date) = match exchange {
             etradeTaxReturnHelper::Exchange::USD(date) => ("usd", date),
             etradeTaxReturnHelper::Exchange::EUR(date) => ("eur", date),
             etradeTaxReturnHelper::Exchange::PLN(_) => {

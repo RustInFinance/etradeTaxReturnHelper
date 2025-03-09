@@ -152,9 +152,30 @@ fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Bo
 fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()],
+        patterns: vec![
+            "TREASURY LIQUIDITY FUND".to_owned(),
+            "INTEL CORP".to_owned(),
+            "ADVANCED MICRO DEVICES".to_owned(),
+        ],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
+}
+
+fn create_tax_withholding_adjusted_parsing_sequence(
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) {
+    // Description
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    // Comment
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    // Money returned to tax-payer
+    sequence.push_back(Box::new(F32Entry { val: 0.0 }));
 }
 
 fn create_interests_fund_parsing_sequence(
@@ -761,6 +782,10 @@ fn check_if_transaction(
     } else if candidate_string == "TAX WITHHOLDING" {
         create_tax_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Tax);
+        log::info!("Starting to parse Tax transaction");
+    } else if candidate_string == "TAX WITHHOLDING ADJ" {
+        create_tax_withholding_adjusted_parsing_sequence(sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Dividends);
         log::info!("Starting to parse Tax transaction");
     } else if candidate_string == "NET CREDITS/(DEBITS)" {
         // "NET CREDITS/(DEBITS)" is marking the end of CASH FLOW ACTIVITIES block

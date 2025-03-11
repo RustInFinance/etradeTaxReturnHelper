@@ -1,0 +1,8 @@
+Summary for Savings Accounts - EUR
+
+Transactions for Savings Accounts - EUR
+Date,Description,Money out,Money in,Balance
+"Jan 3, 2024",Interest earned,,"€0.01","€400.01"
+"Jan 4, 2024",Interest earned,,"€0.02","€400.03"
+"Jan 4, 2024",Depositing savings,,"€440","€840.03"
+"Dec 31, 2024",Interest earned,,"€0.01","€287.45"

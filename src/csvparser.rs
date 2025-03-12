@@ -59,11 +59,14 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     let cashline_string: String = cashline_string.replace(" ", "");
     log::info!("Processed moneyin/total amount line: {cashline_string}");
     let mut euro_parser = tuple((double::<&str, Error<_>>, tag("€")));
+    let mut euro_parser2 = tuple((tag("€"), double::<&str, Error<_>>));
     let mut usd_parser = tuple((many_m_n(0, 1, tag("-")), tag("$"), double::<&str, Error<_>>));
     let mut usd_parser2 = tuple((many_m_n(0, 1, tag("-")), double::<&str, Error<_>>, tag("$")));
     let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
     if let Ok((_, (value, _))) = euro_parser(cashline_string.as_str()) {
+        return Ok(crate::Currency::EUR(value));
+    } else if let Ok((_, (_, value))) = euro_parser2(cashline_string.as_str()) {
         return Ok(crate::Currency::EUR(value));
     } else if let Ok((_, (value, _))) = pln_parser(cashline_string.as_str()) {
         return Ok(crate::Currency::PLN(value));
@@ -223,6 +226,7 @@ fn parse_investment_transaction_dates(
             let cd = chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%dT%H:%M:%S%.fZ")
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d"))
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%e %b %Y"))
+                .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%b %d, %Y"))
                 .map_err(|_| "Error converting cell to NaiveDate")?
                 .format("%m/%d/%y")
                 .to_string();
@@ -653,6 +657,10 @@ mod tests {
         assert_eq!(extract_cash("6 000€"), Ok(crate::Currency::EUR(6000.00)));
         assert_eq!(extract_cash("600,34€"), Ok(crate::Currency::EUR(600.34)));
 
+        assert_eq!(extract_cash("€840.03"), Ok(crate::Currency::EUR(840.03)));
+        assert_eq!(extract_cash("€0.01"), Ok(crate::Currency::EUR(0.01)));
+        assert_eq!(extract_cash("€440"), Ok(crate::Currency::EUR(440.0)));
+
         assert_eq!(extract_cash("1,06 PLN"), Ok(crate::Currency::PLN(1.06)));
         assert_eq!(
             extract_cash("500 000.45 PLN"),
@@ -738,6 +746,25 @@ mod tests {
 
         let expected_first_date = "08/25/23".to_owned();
         let expected_second_date = "09/01/23".to_owned();
+
+        assert_eq!(
+            parse_investment_transaction_dates(&df, "Completed Date"),
+            Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_transaction_dates_us() -> Result<(), String> {
+        let completed_dates = Series::new("Completed Date", vec!["Jan 3, 2024", "Dec 31, 2024"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df = DataFrame::new(vec![description, completed_dates])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        let expected_first_date = "01/03/24".to_owned();
+        let expected_second_date = "12/31/24".to_owned();
 
         assert_eq!(
             parse_investment_transaction_dates(&df, "Completed Date"),
@@ -892,6 +919,36 @@ mod tests {
             expected_result
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_transactions_consolidated_eur() -> Result<(), String> {
+        let expected_result = Ok((
+            vec![
+                // EUR interests
+                (
+                    "01/03/24".to_owned(),
+                    crate::Currency::EUR(0.01),
+                    crate::Currency::EUR(0.00),
+                ),
+                (
+                    "01/04/24".to_owned(),
+                    crate::Currency::EUR(0.02),
+                    crate::Currency::EUR(0.00),
+                ),
+                (
+                    "12/31/24".to_owned(),
+                    crate::Currency::EUR(0.01),
+                    crate::Currency::EUR(0.00),
+                ),
+            ],
+            vec![],
+        ));
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/consolidated-eur_2024.csv"),
+            expected_result
+        );
         Ok(())
     }
 

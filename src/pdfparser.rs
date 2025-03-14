@@ -499,6 +499,7 @@ fn process_transaction(
                             .chain(interests_transactions.iter_mut())
                             .find(|x| x.1 > tax_us && x.2 == 0.0f32).ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
+                        subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
                     }
                     TransactionType::Interests => {

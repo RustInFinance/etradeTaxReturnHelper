@@ -369,7 +369,7 @@ pub fn run_taxation(
 > {
     validate_file_names(&names)?;
 
-    let mut parsed_interests_transactions: Vec<(String, f32)> = vec![];
+    let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
@@ -418,7 +418,7 @@ pub fn run_taxation(
         std::collections::HashMap::new();
     parsed_interests_transactions
         .iter()
-        .for_each(|(trade_date, _)| {
+        .for_each(|(trade_date, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);

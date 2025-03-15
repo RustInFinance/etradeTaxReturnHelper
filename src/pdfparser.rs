@@ -152,9 +152,30 @@ fn create_dividend_parsing_sequence(sequence: &mut std::collections::VecDeque<Bo
 fn create_tax_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
     sequence.push_back(Box::new(StringEntry {
         val: String::new(),
-        patterns: vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()],
+        patterns: vec![
+            "TREASURY LIQUIDITY FUND".to_owned(),
+            "INTEL CORP".to_owned(),
+            "ADVANCED MICRO DEVICES".to_owned(),
+        ],
     }));
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Tax Entry
+}
+
+fn create_tax_withholding_adjusted_parsing_sequence(
+    sequence: &mut std::collections::VecDeque<Box<dyn Entry>>,
+) {
+    // Description
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    // Comment
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec![],
+    }));
+    // Money returned to tax-payer
+    sequence.push_back(Box::new(F32Entry { val: 0.0 }));
 }
 
 fn create_interests_fund_parsing_sequence(
@@ -426,7 +447,7 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 }
 
 fn process_transaction(
-    interests_transactions: &mut Vec<(String, f32)>,
+    interests_transactions: &mut Vec<(String, f32, f32)>,
     div_transactions: &mut Vec<(String, f32, f32)>,
     sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
     actual_string: &pdf::primitive::PdfString,
@@ -475,6 +496,7 @@ fn process_transaction(
                         // applied
                         let subject_to_tax = div_transactions
                             .iter_mut()
+                            .chain(interests_transactions.iter_mut())
                             .find(|x| x.1 > tax_us && x.2 == 0.0f32)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
@@ -493,6 +515,7 @@ fn process_transaction(
                                 .pop()
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
+                            0.0, // No tax info yet. It may be added later in Tax section
                         ));
                         log::info!("Completed parsing Interests transaction");
                     }
@@ -544,7 +567,7 @@ fn parse_brokerage_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -762,6 +785,10 @@ fn check_if_transaction(
         create_tax_parsing_sequence(sequence);
         state = ParserState::ProcessingTransaction(TransactionType::Tax);
         log::info!("Starting to parse Tax transaction");
+    } else if candidate_string == "TAX WITHHOLDING ADJ" {
+        create_tax_withholding_adjusted_parsing_sequence(sequence);
+        state = ParserState::ProcessingTransaction(TransactionType::Dividends);
+        log::info!("Starting to parse Tax transaction");
     } else if candidate_string == "NET CREDITS/(DEBITS)" {
         // "NET CREDITS/(DEBITS)" is marking the end of CASH FLOW ACTIVITIES block
         state = ParserState::SearchingCashFlowBlock;
@@ -793,7 +820,7 @@ fn parse_account_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -803,7 +830,7 @@ fn parse_account_statement<'a, I>(
 where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
-    let mut interests_transactions: Vec<(String, f32)> = vec![];
+    let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut div_transactions: Vec<(String, f32, f32)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
@@ -918,7 +945,7 @@ pub fn parse_statement(
     pdftoparse: &str,
 ) -> Result<
     (
-        Vec<(String, f32)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -1218,7 +1245,7 @@ mod tests {
         assert_eq!(
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
-                vec![("12/1/23".to_owned(), 1.22)],
+                vec![("12/1/23".to_owned(), 1.22, 0.00)],
                 vec![("12/1/23".to_owned(), 386.50, 57.98),],
                 vec![(
                     "12/21/23".to_owned(),
@@ -1235,21 +1262,36 @@ mod tests {
 
     #[test]
     #[ignore]
+    fn test_account_statement_tax_on_interests() -> Result<(), String> {
+        assert_eq!(
+            parse_statement("data/example_interests_taxing.pdf"),
+            (Ok((
+                vec![("1/2/24".to_owned(), 0.92, 0.22)],
+                vec![],
+                vec![],
+                vec![]
+            )))
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
     fn test_combined_account_statement() -> Result<(), String> {
         assert_eq!(
             parse_statement("etrade_data_2024/ClientStatements_010325.pdf"),
             (Ok((
                 vec![
-                    ("12/2/24".to_owned(), 4.88),
-                    ("10/1/24".to_owned(), 24.91),
-                    ("11/1/24".to_owned(), 25.09),
-                    ("9/3/24".to_owned(), 23.65), // Interest rates
-                    ("8/1/24".to_owned(), 4.34),
-                    ("7/1/24".to_owned(), 3.72),
-                    ("6/3/24".to_owned(), 13.31),
-                    ("5/1/24".to_owned(), 0.62),
-                    ("4/1/24".to_owned(), 1.16),
-                    ("1/2/24".to_owned(), 0.49)
+                    ("12/2/24".to_owned(), 4.88, 0.00),
+                    ("10/1/24".to_owned(), 24.91, 0.00),
+                    ("11/1/24".to_owned(), 25.09, 0.00),
+                    ("9/3/24".to_owned(), 23.65, 0.00), // Interest rates
+                    ("8/1/24".to_owned(), 4.34, 0.00),
+                    ("7/1/24".to_owned(), 3.72, 0.00),
+                    ("6/3/24".to_owned(), 13.31, 0.00),
+                    ("5/1/24".to_owned(), 0.62, 0.00),
+                    ("4/1/24".to_owned(), 1.16, 0.00),
+                    ("1/2/24".to_owned(), 0.49, 0.00)
                 ],
                 vec![
                     ("6/3/24".to_owned(), 57.25, 8.59), // Dividends date, gross, tax_us

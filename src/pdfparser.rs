@@ -497,7 +497,8 @@ fn process_transaction(
                         let subject_to_tax = div_transactions
                             .iter_mut()
                             .chain(interests_transactions.iter_mut())
-                            .find(|x| x.1 > tax_us && x.2 == 0.0f32).ok_or("Error: Unable to find transaction that was taxed")?;
+                            .find(|x| x.1 > tax_us && x.2 == 0.0f32)
+                            .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
                         subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
@@ -514,7 +515,7 @@ fn process_transaction(
                                 .pop()
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
-                            0.0,// No tax info yet. It may be added later in Tax section
+                            0.0, // No tax info yet. It may be added later in Tax section
                         ));
                         log::info!("Completed parsing Interests transaction");
                     }
@@ -1265,7 +1266,7 @@ mod tests {
         assert_eq!(
             parse_statement("data/example_interests_taxing.pdf"),
             (Ok((
-                vec![("1/2/24".to_owned(), 0.92,0.22)],
+                vec![("1/2/24".to_owned(), 0.92, 0.22)],
                 vec![],
                 vec![],
                 vec![]

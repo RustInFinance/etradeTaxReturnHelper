@@ -12,6 +12,8 @@ mod gui;
 use etradeTaxReturnHelper::run_taxation;
 use logging::ResultExt;
 
+// TODO: Make parsing of PDF start from first page not second so then reproduction of problem
+// require one page not two
 // TODO: remove support for account statement of investment account of revolut
 // TODO: When there is no proxy (on intel account) there are problems (UT do not work
 // getting_Exchange_rate)

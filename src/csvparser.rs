@@ -220,6 +220,7 @@ fn parse_investment_transaction_dates(
                 .replace(" lip ", " Jul ")
                 .replace(" sie ", " Aug ")
                 .replace(" wrz ", " Sep ")
+                .replace(" Sept ", " Sep ")
                 .replace(" paź ", " Oct ")
                 .replace(" lis ", " Nov ")
                 .replace(" gru ", " Dec ");

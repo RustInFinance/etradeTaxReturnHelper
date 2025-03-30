@@ -776,6 +776,25 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_transaction_dates_uk() -> Result<(), String> {
+        let completed_dates = Series::new("Date", vec!["7 Sept 2024", "10 Apr 2024"]);
+        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+
+        let df = DataFrame::new(vec![description, completed_dates])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        let expected_first_date = "09/07/24".to_owned();
+        let expected_second_date = "04/10/24".to_owned();
+
+        assert_eq!(
+            parse_investment_transaction_dates(&df, "Date"),
+            Ok(vec![expected_first_date, expected_second_date])
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_transaction_dates_pl() -> Result<(), String> {
         let completed_dates = Series::new("Date", vec!["25 sty 2023", "1 wrz 2023"]);
         let description = Series::new("Description", vec!["odsetki", "odsetki"]);

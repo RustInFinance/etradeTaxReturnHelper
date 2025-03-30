@@ -738,8 +738,8 @@ mod tests {
     }
 
     fn test_parse_date_helper(
-        description: Vec<String>,
-        input_dates: Vec<String>,
+        description: Vec<&str>,
+        input_dates: Vec<&str>,
         expected_dates: Vec<String>)
     -> Result<(), String> {
         let description_series = Series::new("Description", description);
@@ -758,8 +758,8 @@ mod tests {
 
     #[test]
     fn test_parse_transaction_dates() -> Result<(), String> {
-        let description = vec!["odsetki".to_string(), "odsetki".to_string()];
-        let input_dates = vec!["25 Aug 2023".to_string(), "1 Sep 2023".to_string()];
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["25 Aug 2023", "1 Sep 2023"];
         let expected_dates = vec!["08/25/23".to_string(), "09/01/23".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
@@ -767,8 +767,8 @@ mod tests {
 
     #[test]
     fn test_parse_transaction_dates_us() -> Result<(), String> {
-        let description = vec!["odsetki".to_string(), "odsetki".to_string()];
-        let input_dates = vec!["Jan 3, 2024".to_string(), "Dec 31, 2024".to_string()];
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["Jan 3, 2024", "Dec 31, 2024"];
         let expected_dates = vec!["01/03/24".to_string(), "12/31/24".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
@@ -776,8 +776,8 @@ mod tests {
 
     #[test]
     fn test_parse_transaction_dates_uk() -> Result<(), String> {
-        let description = vec!["odsetki".to_string(), "odsetki".to_string()];
-        let input_dates = vec!["7 Sept 2024".to_string(), "10 Apr 2024".to_string()];
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["7 Sept 2024", "10 Apr 2024"];
         let expected_dates = vec!["09/07/24".to_string(), "04/10/24".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
@@ -785,8 +785,8 @@ mod tests {
 
     #[test]
     fn test_parse_transaction_dates_pl() -> Result<(), String> {
-        let description = vec!["odsetki".to_string(), "odsetki".to_string()];
-        let input_dates = vec!["25 sty 2023".to_string(), "1 wrz 2023".to_string()];
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["25 sty 2023", "1 wrz 2023"];
         let expected_dates = vec!["01/25/23".to_string(), "09/01/23".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
@@ -794,8 +794,8 @@ mod tests {
 
     #[test]
     fn test_parse_investment_transaction_dates() -> Result<(), String> {
-        let description = vec!["DIVIDEND".to_string(), "CUSTODY FEE".to_string()];
-        let input_dates = vec!["2023-12-08T14:30:08.150Z".to_string(), "2023-09-09T05:35:43.253726Z".to_string()];
+        let description = vec!["DIVIDEND", "CUSTODY FEE"];
+        let input_dates = vec!["2023-12-08T14:30:08.150Z", "2023-09-09T05:35:43.253726Z"];
         let expected_dates = vec!["12/08/23".to_string(), "09/09/23".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
@@ -803,8 +803,8 @@ mod tests {
 
     #[test]
     fn test_parse_gain_and_losses_transaction_dates() -> Result<(), String> {
-        let description = vec!["DIVIDEND".to_string(), "CUSTODY FEE".to_string()];
-        let input_dates = vec!["2024-03-04".to_string(), "2024-07-16".to_string()];
+        let description = vec!["DIVIDEND", "CUSTODY FEE"];
+        let input_dates = vec!["2024-03-04", "2024-07-16"];
         let expected_dates = vec!["03/04/24".to_string(), "07/16/24".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)

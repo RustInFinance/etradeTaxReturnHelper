@@ -740,8 +740,8 @@ mod tests {
     fn test_parse_date_helper(
         description: Vec<&str>,
         input_dates: Vec<&str>,
-        expected_dates: Vec<String>)
-    -> Result<(), String> {
+        expected_dates: Vec<String>,
+    ) -> Result<(), String> {
         let description_series = Series::new("Description", description);
         let input_date_series = Series::new("Date", input_dates);
 

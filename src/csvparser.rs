@@ -220,6 +220,7 @@ fn parse_investment_transaction_dates(
                 .replace(" lip ", " Jul ")
                 .replace(" sie ", " Aug ")
                 .replace(" wrz ", " Sep ")
+                .replace(" Sept ", " Sep ")
                 .replace(" paź ", " Oct ")
                 .replace(" lis ", " Nov ")
                 .replace(" gru ", " Dec ");
@@ -736,102 +737,77 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_parse_transaction_dates() -> Result<(), String> {
-        let completed_dates = Series::new("Completed Date", vec!["25 Aug 2023", "1 Sep 2023"]);
-        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+    fn test_parse_date_helper(
+        description: Vec<&str>,
+        input_dates: Vec<&str>,
+        expected_dates: Vec<String>,
+    ) -> Result<(), String> {
+        let description_series = Series::new("Description", description);
+        let input_date_series = Series::new("Date", input_dates);
 
-        let df = DataFrame::new(vec![description, completed_dates])
+        let df = DataFrame::new(vec![description_series, input_date_series])
             .map_err(|_| "Error creating DataFrame")?;
 
-        let expected_first_date = "08/25/23".to_owned();
-        let expected_second_date = "09/01/23".to_owned();
-
         assert_eq!(
-            parse_investment_transaction_dates(&df, "Completed Date"),
-            Ok(vec![expected_first_date, expected_second_date])
+            parse_investment_transaction_dates(&df, "Date"),
+            Ok(expected_dates)
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_transaction_dates() -> Result<(), String> {
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["25 Aug 2023", "1 Sep 2023"];
+        let expected_dates = vec!["08/25/23".to_string(), "09/01/23".to_string()];
+
+        test_parse_date_helper(description, input_dates, expected_dates)
     }
 
     #[test]
     fn test_parse_transaction_dates_us() -> Result<(), String> {
-        let completed_dates = Series::new("Completed Date", vec!["Jan 3, 2024", "Dec 31, 2024"]);
-        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["Jan 3, 2024", "Dec 31, 2024"];
+        let expected_dates = vec!["01/03/24".to_string(), "12/31/24".to_string()];
 
-        let df = DataFrame::new(vec![description, completed_dates])
-            .map_err(|_| "Error creating DataFrame")?;
+        test_parse_date_helper(description, input_dates, expected_dates)
+    }
 
-        let expected_first_date = "01/03/24".to_owned();
-        let expected_second_date = "12/31/24".to_owned();
+    #[test]
+    fn test_parse_transaction_dates_uk() -> Result<(), String> {
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["7 Sept 2024", "10 Apr 2024"];
+        let expected_dates = vec!["09/07/24".to_string(), "04/10/24".to_string()];
 
-        assert_eq!(
-            parse_investment_transaction_dates(&df, "Completed Date"),
-            Ok(vec![expected_first_date, expected_second_date])
-        );
-
-        Ok(())
+        test_parse_date_helper(description, input_dates, expected_dates)
     }
 
     #[test]
     fn test_parse_transaction_dates_pl() -> Result<(), String> {
-        let completed_dates = Series::new("Date", vec!["25 sty 2023", "1 wrz 2023"]);
-        let description = Series::new("Description", vec!["odsetki", "odsetki"]);
+        let description = vec!["odsetki", "odsetki"];
+        let input_dates = vec!["25 sty 2023", "1 wrz 2023"];
+        let expected_dates = vec!["01/25/23".to_string(), "09/01/23".to_string()];
 
-        let df = DataFrame::new(vec![description, completed_dates])
-            .map_err(|_| "Error creating DataFrame")?;
-
-        let expected_first_date = "01/25/23".to_owned();
-        let expected_second_date = "09/01/23".to_owned();
-
-        assert_eq!(
-            parse_investment_transaction_dates(&df, "Date"),
-            Ok(vec![expected_first_date, expected_second_date])
-        );
-
-        Ok(())
+        test_parse_date_helper(description, input_dates, expected_dates)
     }
 
     #[test]
     fn test_parse_investment_transaction_dates() -> Result<(), String> {
-        let completed_dates = Series::new(
-            "Date",
-            vec!["2023-12-08T14:30:08.150Z", "2023-09-09T05:35:43.253726Z"],
-        );
-        let description = Series::new("Type", vec!["DIVIDEND", "CUSTODY FEE"]);
+        let description = vec!["DIVIDEND", "CUSTODY FEE"];
+        let input_dates = vec!["2023-12-08T14:30:08.150Z", "2023-09-09T05:35:43.253726Z"];
+        let expected_dates = vec!["12/08/23".to_string(), "09/09/23".to_string()];
 
-        let df = DataFrame::new(vec![description, completed_dates])
-            .map_err(|_| "Error creating DataFrame")?;
-
-        let expected_first_date = "12/08/23".to_owned();
-        let expected_second_date = "09/09/23".to_owned();
-
-        assert_eq!(
-            parse_investment_transaction_dates(&df, "Date"),
-            Ok(vec![expected_first_date, expected_second_date])
-        );
-
-        Ok(())
+        test_parse_date_helper(description, input_dates, expected_dates)
     }
 
     #[test]
     fn test_parse_gain_and_losses_transaction_dates() -> Result<(), String> {
-        let completed_dates = Series::new("Date", vec!["2024-03-04", "2024-07-16"]);
-        let description = Series::new("Type", vec!["DIVIDEND", "CUSTODY FEE"]);
+        let description = vec!["DIVIDEND", "CUSTODY FEE"];
+        let input_dates = vec!["2024-03-04", "2024-07-16"];
+        let expected_dates = vec!["03/04/24".to_string(), "07/16/24".to_string()];
 
-        let df = DataFrame::new(vec![description, completed_dates])
-            .map_err(|_| "Error creating DataFrame")?;
-
-        let expected_first_date = "03/04/24".to_owned();
-        let expected_second_date = "07/16/24".to_owned();
-
-        assert_eq!(
-            parse_investment_transaction_dates(&df, "Date"),
-            Ok(vec![expected_first_date, expected_second_date])
-        );
-
-        Ok(())
+        test_parse_date_helper(description, input_dates, expected_dates)
     }
 
     #[test]

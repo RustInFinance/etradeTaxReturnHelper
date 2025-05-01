@@ -23,7 +23,7 @@ Project that parse e-trade and revolut account statements and Gain and Losses do
 4. Run: 
     1. `etradeTaxReturnHelper <your PDF documents that MAY contains dividends and/or sold transactions e.g. "*.pdf"> <Gain and Loss XLSX document>`
     2. Alternatively you can just run `etradeTaxReturnHelper` to have program running with GUI (graphical user interface):
-       ![gui](/Pictures/GUI.png)
+       ![gui](/assets/etradetaxreturnhelper-640x480.gif)
 
 ### FAQ
 1. How to install this project?

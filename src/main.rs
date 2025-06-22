@@ -53,7 +53,7 @@ fn main() {
     if args.len() <= 1 {
         #[cfg(feature = "gui")]
         {
-            gui::gui::run_gui();
+            gui::run_gui();
             return;
         }
     }

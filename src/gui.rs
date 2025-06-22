@@ -416,9 +416,10 @@ pub fn run_gui() {
                         .borrow()
                         .buffer()
                         .expect_and_log("Error: No buffer assigned to Notes TextDisplay");
-                    let mut tbuffer = tdisplay.borrow().buffer().expect_and_log(
-                        "Error: No buffer assigned to Transactions TextDisplay",
-                    );
+                    let mut tbuffer = tdisplay
+                        .borrow()
+                        .buffer()
+                        .expect_and_log("Error: No buffer assigned to Transactions TextDisplay");
                     buffer.set_text("");
                     tbuffer.set_text("");
                     nbuffer.set_text("");

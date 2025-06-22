@@ -1,4 +1,4 @@
-#[cfg(feature = "gui")]
+#![cfg(feature = "gui")]
 
 pub use crate::logging::ResultExt;
 use fltk::{

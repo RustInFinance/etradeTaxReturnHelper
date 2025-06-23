@@ -218,7 +218,7 @@ mod tests {
             assert_eq!(ecb_response.freq, "D");
             assert_eq!(ecb_response.currency, "USD");
             assert_eq!(ecb_response.currency_denom, "EUR");
-            assert_eq!(ecb_response.title, "Euro/US dollar");
+            assert_eq!(ecb_response.title, "US dollar/Euro");
             assert_eq!(ecb_response.unit, "USD");
             assert_eq!(ecb_response.date, "2023-07-13");
             assert_eq!(ecb_response.rate, "1.1182");

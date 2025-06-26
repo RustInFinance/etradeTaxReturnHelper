@@ -246,6 +246,18 @@ pub trait Residency {
     }
 }
 
+pub struct TaxCalculationResult {
+        pub gross_income: f32,
+        pub tax: f32,
+        pub gross_sold: f32,
+        pub cost_sold: f32,
+        pub interests: Vec<Transaction>,
+        pub transactions: Vec<Transaction>,
+        pub revolut_dividends_transactions: Vec<Transaction>,
+        pub sold_transactions: Vec<SoldTransaction>,
+        pub revolut_sold_transactions: Vec<SoldTransaction>,
+}
+
 fn create_client() -> reqwest::blocking::Client {
     // proxies are taken from env vars: http_proxy and https_proxy
     let http_proxy = std::env::var("http_proxy");
@@ -354,17 +366,7 @@ pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
 ) -> Result<
-    (
-        f32,
-        f32,
-        f32,
-        f32,
-        Vec<Transaction>,
-        Vec<Transaction>,
-        Vec<Transaction>,
-        Vec<SoldTransaction>,
-        Vec<SoldTransaction>,
-    ),
+    TaxCalculationResult,
     String,
 > {
     validate_file_names(&names)?;
@@ -485,17 +487,16 @@ pub fn run_taxation(
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
     let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
     let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
-    Ok((
-        gross_interests + gross_div + gross_revolut,
-        tax_div + tax_revolut,
-        gross_sold + gross_revolut_sold,
-        cost_sold + cost_revolut_sold,
-        interests,
-        transactions,
-        revolut_dividends_transactions,
-        sold_transactions,
-        revolut_sold_transactions,
-    ))
+    Ok(TaxCalculationResult{
+        gross_income: gross_interests + gross_div + gross_revolut,
+        tax: tax_div + tax_revolut,
+        gross_sold: gross_sold + gross_revolut_sold,
+        cost_sold: cost_sold + cost_revolut_sold,
+        interests: interests,
+        transactions: transactions,
+        revolut_dividends_transactions: revolut_dividends_transactions,
+        sold_transactions: sold_transactions,
+        revolut_sold_transactions: revolut_sold_transactions})
 }
 
 #[cfg(test)]

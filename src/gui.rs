@@ -116,17 +116,26 @@ fn create_execute_documents(
         tbuffer.set_text("");
         nbuffer.set_text("Running...");
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
-        let (gross_div, tax_div, gross_sold, cost_sold, interests_transactions, div_transactions, revolut_transactions, sold_transactions, revolut_sold_transactions) =
-            match run_taxation(&rd, file_names) {
-                Ok((gd, td, gs, cs, its, dts, rts, sts, rsts)) => {
-                    nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
-                    (gd, td, gs, cs, its, dts, rts, sts, rsts)
-                }
-                Err(err) => {
-                    nbuffer.set_text(&err);
-                    panic!("Error: unable to perform taxation");
-                }
-            };
+        let etradeTaxReturnHelper::TaxCalculationResult {
+            gross_income: gross_div,
+            tax: tax_div,
+            gross_sold,
+            cost_sold,
+            interests: interests_transactions,
+            transactions: div_transactions,
+            revolut_dividends_transactions: revolut_transactions,
+            sold_transactions,
+            revolut_sold_transactions,
+        } = match run_taxation(&rd, file_names) {
+            Ok(res) => {
+                nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
+                res
+            }
+            Err(err) => {
+                nbuffer.set_text(&err);
+                panic!("Error: unable to perform taxation");
+            }
+        };
         let (presentation,warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
         buffer.set_text(&presentation.join("\n"));
         if let Some(warn_msg) = warning {

@@ -489,7 +489,7 @@ pub fn run_taxation(
         tax: tax_div + tax_revolut,
         gross_sold: gross_sold + gross_revolut_sold,
         cost_sold: cost_sold + cost_revolut_sold,
-        interests: interests,
+        interests,
         transactions: transactions,
         revolut_dividends_transactions: revolut_dividends_transactions,
         sold_transactions: sold_transactions,

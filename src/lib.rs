@@ -247,15 +247,15 @@ pub trait Residency {
 }
 
 pub struct TaxCalculationResult {
-        pub gross_income: f32,
-        pub tax: f32,
-        pub gross_sold: f32,
-        pub cost_sold: f32,
-        pub interests: Vec<Transaction>,
-        pub transactions: Vec<Transaction>,
-        pub revolut_dividends_transactions: Vec<Transaction>,
-        pub sold_transactions: Vec<SoldTransaction>,
-        pub revolut_sold_transactions: Vec<SoldTransaction>,
+    pub gross_income: f32,
+    pub tax: f32,
+    pub gross_sold: f32,
+    pub cost_sold: f32,
+    pub interests: Vec<Transaction>,
+    pub transactions: Vec<Transaction>,
+    pub revolut_dividends_transactions: Vec<Transaction>,
+    pub sold_transactions: Vec<SoldTransaction>,
+    pub revolut_sold_transactions: Vec<SoldTransaction>,
 }
 
 fn create_client() -> reqwest::blocking::Client {
@@ -365,10 +365,7 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
-) -> Result<
-    TaxCalculationResult,
-    String,
-> {
+) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
     let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
@@ -487,7 +484,7 @@ pub fn run_taxation(
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
     let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
     let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
-    Ok(TaxCalculationResult{
+    Ok(TaxCalculationResult {
         gross_income: gross_interests + gross_div + gross_revolut,
         tax: tax_div + tax_revolut,
         gross_sold: gross_sold + gross_revolut_sold,
@@ -496,7 +493,8 @@ pub fn run_taxation(
         transactions: transactions,
         revolut_dividends_transactions: revolut_dividends_transactions,
         sold_transactions: sold_transactions,
-        revolut_sold_transactions: revolut_sold_transactions})
+        revolut_sold_transactions: revolut_sold_transactions,
+    })
 }
 
 #[cfg(test)]

@@ -82,7 +82,13 @@ fn main() {
 
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-    let TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. } = match run_taxation(&rd, pdfnames) {
+    let TaxCalculationResult {
+        gross_income: gross_div,
+        tax: tax_div,
+        gross_sold,
+        cost_sold,
+        ..
+    } = match run_taxation(&rd, pdfnames) {
         Ok(res) => res,
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
@@ -309,7 +315,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (14062.57, 2109.3772, 395.45355, 91.156715)
@@ -340,7 +352,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (2930.206, 439.54138, 395.45355, 91.156715)
@@ -376,7 +394,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (8369.726, 1253.2899, 14983.293, 7701.9253),
@@ -403,7 +427,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult{gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, ..}) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (6331.29, 871.17993, 0.0, 0.0),
@@ -430,7 +460,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult{gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, ..}) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (9142.319, 1207.08, 22988.617, 20163.5),
@@ -457,7 +493,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (86.93008, 0.0, 0.0, 0.0),
@@ -484,7 +526,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (3272.3125, 490.82773, 0.0, 0.0),
@@ -509,7 +557,13 @@ mod tests {
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames) {
-            Ok(TaxCalculationResult { gross_income: gross_div, tax: tax_div, gross_sold, cost_sold, .. }) => {
+            Ok(TaxCalculationResult {
+                gross_income: gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
                 assert_eq!(
                     (gross_div, tax_div, gross_sold, cost_sold),
                     (0.66164804, 0.0, 0.0, 0.0),

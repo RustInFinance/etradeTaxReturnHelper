@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use etradeTaxReturnHelper::Exchange;
 
+#[allow(clippy::approx_constant)]
 pub fn get_exchange_rates() -> HashMap<Exchange, f64> {
     let mut exchange_rates = HashMap::new();
     exchange_rates.insert(Exchange::USD("2023-05-18".to_string()), 4.1929f64);

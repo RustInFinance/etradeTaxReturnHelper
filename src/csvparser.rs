@@ -633,7 +633,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     Ok(RevolutTransactions {
         dividend_transactions,
         sold_transactions,
-        crypto_transactions: crypto_transactions,
+        crypto_transactions,
     })
 }
 

@@ -26,8 +26,7 @@ struct TransactionAccumulator {
     pub taxes: Vec<crate::Currency>,
 }
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct RevolutTransactions {
     pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency)>,
     pub sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
@@ -890,7 +889,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_transactions_consolidated_eur() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 // EUR interests
                 (
@@ -921,7 +920,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_transactions_consolidated() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 // EUR interests
                 (
@@ -1017,7 +1016,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_investment_gain_and_losses_dividends() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 (
                     "06/04/24".to_owned(),
@@ -1054,7 +1053,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_investment_with_commas_gain_and_losses_dividends() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 (
                     "06/04/24".to_owned(),
@@ -1116,7 +1115,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_investment_gain_and_losses_sells_and_dividends() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 (
                     "03/04/24".to_owned(),
@@ -1220,7 +1219,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_transactions_english_statement_pln() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 (
                     "12/12/23".to_owned(),
@@ -1331,7 +1330,7 @@ mod tests {
 
     #[test]
     fn test_parse_revolut_investment_transactions_usd() -> Result<(), String> {
-        let expected_result = Ok(RevolutTransactions{
+        let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
                 (
                     "11/02/23".to_owned(),

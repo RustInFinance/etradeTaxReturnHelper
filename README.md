@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2022-2025 RustInFinance
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
 # etradeTaxReturnHelper
 Project that parse e-trade and revolut account statements and Gain and Losses documents  in order to compute total gross gain and tax paid in US that are needed for tax return forms out of US.
 

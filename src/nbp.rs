@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 use std::collections::HashMap;
 
 use etradeTaxReturnHelper::Exchange;

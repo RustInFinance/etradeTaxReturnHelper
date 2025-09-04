@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2022-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 pub struct US {}
 impl etradeTaxReturnHelper::Residency for US {
     fn get_exchange_rates(

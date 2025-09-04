@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 #![cfg(feature = "gui")]
 
 pub use crate::logging::ResultExt;

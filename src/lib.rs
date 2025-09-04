@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2022-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 mod csvparser;
 mod ecb;
 mod logging;
@@ -554,13 +557,11 @@ mod tests {
 
     #[test]
     fn test_validate_file_names_no_extension() {
-        let files = vec![String::from("LICENCE")];
+        let fpath = ".git/description";
+        let files = vec![String::from(fpath)];
 
-        let result = validate_file_names(&files);
-        assert_eq!(
-            result.err(),
-            Some(String::from("File has no extension: LICENCE"))
-        );
+        let err = validate_file_names(&files).unwrap_err();
+        assert_eq!(err, format!("File has no extension: {}", fpath));
     }
 
     #[test]

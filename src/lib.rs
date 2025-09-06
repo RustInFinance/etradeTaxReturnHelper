@@ -387,9 +387,13 @@ pub fn run_taxation(
         } else if x.contains(".xlsx") {
             parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else if x.contains(".csv") {
-            let (mut div_t, mut sold_t) = csvparser::parse_revolut_transactions(x)?;
-            parsed_revolut_dividends_transactions.append(&mut div_t);
-            parsed_revolut_sold_transactions.append(&mut sold_t);
+            let csvparser::RevolutTransactions {
+                mut dividend_transactions,
+                mut sold_transactions,
+                ..
+            } = csvparser::parse_revolut_transactions(x)?;
+            parsed_revolut_dividends_transactions.append(&mut dividend_transactions);
+            parsed_revolut_sold_transactions.append(&mut sold_transactions);
         } else {
             return Err(format!("Error: Unable to open a file: {x}"));
         }

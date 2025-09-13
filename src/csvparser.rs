@@ -917,6 +917,83 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_revolut_transactions_consolidated_crypto_tsv() -> Result<(), String> {
+        // This test verifies that the consolidated TSV with crypto transactions
+        // is parsed and that crypto cost basis and gross proceeds are counted
+        // According to the summary present in the file (Gross proceeds = 7.95$, Cost basis = 0$).
+        let res = parse_revolut_transactions("revolut_data/consolidated-eur-pln-crypto_2025.tsv");
+        if res.is_err() {
+            return Err(format!("Parsing failed: {:?}", res));
+        }
+        let parsed = res.unwrap();
+
+        // There should be some crypto transactions parsed
+        assert!(
+            parsed.crypto_transactions.len() > 0,
+            "No crypto transactions parsed"
+        );
+
+        // Sum up cost basis and gross proceeds (values are stored as Currency)
+        let total_cost: f64 = parsed
+            .crypto_transactions
+            .iter()
+            .map(|(_, _, cost, _)| cost.value())
+            .sum();
+        let total_gross: f64 = parsed
+            .crypto_transactions
+            .iter()
+            .map(|(_, _, _, gross)| gross.value())
+            .sum();
+
+        // The consolidated summary in the fixture reports 0$ cost and 7.95$ gross
+        let eps = 1e-6;
+        assert!(
+            (total_cost - 0.0).abs() < eps,
+            "expected total crypto cost ~0.0, got {}",
+            total_cost
+        );
+        assert!(
+            (total_gross - 7.95).abs() < 1e-6,
+            "expected total crypto gross ~7.95, got {}",
+            total_gross
+        );
+
+        // Verify savings interest totals (present in the file summary):
+        // EUR interests total = 1,66€ and PLN interests total = 10,09 PLN
+        let mut sum_eur = 0.0f64;
+        let mut sum_pln = 0.0f64;
+        parsed
+            .dividend_transactions
+            .iter()
+            .for_each(|(_, amount, _)| match amount {
+                crate::Currency::EUR(v) => sum_eur += v,
+                crate::Currency::PLN(v) => sum_pln += v,
+                _ => (),
+            });
+
+        let eps = 1e-6;
+        assert!(
+            (sum_eur - 1.66).abs() < eps,
+            "expected EUR interests ~1.66, got {}",
+            sum_eur
+        );
+        assert!(
+            (sum_pln - 10.09).abs() < eps,
+            "expected PLN interests ~10.09, got {}",
+            sum_pln
+        );
+
+        // Sold transactions: this consolidated file doesn't include brokerage sells
+        assert_eq!(
+            parsed.sold_transactions.len(),
+            0,
+            "expected no sold transactions"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_revolut_transactions_consolidated_eur() -> Result<(), String> {
         let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![

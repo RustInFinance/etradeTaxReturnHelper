@@ -346,7 +346,7 @@ fn process_tax_consolidated_data(
                 .truncate_ragged_lines(true)
                 .with_separator(delimiter)
                 .finish()
-                .map_err(|e| format!("Error reading CSV: {e}"))?;
+                .map_err(|e| format!("Error reading CSV (Interests): {e}"))?;
             log::info!("Content of Interests: {df}");
             let filtred_df = extract_intrest_rate_transactions(&df)?;
             ta.dates
@@ -362,7 +362,7 @@ fn process_tax_consolidated_data(
                 .truncate_ragged_lines(true)
                 .with_separator(delimiter)
                 .finish()
-                .map_err(|e| format!("Error reading CSV: {e}"))?;
+                .map_err(|e| format!("Error reading CSV (Sells): {e}"))?;
             log::trace!("Content of Sells: {df}");
             let filtred_df = extract_sold_transactions(&df)?;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
@@ -396,7 +396,7 @@ fn process_tax_consolidated_data(
                 .truncate_ragged_lines(true)
                 .with_separator(delimiter)
                 .finish()
-                .map_err(|e| format!("Error reading CSV: {e}"))?;
+                .map_err(|e| format!("Error reading CSV (Dividends): {e}"))?;
             log::info!("Content of Dividends: {df}");
             let filtred_df = extract_dividends_transactions(&df)?;
             log::info!("Filtered Dividend Data of interest: {filtred_df}");
@@ -424,7 +424,7 @@ fn process_tax_consolidated_data(
                 .truncate_ragged_lines(true)
                 .with_separator(delimiter)
                 .finish()
-                .map_err(|e| format!("Error reading CSV: {e}"))?;
+                .map_err(|e| format!("Error reading CSV (Crypto): {e}"))?;
             log::info!("Content of Crypto: {df}");
             let lacquired_dates = parse_investment_transaction_dates(&df, "Date acquired")?;
             log::trace!("acquired dates:: {:?}", lacquired_dates);

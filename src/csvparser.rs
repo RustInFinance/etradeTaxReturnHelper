@@ -458,13 +458,20 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
     let mut ta = TransactionAccumulator::default();
 
+    let original_delimiter: u8 = if csvtoparse.ends_with(".tsv") {
+        b'\t'
+    } else {
+        b','
+    };
     const DELIMITER: u8 = b';';
+    const DELIMITER_AS_STR: &str = ";";
 
-    //let mut rdr = csv::Reader::from_path(csvtoparse).map_err(|_| "Error: opening CSV")?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
+        .delimiter(original_delimiter)
         .from_path(csvtoparse)
         .map_err(|_| "Error: opening CSV")?;
+
     let result = rdr
         .headers()
         .map_err(|e| format!("Error: scanning CSV header: {e}"))?;
@@ -472,6 +479,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Detected Savings account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
             .map_err(|_| "Error: opening CSV")?
+            .with_separator(original_delimiter)
             .has_header(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
@@ -492,6 +500,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Detected Investment account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
             .map_err(|_| "Error: opening CSV")?
+            .with_separator(original_delimiter)
             .has_header(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
@@ -508,7 +517,10 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         let mut switch = false;
         for result in rdr.records() {
             let record = result.map_err(|e| format!("Error reading CSV: {e}"))?;
-            let line = record.into_iter().collect::<Vec<&str>>().join(",");
+            let line = record
+                .into_iter()
+                .collect::<Vec<&str>>()
+                .join(DELIMITER_AS_STR);
             if line.starts_with("Other income & fees") {
                 switch = true;
             } else {
@@ -525,10 +537,12 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Content of second to be DataFrame: {content2}");
 
         let sales = CsvReader::new(std::io::Cursor::new(content1.as_bytes()))
+            .with_separator(DELIMITER)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
         let others = CsvReader::new(std::io::Cursor::new(content2.as_bytes()))
+            .with_separator(DELIMITER)
             .truncate_ragged_lines(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
@@ -562,11 +576,11 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         let mut state = ParsingState::None;
 
         for result in rdr.records() {
-            let record = result.map_err(|e| format!("Error reading CSV: {e}"))?;
-            let line = record.into_iter().collect::<Vec<&str>>().join(
-                std::str::from_utf8(&[DELIMITER])
-                    .map_err(|_| "ERROR: Unable to convert delimiter to string".to_string())?,
-            );
+            let record = result.map_err(|e| format!("Error reading CSV record: {e}"))?;
+            let line = record
+                .into_iter()
+                .collect::<Vec<&str>>()
+                .join(DELIMITER_AS_STR);
             if line.starts_with("Transactions for") {
                 process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
 
@@ -929,7 +943,7 @@ mod tests {
 
         // There should be some crypto transactions parsed
         assert!(
-            parsed.crypto_transactions.len() > 0,
+            !parsed.crypto_transactions.is_empty(),
             "No crypto transactions parsed"
         );
 
@@ -953,7 +967,7 @@ mod tests {
             total_cost
         );
         assert!(
-            (total_gross - 7.95).abs() < 1e-6,
+            (total_gross - 7.95).abs() < eps,
             "expected total crypto gross ~7.95, got {}",
             total_gross
         );

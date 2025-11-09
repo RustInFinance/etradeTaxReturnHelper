@@ -219,7 +219,7 @@ fn parse_investment_transaction_dates(
     df: &DataFrame,
     col_names: &[&str],
 ) -> Result<Vec<String>, &'static str> {
-        // Pick the first available column from the provided candidates.
+    // Pick the first available column from the provided candidates.
     let col_name = col_names
         .iter()
         .find(|c| df.get_column_names().contains(c))
@@ -365,7 +365,8 @@ fn process_tax_consolidated_data(
             log::trace!("Content of Sells: {df}");
             let filtred_df = extract_sold_transactions(&df)?;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
-            let lacquired_dates = parse_investment_transaction_dates(&filtred_df, &["Date acquired"])?;
+            let lacquired_dates =
+                parse_investment_transaction_dates(&filtred_df, &["Date acquired"])?;
             log::info!("dates:: {:?}", ta.acquired_dates);
             let lsold_dates = parse_investment_transaction_dates(&filtred_df, &["Date sold"])?;
 

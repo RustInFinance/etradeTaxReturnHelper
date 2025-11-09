@@ -470,14 +470,15 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         .flexible(true)
         .delimiter(DELIMITER)
         .from_path(csvtoparse)
-        .map_err(|_| "Error: opening CSV")?;
+        .map_err(|_| format!("Error: opening CSV: {}", csvtoparse))?;
+
     let result = rdr
         .headers()
         .map_err(|e| format!("Error: scanning CSV header: {e}"))?;
     if result.iter().any(|field| field == "Completed Date") {
         log::info!("Detected Savings account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
-            .map_err(|_| "Error: opening CSV")?
+            .map_err(|_| format!("Error: opening CSV: {}", csvtoparse))?
             .with_separator(DELIMITER)
             .has_header(true)
             .finish()
@@ -598,7 +599,10 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
                     log::info!("Starting to collect: Crypto transactions");
                     state = ParsingState::Crypto(String::new());
                 } else {
-                    return Err("ERROR: Unsupported CSV type of document".to_string());
+                    return Err(format!(
+                        "ERROR: Unsupported CSV type of document: {}",
+                        csvtoparse
+                    ));
                 }
             } else {
                 match &mut state {
@@ -624,7 +628,10 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         }
         process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
     } else {
-        return Err("ERROR: Unsupported CSV type of document: {csvtoparse}".to_string());
+        return Err(format!(
+            "ERROR: Unsupported CSV type of document: {}",
+            csvtoparse
+        ));
     }
     // Sold transactions
     log::info!("Sold Acquire Dates: {:?}", ta.acquired_dates);

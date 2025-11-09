@@ -569,15 +569,8 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     {
         let mut state = ParsingState::None;
 
-        let mut rdr2 = csv::ReaderBuilder::new()
-            .flexible(true)
-            .delimiter(DELIMITER)
-            .from_path(csvtoparse)
-            .map_err(|e| format!("Error reopening CSV for records: {e}"))?;
-
-        for result in rdr2.records() {
+        for result in rdr.records() {
             let record = result.map_err(|e| format!("Error reading CSV record: {e}"))?;
-
             let line = csv_record_to_line(&record, DELIMITER)?;
 
             if line.starts_with("Transactions for") {

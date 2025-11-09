@@ -712,6 +712,16 @@ mod tests {
     }
 
     #[test]
+    fn test_csv_record_to_line_helper() -> Result<(), String> {
+        // field with comma should be quoted, and quotes inside field doubled
+        let record = csv::StringRecord::from(vec!["field1", "field,with,comma", "field\"quote"]);
+        let line = csv_record_to_line(&record, b',')?;
+        // csv::Writer uses '\n' as line terminator by default
+        assert_eq!(line, "field1,\"field,with,comma\",\"field\"\"quote\"\n");
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_incomes_pl() -> Result<(), String> {
         let moneyin = Series::new("Money in", vec!["0,27€", "5 452,74€"]);
         let description = Series::new("Description", vec!["odsetki", "odsetki"]);

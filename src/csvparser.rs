@@ -217,8 +217,15 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
 
 fn parse_investment_transaction_dates(
     df: &DataFrame,
-    col_name: &str,
+    col_names: &[&str],
 ) -> Result<Vec<String>, &'static str> {
+        // Pick the first available column from the provided candidates.
+    let col_name = col_names
+        .iter()
+        .find(|c| df.get_column_names().contains(c))
+        .map(|s| *s)
+        .ok_or("Error: None of the requested date columns are present")?;
+
     let date = df
         .column(col_name)
         .map_err(|_| "Error: Unable to select Date")?;
@@ -342,7 +349,7 @@ fn process_tax_consolidated_data(
             log::info!("Content of Interests: {df}");
             let filtred_df = extract_intrest_rate_transactions(&df)?;
             ta.dates
-                .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+                .extend(parse_investment_transaction_dates(&filtred_df, &["Date"])?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
@@ -358,9 +365,9 @@ fn process_tax_consolidated_data(
             log::trace!("Content of Sells: {df}");
             let filtred_df = extract_sold_transactions(&df)?;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
-            let lacquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
+            let lacquired_dates = parse_investment_transaction_dates(&filtred_df, &["Date acquired"])?;
             log::info!("dates:: {:?}", ta.acquired_dates);
-            let lsold_dates = parse_investment_transaction_dates(&filtred_df, "Date sold")?;
+            let lsold_dates = parse_investment_transaction_dates(&filtred_df, &["Date sold"])?;
 
             // For each sold data has to be one acquire date
             if lacquired_dates.len() != lsold_dates.len() {
@@ -392,7 +399,7 @@ fn process_tax_consolidated_data(
             let filtred_df = extract_dividends_transactions(&df)?;
             log::info!("Filtered Dividend Data of interest: {filtred_df}");
             ta.dates
-                .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+                .extend(parse_investment_transaction_dates(&filtred_df, &["Date"])?);
 
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross amount base currency")?;
@@ -417,9 +424,9 @@ fn process_tax_consolidated_data(
                 .finish()
                 .map_err(|e| format!("Error reading CSV: {e}"))?;
             log::info!("Content of Crypto: {df}");
-            let lacquired_dates = parse_investment_transaction_dates(&df, "Date acquired")?;
+            let lacquired_dates = parse_investment_transaction_dates(&df, &["Date acquired"])?;
             log::trace!("acquired dates:: {:?}", lacquired_dates);
-            let lsold_dates = parse_investment_transaction_dates(&df, "Date sold")?;
+            let lsold_dates = parse_investment_transaction_dates(&df, &["Date sold"])?;
             log::trace!("sold dates:: {:?}", lsold_dates);
             // For each sold data has to be one acquire date
             if lacquired_dates.len() != lsold_dates.len() {
@@ -471,7 +478,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
         log::info!("Filtered data of Interest: {filtred_df}");
 
-        ta.dates = parse_investment_transaction_dates(&filtred_df, "Completed Date")?;
+        ta.dates = parse_investment_transaction_dates(&filtred_df, &["Completed Date"])?;
 
         ta.incomes = parse_incomes(&filtred_df, "Money in")?;
         // Taxes are not automatically taken from savings account
@@ -488,7 +495,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("CSV DataFrame: {df}");
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
-        ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
+        ta.dates = parse_investment_transaction_dates(&filtred_df, &["Date"])?;
         ta.incomes = parse_incomes(&filtred_df, "Total Amount")?;
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
@@ -526,8 +533,8 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
         let filtred_df = extract_sold_transactions(&sales)?;
         log::info!("Filtered Sold Data of interest: {filtred_df}");
-        ta.acquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
-        ta.sold_dates = parse_investment_transaction_dates(&filtred_df, "Date sold")?;
+        ta.acquired_dates = parse_investment_transaction_dates(&filtred_df, &["Date acquired"])?;
+        ta.sold_dates = parse_investment_transaction_dates(&filtred_df, &["Date sold"])?;
         // For each sold date there has to be one acquire date
         if ta.acquired_dates.len() != ta.sold_dates.len() {
             return Err("ERROR: Different number of acquired and sold dates".to_string());
@@ -539,7 +546,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Dividend Data of interest: {filtred_df}");
-        ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
+        ta.dates = parse_investment_transaction_dates(&filtred_df, &["Date"])?;
         // parse income
         ta.incomes = parse_income_with_currency(&filtred_df, "Gross amount", "Currency")?;
         // parse taxes
@@ -737,7 +744,7 @@ mod tests {
             .map_err(|_| "Error creating DataFrame")?;
 
         assert_eq!(
-            parse_investment_transaction_dates(&df, "Date"),
+            parse_investment_transaction_dates(&df, &["Date"]),
             Ok(expected_dates)
         );
 

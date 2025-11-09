@@ -324,6 +324,23 @@ fn parse_income_with_currency(
     Ok(incomes)
 }
 
+// Helper: convert a csv::StringRecord into a properly quoted CSV line using
+// csv::Writer so fields containing the delimiter are quoted/escaped.
+fn csv_record_to_line(record: &csv::StringRecord, delimiter: u8) -> Result<String, String> {
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .delimiter(delimiter)
+        .from_writer(vec![]);
+    wtr.write_record(record.iter())
+        .map_err(|e| format!("Error writing CSV record: {e}"))?;
+    wtr.flush()
+        .map_err(|e| format!("Error flushing CSV writer: {e}"))?;
+    let buf = wtr
+        .into_inner()
+        .map_err(|e| format!("Error retrieving CSV buffer: {e}"))?;
+    String::from_utf8(buf).map_err(|e| format!("Error decoding CSV buffer: {e}"))
+}
+
 /// Process gathered financial operations from revolut consolidated tax document
 fn process_tax_consolidated_data(
     state: &ParsingState,
@@ -447,11 +464,11 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
     let mut ta = TransactionAccumulator::default();
 
-    const DELIMITER: u8 = b';';
+    const DELIMITER: u8 = b',';
 
-    //let mut rdr = csv::Reader::from_path(csvtoparse).map_err(|_| "Error: opening CSV")?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
+        .delimiter(DELIMITER)
         .from_path(csvtoparse)
         .map_err(|_| "Error: opening CSV")?;
     let result = rdr
@@ -461,6 +478,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Detected Savings account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
             .map_err(|_| "Error: opening CSV")?
+            .with_separator(DELIMITER)
             .has_header(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
@@ -481,6 +499,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Detected Investment account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
             .map_err(|_| "Error: opening CSV")?
+            .with_separator(DELIMITER)
             .has_header(true)
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
@@ -550,12 +569,17 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     {
         let mut state = ParsingState::None;
 
-        for result in rdr.records() {
-            let record = result.map_err(|e| format!("Error reading CSV: {e}"))?;
-            let line = record.into_iter().collect::<Vec<&str>>().join(
-                std::str::from_utf8(&[DELIMITER])
-                    .map_err(|_| "ERROR: Unable to convert delimiter to string".to_string())?,
-            );
+        let mut rdr2 = csv::ReaderBuilder::new()
+            .flexible(true)
+            .delimiter(DELIMITER)
+            .from_path(csvtoparse)
+            .map_err(|e| format!("Error reopening CSV for records: {e}"))?;
+
+        for result in rdr2.records() {
+            let record = result.map_err(|e| format!("Error reading CSV record: {e}"))?;
+
+            let line = csv_record_to_line(&record, DELIMITER)?;
+
             if line.starts_with("Transactions for") {
                 process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
 

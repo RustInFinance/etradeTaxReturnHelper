@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2022-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 use pdf::file::File;
 use pdf::object::PageRc;
 use pdf::primitive::Primitive;

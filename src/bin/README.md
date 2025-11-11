@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2024-2025 RustInFinance
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
 ### Usage
 1. Get JSON data with exchange rates. For example USD to PLN throughput year 2024:
 ```bash

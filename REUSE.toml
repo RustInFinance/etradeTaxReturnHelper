@@ -1,0 +1,26 @@
+version = 1
+
+[[annotations]]
+path = ["data/HowToReadETfromMSStatement.pdf"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "© 2022 Morgan Stanley Smith Barney LLC. Member SIPC."
+SPDX-License-Identifier = "LicenseRef-ETrade-MorganStanley"
+
+[[annotations]]
+path=[
+"Cargo.lock",
+"assets/etradetaxreturnhelper-640x480.gif",
+]
+SPDX-FileCopyrightText = "2025 RustInFinance"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = [
+  "data/G&L_Collapsed.xlsx",
+  "data/G&L_Expanded.xlsx",
+  "data/G&L_Expanded_polish.xlsx",
+  "data/ecb_example_response.xml",
+  "revolut_data/*.csv",
+]
+SPDX-FileCopyrightText = "2025 RustInFinance"
+SPDX-License-Identifier = "LicenseRef-Private-Data"

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2023-2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 use nom::{
     bytes::complete::tag, bytes::complete::take, error::Error, multi::many_m_n,
     number::complete::double, sequence::tuple,

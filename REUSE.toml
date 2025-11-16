@@ -21,6 +21,7 @@ path = [
   "data/G&L_Expanded_polish.xlsx",
   "data/ecb_example_response.xml",
   "revolut_data/*.csv",
+  "revolut_data/*.tsv",
 ]
 SPDX-FileCopyrightText = "2025 RustInFinance"
 SPDX-License-Identifier = "LicenseRef-Private-Data"

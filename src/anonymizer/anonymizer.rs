@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use clap::Parser;
-use lopdf::{Document, Object, Stream, dictionary, content::{Content, Operation}};
+use lopdf::{
+    content::{Content, Operation},
+    dictionary, Document, Object, Stream,
+};
 use regex::Regex;
 
 #[derive(Parser, Debug)]
@@ -12,7 +15,7 @@ struct Args {
     #[arg(short, long)]
     input: String,
 
-    /// file path output 
+    /// file path output
     #[arg(short, long)]
     output: String,
 }
@@ -80,29 +83,28 @@ fn main() {
 
     println!("Input PDF: {}", args.input);
     /*
-    // Load PDF
-    let mut doc = Document::load(&args.input).expect("Cannot load PDF file");
-    println!("Output PDF: {}", args.output);
-    println!("Replace owner");
-    let first_page = doc.extract_text(&[1]).expect("Unable to extract first page");
-    println!("First page content: {}", first_page);
+        // Load PDF
+        let mut doc = Document::load(&args.input).expect("Cannot load PDF file");
+        println!("Output PDF: {}", args.output);
+        println!("Replace owner");
+        let first_page = doc.extract_text(&[1]).expect("Unable to extract first page");
+        println!("First page content: {}", first_page);
 
-    // Next substring after "STATEMENT FOR:" is "\n<Name of owner>\n"
-    let re = Regex::new(r"FOR:\n([^\n]+)\n").unwrap();
-    let caps = re.captures(&first_page).unwrap();
-    let name = &caps[1].trim();
-    println!("OWNER: '{}'", name);
-*/
-//        let new_content = content.replace("JACEK CZAJA", "John Smith");
-//        doc.change_page_content(page_id, new_content.as_bytes().to_vec());
-//    }
+        // Next substring after "STATEMENT FOR:" is "\n<Name of owner>\n"
+        let re = Regex::new(r"FOR:\n([^\n]+)\n").unwrap();
+        let caps = re.captures(&first_page).unwrap();
+        let name = &caps[1].trim();
+        println!("OWNER: '{}'", name);
+    */
+    //        let new_content = content.replace("JACEK CZAJA", "John Smith");
+    //        doc.change_page_content(page_id, new_content.as_bytes().to_vec());
+    //    }
 
-        // Zapisz zmodyfikowany PDF
-//    doc.save(&args.output).expect("Nie można zapisać PDF");
-//  save_text_as_pdf(&first_page, &args.output);
+    // Zapisz zmodyfikowany PDF
+    //    doc.save(&args.output).expect("Nie można zapisać PDF");
+    //  save_text_as_pdf(&first_page, &args.output);
 
-// Save without modification works fine!
-// Save on example.pdf PDF works fine!
-// Save modified statement PDF does not work!
-
+    // Save without modification works fine!
+    // Save on example.pdf PDF works fine!
+    // Save modified statement PDF does not work!
 }

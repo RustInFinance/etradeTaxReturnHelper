@@ -60,7 +60,7 @@ fn main() {
             return;
         }
     }
-    
+
     let myapp = Command::new("etradeTaxHelper")
         .version(VERSION)
         .arg_required_else_help(true);
@@ -199,10 +199,16 @@ mod tests {
             "--residency=de",
             "data/example.pdf",
         ]);
-        let residency = matches.get_one::<String>("residency").ok_or(clap::error::Error::new(clap::error::ErrorKind::InvalidValue))?;
+        let residency = matches
+            .get_one::<String>("residency")
+            .ok_or(clap::error::Error::new(
+                clap::error::ErrorKind::InvalidValue,
+            ))?;
         match residency.as_str() {
             "de" => return Ok(()),
-            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(clap::error::ErrorKind::InvalidValue),
+            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(
+                clap::error::ErrorKind::InvalidValue,
+            ),
         };
         Ok(())
     }
@@ -216,10 +222,16 @@ mod tests {
             "--residency=pl",
             "data/example.pdf",
         ]);
-        let residency = matches.get_one::<String>("residency").ok_or(clap::error::Error::new(clap::error::ErrorKind::InvalidValue))?;
+        let residency = matches
+            .get_one::<String>("residency")
+            .ok_or(clap::error::Error::new(
+                clap::error::ErrorKind::InvalidValue,
+            ))?;
         match residency.as_str() {
             "pl" => return Ok(()),
-            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(clap::error::ErrorKind::InvalidValue),
+            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(
+                clap::error::ErrorKind::InvalidValue,
+            ),
         };
         Ok(())
     }
@@ -240,10 +252,16 @@ mod tests {
             "--residency=us",
             "data/example.pdf",
         ]);
-        let residency = matches.get_one::<String>("residency").ok_or(clap::error::Error::new(clap::error::ErrorKind::InvalidValue))?;
+        let residency = matches
+            .get_one::<String>("residency")
+            .ok_or(clap::error::Error::new(
+                clap::error::ErrorKind::InvalidValue,
+            ))?;
         match residency.as_str() {
             "us" => return Ok(()),
-            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(clap::error::ErrorKind::InvalidValue),
+            _ => clap::error::Error::<clap::error::DefaultFormatter>::new(
+                clap::error::ErrorKind::InvalidValue,
+            ),
         };
         Ok(())
     }
@@ -252,9 +270,7 @@ mod tests {
     fn test_unrecognized_file_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
 
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
-
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
 
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         // Check printed values or returned values?
@@ -276,8 +292,7 @@ mod tests {
     #[ignore]
     fn test_dividends_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         // Check printed values or returned values?
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
@@ -320,8 +335,7 @@ mod tests {
     #[ignore]
     fn test_sold_dividends_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
             "mytest",
@@ -358,8 +372,7 @@ mod tests {
     #[ignore]
     fn test_sold_dividends_interests_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
@@ -400,8 +413,7 @@ mod tests {
     #[test]
     fn test_revolut_dividends_pln() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
@@ -434,8 +446,7 @@ mod tests {
     #[test]
     fn test_revolut_sold_and_dividends() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
@@ -468,8 +479,7 @@ mod tests {
     #[test]
     fn test_revolut_interests_taxation_pln() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
 
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
@@ -503,8 +513,7 @@ mod tests {
     #[ignore]
     fn test_sold_dividends_only_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
             "mytest",
@@ -537,8 +546,7 @@ mod tests {
     #[ignore]
     fn test_interest_adjustment_taxation() -> Result<(), clap::Error> {
         // Get all brokerage with dividends only
-        let myapp = Command::new("etradeTaxHelper")
-            .arg_required_else_help(true);
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
         let matches = create_cmd_line_pattern(myapp)
             .get_matches_from(vec!["mytest", "data/example-interest-adj.pdf"]);

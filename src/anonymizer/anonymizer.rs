@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2024-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
+
+// TODO: Implement PDF generation only with needed data
+// TODO: Implement GUI using eGUI
+
 use clap::Parser;
 use lopdf::{
     content::{Content, Operation},
@@ -20,7 +24,7 @@ struct Args {
     output: String,
 }
 
-/*
+
 fn save_text_as_pdf(text: &str, output_path: &str) -> lopdf::Result<()> {
    let mut doc = Document::with_version("1.4");
 
@@ -77,18 +81,18 @@ fn save_text_as_pdf(text: &str, output_path: &str) -> lopdf::Result<()> {
    doc.save(output_path)?;
    Ok(())
 }
-*/
+
 fn main() {
     let args = Args::parse();
 
-    println!("Input PDF: {}", args.input);
-    /*
+    log::info!("Started etradeAnonymizer");
+    log::info!("Input PDF: {}", args.input);
         // Load PDF
         let mut doc = Document::load(&args.input).expect("Cannot load PDF file");
-        println!("Output PDF: {}", args.output);
-        println!("Replace owner");
+        println!("Generating anonymized PDF: {} (output PDF file) based on {} (input PDF file)", args.output,args.input);
         let first_page = doc.extract_text(&[1]).expect("Unable to extract first page");
-        println!("First page content: {}", first_page);
+        log::trace!("First page content: {}", first_page);
+    /*
 
         // Next substring after "STATEMENT FOR:" is "\n<Name of owner>\n"
         let re = Regex::new(r"FOR:\n([^\n]+)\n").unwrap();
@@ -102,7 +106,7 @@ fn main() {
 
     // Zapisz zmodyfikowany PDF
     //    doc.save(&args.output).expect("Nie można zapisać PDF");
-    //  save_text_as_pdf(&first_page, &args.output);
+      save_text_as_pdf(&first_page, &args.output);
 
     // Save without modification works fine!
     // Save on example.pdf PDF works fine!

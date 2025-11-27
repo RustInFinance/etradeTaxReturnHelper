@@ -24,22 +24,21 @@ struct Args {
     output: String,
 }
 
+#[allow(dead_code)]
+pub fn init_logging_infrastructure() {
+    // Make a default logging level: error
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "error")
+    }
+    simple_logger::SimpleLogger::new().env().init().unwrap();
+}
 
-fn save_text_as_pdf(text: &str, output_path: &str) -> lopdf::Result<()> {
-   let mut doc = Document::with_version("1.4");
+fn text_as_content(text: &str) -> lopdf::Result<Content> {
 
-    let pages_id = doc.new_object_id();
-    let page_id = doc.new_object_id();
-   // Font
-   let font_id = doc.add_object(dictionary! {
-       "Type" => "Font",
-       "Subtype" => "Type1",
-       "BaseFont" => "Helvetica",
-   });
-
-   // Content stream (jedna linia = jedna linia w PDF)
+   // Content stream (one line of text is one line in output PDF)
    let mut content = Content { operations: vec![] };
    let mut y = 750.0;
+
    for line in text.lines() {
        content.operations.push(Operation::new("BT", vec![])); // Begin Text
        content.operations.push(Operation::new("Tf", vec!["F1".into(), 12.into()])); // Font
@@ -48,67 +47,98 @@ fn save_text_as_pdf(text: &str, output_path: &str) -> lopdf::Result<()> {
        content.operations.push(Operation::new("ET", vec![])); // End Text
        y -= 15.0;
    }
-   let content_stream = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
 
-   // Page
-   let page_id = doc.add_object(dictionary! {
-       "Type" => "Page",
-//       "Parent" => lopdf::Object::Reference(2),
-    "Parent" => Object::Reference(pages_id),
-       "Contents" => content_stream,
-       "Resources" => dictionary! {
-           "Font" => dictionary! {
-               "F1" => font_id,
+   Ok(content)
+}
+
+fn init_content() -> Content {
+
+    Content { operations: vec![] }
+}
+
+fn save_output_document(output_path: &str, content : &mut Content) -> Result<(), std::io::Error> {
+    let mut doc = Document::with_version("1.4");
+
+     let pages_id = doc.new_object_id();
+     let page_id = doc.new_object_id();
+    // Font
+    let font_id = doc.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+    });
+
+    let mut y = 750.0;
+       let content_stream = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+       // Page
+       let page_id = doc.add_object(dictionary! {
+           "Type" => "Page",
+    //       "Parent" => lopdf::Object::Reference(2),
+        "Parent" => Object::Reference(pages_id),
+           "Contents" => content_stream,
+           "Resources" => dictionary! {
+               "Font" => dictionary! {
+                   "F1" => font_id,
+               }
            }
-       }
-   });
+       });
 
-   // Pages root
-   let pages_id = doc.add_object(dictionary! {
-       "Type" => "Pages",
-       "Kids" => vec![page_id.into()],
-       "Count" => 1,
-       "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
-   });
+       // Pages root
+       let pages_id = doc.add_object(dictionary! {
+           "Type" => "Pages",
+           "Kids" => vec![page_id.into()],
+           "Count" => 1,
+           "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
+       });
 
-   // Catalog
-   let catalog_id = doc.add_object(dictionary! {
-       "Type" => "Catalog",
-       "Pages" => pages_id,
-   });
+       // Catalog
+       let catalog_id = doc.add_object(dictionary! {
+           "Type" => "Catalog",
+           "Pages" => pages_id,
+       });
 
-   doc.trailer.set("Root", catalog_id);
-   doc.save(output_path)?;
-   Ok(())
+       doc.trailer.set("Root", catalog_id);
+       doc.save(output_path)?;
+       Ok(())
 }
 
 fn main() {
+    crate::init_logging_infrastructure();
+
     let args = Args::parse();
 
     log::info!("Started etradeAnonymizer");
     log::info!("Input PDF: {}", args.input);
-        // Load PDF
-        let mut doc = Document::load(&args.input).expect("Cannot load PDF file");
-        println!("Generating anonymized PDF: {} (output PDF file) based on {} (input PDF file)", args.output,args.input);
-        let first_page = doc.extract_text(&[1]).expect("Unable to extract first page");
-        log::trace!("First page content: {}", first_page);
-    /*
+    // Load PDF
+    let mut doc = Document::load(&args.input).expect("Cannot load PDF file");
+    println!("Generating anonymized PDF: {} (output PDF file) based on {} (input PDF file)", args.output,args.input);
 
-        // Next substring after "STATEMENT FOR:" is "\n<Name of owner>\n"
-        let re = Regex::new(r"FOR:\n([^\n]+)\n").unwrap();
-        let caps = re.captures(&first_page).unwrap();
-        let name = &caps[1].trim();
-        println!("OWNER: '{}'", name);
-    */
-    //        let new_content = content.replace("JACEK CZAJA", "John Smith");
-    //        doc.change_page_content(page_id, new_content.as_bytes().to_vec());
-    //    }
+    let num_pages = doc.get_pages().len();
+    log::info!("Input PDF is having {} pages", num_pages);
 
-    // Zapisz zmodyfikowany PDF
-    //    doc.save(&args.output).expect("Nie można zapisać PDF");
-      save_text_as_pdf(&first_page, &args.output);
 
-    // Save without modification works fine!
-    // Save on example.pdf PDF works fine!
+    let first_page = doc.extract_text(&[1]).expect("Unable to extract first page");
+    log::trace!("First page content: {}", first_page);
+
+    // Based on "CLIENT STATEMENT" on the first page, recognize if we are processing expected
+    // type of document
+    let re = Regex::new(r"CLIENT STATEMENT").unwrap();
+    let _ = re.captures(&first_page).expect("\n ERROR: Wrong type of input PDF. You need to pass a E*TRADE account statement document\n");
+
+
+    let mut content = text_as_content("CLIENT STATEMENT").expect("Unable to create Content"); 
+
+    // Create output document
+    save_output_document(&args.output, &mut content).expect("Unable to create PDF");
+    
+
+    // On first page just write "CLIENT STATEMENT"
+
+    // Iterate through pages 2 to num_pages to find
+    // CASH FLOW ACTIVITY BLOCK
+    for i in 2..=num_pages {
+    }
+
+
     // Save modified statement PDF does not work!
 }

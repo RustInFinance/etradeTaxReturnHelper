@@ -19,6 +19,7 @@ impl Default for DetectionConfig {
 
 #[derive(Default, Debug)]
 pub(crate) struct DetectionResult {
+    id: Option<String>,
     name: Option<String>,
     address_line1: Option<String>,
     address_line2: Option<String>,
@@ -28,7 +29,8 @@ pub(crate) struct DetectionResult {
 
 impl DetectionResult {
     fn all_found(&self) -> bool {
-        self.name.is_some()
+        self.id.is_some()
+            && self.name.is_some()
             && self.address_line1.is_some()
             && self.address_line2.is_some()
             && self.account_spaced.is_some()
@@ -97,6 +99,11 @@ pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Build final ordered list: name, addr1, addr2, account_spaced, account_ms
     let mut final_texts: Vec<String> = Vec::new();
     let mut inserted = std::collections::HashSet::new();
+    if let Some(id) = result.id.as_ref() {
+        if inserted.insert(id.clone()) {
+            final_texts.push(id.clone());
+        }
+    }
     if let Some(n) = result.name.as_ref() {
         if inserted.insert(n.clone()) {
             final_texts.push(n.clone());
@@ -245,6 +252,15 @@ fn handle_for_and_extract(
                 if extracted_texts[k].contains(&name_full) {
                     anchor_index = k;
                     break;
+                }
+            }
+
+            // If we found a later occurrence, check for ID immediately before it.
+            if anchor_index > i + 1 {
+                let id_candidate = &extracted_texts[anchor_index - 1];
+                if !id_candidate.is_empty() {
+                    info!("Found ID before name anchor: {}", id_candidate);
+                    result.id = Some(id_candidate.clone());
                 }
             }
 

@@ -16,6 +16,9 @@ homepage = "https://github.com/jczaja/e-trade-tax-return-pl-helper"
 [[bin]]
 name = "etradeTaxReturnHelper"
 path = "src/main.rs"
+[[bin]]
+name = "etradeAnonymizer"
+path = "src/anonymizer/anonymizer.rs"
 
 [[bin]]
 name = "gen_exchange_rates"
@@ -45,3 +48,5 @@ polars = "0.35.4"
 csv = "1.3.0"
 serde_json = { version = "=1.0.133", optional = true }
 holidays = { version = "0.1.0", default-features = false, features = ["PL"] }
+
+flate2 = "1.1.5"

@@ -56,6 +56,20 @@ fn text_as_content(text: &str) -> lopdf::Result<Content> {
     Ok(content)
 }
 
+// Check if there is "CASH FLOW ACTIVITY BY DATE" section
+// if positive then extract that section as a content
+fn extract_cash_flow_activity_if_present(contents : &mut Vec<Content>, page : String){
+
+    // Check if this page got "CASH FLOW ACTIVITY"
+    let re = Regex::new(r"CASH FLOW ACTIVITY BY DATE").unwrap();
+    if re.captures(&page).is_some() {
+        log::info!("    Page contains \"CASH FLOW ACTIVITY BY DATE\"");
+
+    } else {
+        log::info!("    Page contains no \"CASH FLOW ACTIVITY BY DATE\"");
+    }
+}
+
 fn save_output_document(output_path: &str, contents: Vec<Content>) -> Result<(), std::io::Error> {
     let mut doc = Document::with_version("1.4");
 
@@ -139,12 +153,13 @@ fn main() {
         vec![text_as_content("CLIENT STATEMENT").expect("Unable to create Content")];
 
     // Iterate through pages 2 to num_pages to find
-    // CASH FLOW ACTIVITY BLOCK
+    // CASH FLOW ACTIVITY blocks
     for i in 2..=num_pages {
         let current_page = doc
             .extract_text(&[i as u32])
             .expect("Unable to extract page");
         log::trace!("{i} page content: {}", first_page);
+        extract_cash_flow_activity_if_present(&mut contents, current_page);
     }
 
     // Create output document

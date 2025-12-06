@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2024-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
-// TODO: Searching for cash flow activity block and extracting only that
 // TODO: Implement PDF generation only with needed data
 // TODO: Implement GUI using eGUI
+// TODO: Add tests
 
 use clap::Parser;
 use lopdf::{
@@ -173,13 +173,16 @@ fn main() {
 
     // Iterate through pages 2 to num_pages to find
     // CASH FLOW ACTIVITY blocks
+    let mut accumulated_pages = String::new();
     for i in 2..=num_pages {
         let current_page = doc
             .extract_text(&[i as u32])
             .expect("Unable to extract page");
-        log::trace!("{i} page content: {}", first_page);
-        extract_cash_flow_activity_if_present(&mut contents, current_page);
+        log::trace!("{i} page content: {}", current_page);
+        accumulated_pages.push_str(" ");
+        accumulated_pages.push_str(&current_page);
     }
+    extract_cash_flow_activity_if_present(&mut contents, accumulated_pages);
 
     // Create output document
     save_output_document(&args.output, contents).expect("Unable to create PDF");

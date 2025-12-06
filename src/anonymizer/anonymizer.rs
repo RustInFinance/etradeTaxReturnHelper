@@ -61,12 +61,31 @@ fn text_as_content(text: &str) -> lopdf::Result<Content> {
 fn extract_cash_flow_activity_if_present(contents : &mut Vec<Content>, page : String){
 
     // Check if this page got "CASH FLOW ACTIVITY"
-    let re = Regex::new(r"CASH FLOW ACTIVITY BY DATE").unwrap();
-    if re.captures(&page).is_some() {
-        log::info!("    Page contains \"CASH FLOW ACTIVITY BY DATE\"");
+    let start_pattern = r"CASH FLOW ACTIVITY BY DATE";
+    let end_pattern = r"CREDITS/(DEBITS)";
+    let re = Regex::new(start_pattern).unwrap();
+    if let Some(start_idx) = re.find(&page) {
+        log::info!("    Page contains {start_pattern}");
+        if let Some(rel_end_idx) = page[start_idx.start()..].find(end_pattern) {
+            let end_idx = start_idx.start() + rel_end_idx + end_pattern.len();
+            // Get a section between "CASH FLOW ACTIVITY BY DATE" and "CREDITS/(DEBITS)".
+            let section = &page[start_idx.start()..end_idx];
+            // Replace "CASH FLOW ACTIVITY BY DATE" with "CASH_FLOW_ACTIVITY_BY_DATE"
+            let section = section.replace("CASH FLOW ACTIVITY BY DATE", "CASH_FLOW_ACTIVITY_BY_DATE").
+                replace("Activity Type", "Activity_Type").replace("DIV PAYMENT", "DIV_PAYMENT").
+                replace("TREASURY LIQUIDITY FUND", "TREASURY_LIQUIDITY_FUND").
+                replace("NET CREDITS/(DEBITS)", "NET_CREDITS/(DEBITS)");
 
+            section.split_whitespace().for_each(|s| {
+                log::info!("        Extracted word: {s}");
+                let s = s.replace("_", " "); // Revert back to spaces 
+                contents.push(text_as_content(&s).expect(&format!("Error processing string: {s}")));
+            });
+        } else {
+            log::warn!("    Page contains {start_pattern} but no {end_pattern}, extracting till end of page");
+        }
     } else {
-        log::info!("    Page contains no \"CASH FLOW ACTIVITY BY DATE\"");
+        log::info!("    Page contains no {start_pattern}");
     }
 }
 

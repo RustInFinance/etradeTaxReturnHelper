@@ -44,13 +44,7 @@ impl DetectionResult {
 /// determines name/address/account tokens. It prints a single `replace` command
 /// suitable for shell use.
 pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let pdf_data = match read_pdf(input_path) {
-        Ok(d) => d,
-        Err(_) => {
-            // Header validation already logged inside read_pdf
-            return Ok(());
-        }
-    };
+    let pdf_data = read_pdf(input_path)?;
 
     // let obj_re = Regex::new(OBJ_STREAM_RE).unwrap(); // Removed old regex initialization
     let mut result = DetectionResult::default();

@@ -8,6 +8,7 @@ use log::{debug, error, info, warn};
 use regex::bytes::Regex;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::error::Error;
 
 // Centralized constants and helpers for PDF parsing to reduce duplication between detect/replace.
 /// Expected PDF header (strictly enforced).
@@ -16,7 +17,7 @@ pub(crate) const PDF_HEADER: &[u8] = b"%PDF-1.3\n";
 pub(crate) const OBJ_STREAM_RE: &str = r"(?s)\d+\s+\d+\s+obj\s*<<\s*/Length\s+(\d+)\s*/Filter\s*\[\s*/FlateDecode\s*\]\s*>>\s*stream\n";
 
 /// Read entire PDF file and validate strict header.
-pub(crate) fn read_pdf(path: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub(crate) fn read_pdf(path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = File::open(path)?;
     let mut pdf_data = Vec::new();
     file.read_to_end(&mut pdf_data)?;
@@ -177,12 +178,12 @@ pub(crate) fn extract_stream_bytes<'a>(
 /// Decompress a FlateDecode stream and extract text tokens appearing in `( .. ) Tj` operators.
 pub(crate) fn extract_texts_from_stream(
     compressed_data: &[u8],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, Box<dyn Error>> {
     let mut decoder = ZlibDecoder::new(compressed_data);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
     let text_re =
-        Regex::new(r"\(([^)]+)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        Regex::new(r"\(([^)]+)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn Error>)?;
     let mut extracted_texts: Vec<String> = Vec::new();
     for text_caps in text_re.captures_iter(&decompressed) {
         if let Some(txt) = text_caps.get(1) {
@@ -233,7 +234,7 @@ fn find_fitting_compression(data: &[u8], max_size: usize) -> Option<(Vec<u8>, u3
 pub(crate) fn process_stream(
     compressed_data: &[u8],
     replacements: &[(String, String)],
-) -> Result<(Vec<u8>, std::collections::HashMap<String, usize>), Box<dyn std::error::Error>> {
+) -> Result<(Vec<u8>, std::collections::HashMap<String, usize>), Box<dyn Error>> {
     let original_len = compressed_data.len();
     let mut decoder = ZlibDecoder::new(compressed_data);
     let mut decompressed = Vec::new();

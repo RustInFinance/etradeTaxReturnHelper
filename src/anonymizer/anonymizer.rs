@@ -1,16 +1,19 @@
 // SPDX-FileCopyrightText: 2024-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
+mod list;
 mod detect;
 mod pdf;
 mod replace;
 
 use std::env;
+use std::error::Error;
 
 /// Entry point for programmatic invocation and CLI help text.
 fn help_text() -> &'static str {
     "etradeAnonymizer - Tool for anonymizing PDF files by replacing specific strings in FlateDecode streams.\n\
 	\nUsage:\n\
+          etradeAnonymizer list <input_file_path>\n\
 	  etradeAnonymizer detect <input_file_path>\n\
 	  etradeAnonymizer replace <input_file_path> <output_file_path> <string1> <replacement1> [<string2> <replacement2> ...]\n\
 	\nExamples:\n\
@@ -20,23 +23,30 @@ fn help_text() -> &'static str {
 
 /// Parse arguments and dispatch to detect / replace logic. Returns Ok even
 /// for usage errors (prints help) to keep CLI simple.
-pub fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
     if args.len() < 2 {
         println!("{}", help_text());
         return Ok(());
     }
     match args[1].as_str() {
+        "list" => {
+            if args.len() != 3 {
+                println!("{}", help_text());
+                return Err("Invalid use of list".into());
+            }
+            list::list_texts(&args[2])
+        }
         "detect" => {
             if args.len() != 3 {
                 println!("{}", help_text());
-                return Ok(());
+                return Err("Invalid use of detect".into());
             }
             detect::detect_pii(&args[2])
         }
         "replace" => {
             if args.len() < 6 || (args.len() - 4) % 2 != 0 {
                 println!("{}", help_text());
-                return Ok(());
+                return Err("Invalid use of replace".into());
             }
             let input_path = &args[2];
             let output_path = &args[3];
@@ -55,7 +65,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     // Ensure users see warnings and errors by default even when RUST_LOG is not set.
     // If RUST_LOG is provided, simple_logger will respect it; otherwise we default to `warn`.
     if env::var("RUST_LOG").is_err() {
@@ -85,7 +95,7 @@ mod tests {
     // when running 'cargo test'.
 
     #[test]
-    fn test_detect_mode() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_detect_mode() -> Result<(), Box<dyn Error>> {
         // This test captures stdout, which is tricky in Rust test harness without external crate.
         // However, we can verify it runs without error.
 
@@ -101,7 +111,7 @@ mod tests {
     }
 
     #[test]
-    fn test_replace_mode() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_replace_mode() -> Result<(), Box<dyn Error>> {
         let sample = "anonymizer_data/sample_statement.pdf";
         let expected_pdf = "anonymizer_data/expected_statement.pdf";
         let output_dir = "target/test_outputs";

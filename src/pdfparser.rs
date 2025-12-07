@@ -965,8 +965,9 @@ pub fn parse_statement(
 
     let first_page = pdffile_iter
         .next()
-        .unwrap()
-        .map_err(|_| "Unable to get first page of PDF file".to_string())?;
+        .ok_or("Unable to get first page of PDF file".to_string())?
+        .map_err(|e| format!("PDF error: {:?}", e))?;
+
 
     let document_type = recognize_statement(first_page)?;
 

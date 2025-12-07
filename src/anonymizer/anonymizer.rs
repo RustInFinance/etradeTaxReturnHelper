@@ -122,12 +122,13 @@ fn save_output_document(output_path: &str, contents: Vec<Content>) -> Result<(),
 
     // Pages root
     let num_pages = kids.len();
-    let pages_id = doc.add_object(dictionary! {
+    doc.objects.insert(pages_id, Object::Dictionary(dictionary! {
         "Type" => "Pages",
         "Kids" => kids,
         "Count" => num_pages as i32,
         "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
-    });
+        }));
+
 
     // Catalog
     let catalog_id = doc.add_object(dictionary! {

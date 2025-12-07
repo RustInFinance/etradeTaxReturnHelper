@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2024-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
-// TODO: Implement PDF generation only with needed data
-// TODO: Implement GUI using eGUI
 // TODO: Add tests
+// TODO: Implement GUI using eGUI
 
 use clap::Parser;
 use lopdf::{
@@ -58,8 +57,7 @@ fn text_as_content(text: &str) -> lopdf::Result<Content> {
 
 // Check if there is "CASH FLOW ACTIVITY BY DATE" section
 // if positive then extract that section as a content
-fn extract_cash_flow_activity_if_present(contents : &mut Vec<Content>, page : String){
-
+fn extract_cash_flow_activity_if_present(contents: &mut Vec<Content>, page: String) {
     // Check if this page got "CASH FLOW ACTIVITY"
     let start_pattern = r"CASH FLOW ACTIVITY BY DATE";
     let end_pattern = r"CREDITS/(DEBITS)";
@@ -71,14 +69,16 @@ fn extract_cash_flow_activity_if_present(contents : &mut Vec<Content>, page : St
             // Get a section between "CASH FLOW ACTIVITY BY DATE" and "CREDITS/(DEBITS)".
             let section = &page[start_idx.start()..end_idx];
             // Replace "CASH FLOW ACTIVITY BY DATE" with "CASH_FLOW_ACTIVITY_BY_DATE"
-            let section = section.replace("CASH FLOW ACTIVITY BY DATE", "CASH_FLOW_ACTIVITY_BY_DATE").
-                replace("Activity Type", "Activity_Type").replace("DIV PAYMENT", "DIV_PAYMENT").
-                replace("TREASURY LIQUIDITY FUND", "TREASURY_LIQUIDITY_FUND").
-                replace("NET CREDITS/(DEBITS)", "NET_CREDITS/(DEBITS)");
+            let section = section
+                .replace("CASH FLOW ACTIVITY BY DATE", "CASH_FLOW_ACTIVITY_BY_DATE")
+                .replace("Activity Type", "Activity_Type")
+                .replace("DIV PAYMENT", "DIV_PAYMENT")
+                .replace("TREASURY LIQUIDITY FUND", "TREASURY_LIQUIDITY_FUND")
+                .replace("NET CREDITS/(DEBITS)", "NET_CREDITS/(DEBITS)");
 
             section.split_whitespace().for_each(|s| {
                 log::info!("        Extracted word: {s}");
-                let s = s.replace("_", " "); // Revert back to spaces 
+                let s = s.replace("_", " "); // Revert back to spaces
                 contents.push(text_as_content(&s).expect(&format!("Error processing string: {s}")));
             });
         } else {
@@ -122,13 +122,15 @@ fn save_output_document(output_path: &str, contents: Vec<Content>) -> Result<(),
 
     // Pages root
     let num_pages = kids.len();
-    doc.objects.insert(pages_id, Object::Dictionary(dictionary! {
+    doc.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
         "Type" => "Pages",
         "Kids" => kids,
         "Count" => num_pages as i32,
         "MediaBox" => vec![0.into(), 0.into(), 595.into(), 842.into()],
-        }));
-
+        }),
+    );
 
     // Catalog
     let catalog_id = doc.add_object(dictionary! {
@@ -171,6 +173,17 @@ fn main() {
     // On first page just write "CLIENT STATEMENT"
     let mut contents: Vec<Content> =
         vec![text_as_content("CLIENT STATEMENT").expect("Unable to create Content")];
+
+    // Now get a date "For the Period ...YYYY"
+    let date_pattern = Regex::new(r"(?s)For the Period.*?(\d{4})").unwrap();
+
+    if let Some(m) = date_pattern.captures(first_page.as_str()) {
+        contents.push(text_as_content("For the Period ").expect("Unable to create Content"));
+        // Get actual date
+        let year = &m[1];
+        log::info!("    Extracted year: {}", year);
+        contents.push(text_as_content(year).expect("Unable to create Content"));
+    }
 
     // Iterate through pages 2 to num_pages to find
     // CASH FLOW ACTIVITY blocks

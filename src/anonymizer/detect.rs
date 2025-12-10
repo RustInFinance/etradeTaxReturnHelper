@@ -1,5 +1,6 @@
 use crate::pdf::{extract_texts_from_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
+use std::error::Error;
 
 pub(crate) struct DetectionConfig {
     pub anchor_ms_account: &'static str,
@@ -43,7 +44,7 @@ impl DetectionResult {
 /// The function inspects FlateDecode streams, extracts text tokens and heuristically
 /// determines name/address/account tokens. It prints a single `replace` command
 /// suitable for shell use.
-pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
     let pdf_data = read_pdf(input_path)?;
 
     // let obj_re = Regex::new(OBJ_STREAM_RE).unwrap(); // Removed old regex initialization

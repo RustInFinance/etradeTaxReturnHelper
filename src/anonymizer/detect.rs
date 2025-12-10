@@ -76,20 +76,7 @@ pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let in_path = std::path::Path::new(input_path);
-    let parent = in_path
-        .parent()
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| String::from(""));
-    let file_name = in_path
-        .file_name()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| input_path.to_string());
-    let out_path = if parent.is_empty() {
-        format!("anonymous_{}", file_name)
-    } else {
-        format!("{}/anonymous_{}", parent, file_name)
-    };
+    let out_path = find_output_path(input_path);
 
     // Build final ordered list: name, addr1, addr2, account_spaced, account_ms
     let mut final_texts: Vec<String> = Vec::new();
@@ -133,6 +120,23 @@ pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
     println!();
 
     Ok(())
+}
+
+pub find_output_path(in_path: &str) {
+    let in_path = std::path::Path::new(input_path);
+    let parent = in_path
+        .parent()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| String::from(""));
+    let file_name = in_path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| input_path.to_string());
+    let out_path = if parent.is_empty() {
+        format!("anonymous_{}", file_name)
+    } else {
+        format!("{}/anonymous_{}", parent, file_name)
+    };
 }
 
 pub(crate) fn analyze_extracted_texts(

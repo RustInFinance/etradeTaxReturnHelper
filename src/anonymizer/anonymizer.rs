@@ -7,63 +7,41 @@ mod path;
 mod pdf;
 mod replace;
 
+use clap::{Parser, Subcommand};
 use std::env;
 use std::error::Error;
 
-/// Entry point for programmatic invocation and CLI help text.
-fn help_text() -> &'static str {
-    "etradeAnonymizer - Tool for anonymizing PDF files by replacing specific strings in FlateDecode streams.\n\
-	\nUsage:\n\
-          etradeAnonymizer list <input_file_path>\n\
-	  etradeAnonymizer detect <input_file_path>\n\
-	  etradeAnonymizer replace <input_file_path> <output_file_path> <string1> <replacement1> [<string2> <replacement2> ...]\n\
-	\nExamples:\n\
-	  etradeAnonymizer detect statement.pdf\n\
-	  etradeAnonymizer replace input.pdf output.pdf \"JAN KOWALSKI\" \"XXXXX XXXXXXXX\""
+/// Tool for anonymizing PDF files by replacing specific strings in FlateDecode streams
+#[derive(Parser)]
+#[command(name = "etradeAnonymizer")]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 }
 
-/// Parse arguments and dispatch to detect / replace logic. Returns Ok even
-/// for usage errors (prints help) to keep CLI simple.
-pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
-    if args.len() < 2 {
-        println!("{}", help_text());
-        return Ok(());
-    }
-    match args[1].as_str() {
-        "list" => {
-            if args.len() != 3 {
-                println!("{}", help_text());
-                return Err("Invalid use of list".into());
-            }
-            list::list_texts(&args[2])
-        }
-        "detect" => {
-            if args.len() != 3 {
-                println!("{}", help_text());
-                return Err("Invalid use of detect".into());
-            }
-            detect::detect_pii(&args[2])
-        }
-        "replace" => {
-            if args.len() < 6 || (args.len() - 4) % 2 != 0 {
-                println!("{}", help_text());
-                return Err("Invalid use of replace".into());
-            }
-            let input_path = &args[2];
-            let output_path = &args[3];
-            let mut replacements: Vec<(String, String)> = Vec::new();
-            let mut i = 4;
-            while i < args.len() - 1 {
-                replacements.push((args[i].clone(), args[i + 1].clone()));
-                i += 2;
-            }
-            replace::replace_mode(input_path, output_path, replacements)
-        }
-        _ => {
-            println!("{}", help_text());
-            Ok(())
-        }
-    }
+#[derive(Subcommand)]
+enum Commands {
+    /// List all text tokens from FlateDecode streams in the PDF
+    List {
+        /// Path to the input PDF file
+        input_file: String,
+    },
+    /// Detect PII (name, address, account) in the PDF and print replacement command
+    Detect {
+        /// Path to the input PDF file
+        input_file: String,
+    },
+    /// Replace strings in PDF FlateDecode streams and save to output file
+    Replace {
+        /// Path to the input PDF file
+        input_file: String,
+        /// Path to the output PDF file
+        output_file: String,
+        /// Pairs of strings to replace: <search> <replacement> <search> <replacement> ...
+        #[arg(required = true, num_args = 2..)]
+        replacements: Vec<String>,
+    },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -74,8 +52,28 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     simple_logger::SimpleLogger::new().env().init().unwrap();
 
-    let args: Vec<String> = env::args().collect();
-    run(args)
+    let cli = Cli::parse();
+
+    match cli.command {
+        Commands::List { input_file } => list::list_texts(&input_file),
+        Commands::Detect { input_file } => detect::detect_pii(&input_file),
+        Commands::Replace {
+            input_file,
+            output_file,
+            replacements,
+        } => {
+            if replacements.len() % 2 != 0 {
+                return Err("Replacements must be provided as pairs: <search> <replacement>".into());
+            }
+            let mut replacement_pairs: Vec<(String, String)> = Vec::new();
+            let mut i = 0;
+            while i < replacements.len() {
+                replacement_pairs.push((replacements[i].clone(), replacements[i + 1].clone()));
+                i += 2;
+            }
+            replace::replace_mode(&input_file, &output_file, replacement_pairs)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -83,31 +81,15 @@ mod tests {
     use super::*;
     use std::fs;
 
-    // Helper to mock args
-    fn mock_args(args: &[&str]) -> Vec<String> {
-        let mut v = vec!["etradeAnonymizer".to_string()];
-        for a in args {
-            v.push(a.to_string());
-        }
-        v
-    }
-
     // Note: These tests require 'anonymizer_data' directory to be present in the working directory
     // when running 'cargo test'.
 
     #[test]
     fn test_detect_mode() -> Result<(), Box<dyn Error>> {
-        // This test captures stdout, which is tricky in Rust test harness without external crate.
-        // However, we can verify it runs without error.
-
         let sample = "anonymizer_data/sample_statement.pdf";
-        if !std::path::Path::new(sample).exists() {
-            println!("Skipping test_detect_mode: {} not found", sample);
-            return Ok(());
-        }
+        assert!(std::path::Path::new(sample).exists(), "Required test file missing: {}", sample);
 
-        let args = mock_args(&["detect", sample]);
-        run(args)?;
+        detect::detect_pii(sample)?;
         Ok(())
     }
 
@@ -118,31 +100,20 @@ mod tests {
         let output_dir = "target/test_outputs";
         let output_pdf = "target/test_outputs/out_sample_statement.pdf";
 
-        if !std::path::Path::new(sample).exists() || !std::path::Path::new(expected_pdf).exists() {
-            println!("Skipping test_replace_mode: test data not found");
-            return Ok(());
-        }
+        assert!(std::path::Path::new(sample).exists(), "Required test file missing: {}", sample);
+        assert!(std::path::Path::new(expected_pdf).exists(), "Required test file missing: {}", expected_pdf);
 
         fs::create_dir_all(output_dir)?;
 
-        // Arguments derived from expected_detect_output.txt content logic in original test
-        let args = mock_args(&[
-            "replace",
-            sample,
-            output_pdf,
-            "JAN KOWALSKI",
-            "XXXXXXXXXXXX",
-            "UL. SWIETOKRZYSKA 12",
-            "XXXXXXXXXXXXXXXXXXXX",
-            "WARSAW 00-916 POLAND",
-            "XXXXXXXXXXXXXXXXXXXX",
-            "012 - 345678 - 910 -",
-            "XXXXXXXXXXXXXXXXXXXX",
-            "012-345678-910",
-            "XXXXXXXXXXXXXX",
-        ]);
+        let replacements = vec![
+            ("JAN KOWALSKI".to_string(), "XXXXXXXXXXXX".to_string()),
+            ("UL. SWIETOKRZYSKA 12".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
+            ("WARSAW 00-916 POLAND".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
+            ("012 - 345678 - 910 -".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
+            ("012-345678-910".to_string(), "XXXXXXXXXXXXXX".to_string()),
+        ];
 
-        run(args)?;
+        replace::replace_mode(sample, output_pdf, replacements)?;
 
         let produced = fs::read(output_pdf)?;
         let expected = fs::read(expected_pdf)?;

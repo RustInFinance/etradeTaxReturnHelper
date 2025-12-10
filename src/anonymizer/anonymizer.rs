@@ -3,6 +3,7 @@
 
 mod list;
 mod detect;
+mod path;
 mod pdf;
 mod replace;
 

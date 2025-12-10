@@ -44,8 +44,9 @@ impl DetectionResult {
 /// The function inspects FlateDecode streams, extracts text tokens and heuristically
 /// determines name/address/account tokens. It prints a single `replace` command
 /// suitable for shell use.
-pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
-    let pdf_data = read_pdf(input_path)?;
+pub fn detect_pii<P: AsRef<std::path::Path>>(input_path: P) -> Result<(), Box<dyn Error>> {
+    let input_path_ref = input_path.as_ref();
+    let pdf_data = read_pdf(input_path_ref)?;
 
     // let obj_re = Regex::new(OBJ_STREAM_RE).unwrap(); // Removed old regex initialization
     let mut result = DetectionResult::default();
@@ -76,7 +77,7 @@ pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let out_path = super::path::anonymous_output_path(input_path);
+    let out_path = super::path::anonymous_output_path(input_path_ref);
 
     // Build final ordered list: name, addr1, addr2, account_spaced, account_ms
     let mut final_texts: Vec<String> = Vec::new();
@@ -112,7 +113,7 @@ pub fn detect_pii(input_path: &str) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    print!("replace \"{}\" \"{}\"", input_path, out_path.display());
+    print!("replace \"{}\" \"{}\"", input_path_ref.display(), out_path.display());
     for txt in &final_texts {
         let replacement = "X".repeat(txt.len());
         print!(" \"{}\" \"{}\"", txt, replacement);

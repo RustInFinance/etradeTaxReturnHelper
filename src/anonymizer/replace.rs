@@ -8,14 +8,16 @@ use std::io::Write;
 ///
 /// Each replacement is a `(original, replacement)` pair. Compression is retried to fit
 /// the original stream size; if impossible, the original compressed stream is preserved.
-pub(crate) fn replace_mode(
-    input_path: &str,
-    output_path: &str,
+pub(crate) fn replace_mode<P: AsRef<std::path::Path>>(
+    input_path: P,
+    output_path: P,
     replacements: Vec<(String, String)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Loading: {}", input_path);
+    let input_path_ref = input_path.as_ref();
+    let output_path_ref = output_path.as_ref();
+    info!("Loading: {}", input_path_ref.display());
 
-    let pdf_data = match read_pdf(input_path) {
+    let pdf_data = match read_pdf(input_path_ref) {
         Ok(d) => d,
         Err(_) => return Ok(()), // header or open error already logged
     };
@@ -89,8 +91,8 @@ pub(crate) fn replace_mode(
         }
     }
 
-    info!("Saving: {}", output_path);
-    File::create(output_path)?.write_all(&output_data)?;
+    info!("Saving: {}", output_path_ref.display());
+    File::create(output_path_ref)?.write_all(&output_data)?;
 
     info!("DONE!");
     info!(
@@ -105,7 +107,7 @@ pub(crate) fn replace_mode(
             info!("  '{}' -> {}", k, v);
         }
     }
-    info!("File: {}", output_path);
+    info!("File: {}", output_path_ref.display());
 
     Ok(())
 }

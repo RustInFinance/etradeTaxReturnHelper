@@ -17,14 +17,15 @@ pub(crate) const PDF_HEADER: &[u8] = b"%PDF-1.3\n";
 pub(crate) const OBJ_STREAM_RE: &str = r"(?s)\d+\s+\d+\s+obj\s*<<\s*/Length\s+(\d+)\s*/Filter\s*\[\s*/FlateDecode\s*\]\s*>>\s*stream\n";
 
 /// Read entire PDF file and validate strict header.
-pub(crate) fn read_pdf(path: &str) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut file = File::open(path)?;
+pub(crate) fn read_pdf<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<u8>, Box<dyn Error>> {
+    let path_ref = path.as_ref();
+    let mut file = File::open(path_ref)?;
     let mut pdf_data = Vec::new();
     file.read_to_end(&mut pdf_data)?;
     if pdf_data.len() < PDF_HEADER.len() || &pdf_data[0..PDF_HEADER.len()] != PDF_HEADER {
         error!(
             "Unsupported PDF version or invalid PDF header at '{}'.",
-            path
+            path_ref.display()
         );
         return Err("Invalid PDF header".into());
     }

@@ -2,47 +2,40 @@ use crate::pdf::{extract_texts_from_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
 use std::error::Error;
 
-struct AnchorOffsets {
-    text: &'static str,
-    offsets: &'static [usize],
+pub(crate) struct AnchorOffset {
+    pub text: &'static str,
+    pub offset: usize,
 }
 
 pub(crate) struct DetectionConfig {
-    pub account: AnchorOffsets,
-    pub account_spaced: AnchorOffsets,
-    pub name: AnchorOffsets,
-    pub recipient_data: AnchorOffsets,
+    pub account: AnchorOffset,
+    pub account_spaced: AnchorOffset,
+    pub name: AnchorOffset,
+    pub recipient_code: AnchorOffset,
+    pub recipient_address_line1: AnchorOffset,
+    pub recipient_address_line2: AnchorOffset,
 }
 
-// Find the first `to_be_redacted = anchor + offset`. Replace all `to_be_redacted` you can find
+// Find the first `to_be_redacted = anchor + offset`. Replace all `to_be_redacted` you can find. For most sensitive data.
 impl Default for DetectionConfig {
     fn default() -> Self {
         Self {
             // [148] 012-345678-910
-            account: AnchorOffsets {
-                text: "Morgan Stanley at Work Self-Directed Account",
-                offsets: &[1],
-            },
+            account: AnchorOffset { text: "Morgan Stanley at Work Self-Directed Account", offset: 1 },
             // [10] 012 - 345678 - 910 -
-            account_spaced: AnchorOffsets {
-                text: "For the Period",
-                offsets: &[3],
-            },
+            account_spaced: AnchorOffset { text: "For the Period", offset: 3 },
             // [14] JAN KOWALSKI
-            name: AnchorOffsets {
-                text: "FOR:",
-                offsets: &[1],
-            },
+            name: AnchorOffset { text: "FOR:", offset: 1 },
             /*
-            [18] #BWNJGWM
+            [18] #ABCDEFG
             [19] JAN KOWALSKI
             [20] UL. SWIETOKRZYSKA 12
             [21] WARSAW 00-916 POLAND
             */
-            recipient_data: AnchorOffsets {
-                text: "E*TRADE is a business of Morgan Stanley.",
-                offsets: &[1, 2, 3, 4],
-            },
+            // recipient tokens follow the same anchor; offsets are 1, 3, 4
+            recipient_code: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 1 },
+            recipient_address_line1: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 3 },
+            recipient_address_line2: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 4 },
         }
     }
 }
@@ -185,18 +178,19 @@ fn find_account_after_anchor_in_stream(
         let anchor_text = config.account.text;
         for (idx, t) in extracted_texts.iter().enumerate() {
             if t.contains(anchor_text) {
-                let mut next = idx + 1;
-                while next < extracted_texts.len() {
-                    let cand_full = &extracted_texts[next];
-                    if !cand_full.is_empty() {
+                // use the configured offset for account token
+                let off = config.account.offset;
+                let account_idx = idx + off;
+                if account_idx < extracted_texts.len() {
+                    let account_candidate = &extracted_texts[account_idx];
+                    if !account_candidate.is_empty() {
                         info!(
-                            "Found account number after anchor (later stream): {}",
-                            cand_full
+                            "Found account number after anchor at offset {}: {}",
+                            off, account_candidate
                         );
-                        result.account_ms = Some(cand_full.clone());
+                        result.account_ms = Some(account_candidate.clone());
                         return true;
                     }
-                    next += 1;
                 }
             }
         }
@@ -212,20 +206,22 @@ fn find_spaced_account_and_start(
 ) -> usize {
     let mut for_search_start: usize = 0;
     for (i, txt) in extracted_texts.iter().enumerate() {
-        if txt.contains(config.account_spaced.text) && i + 3 < extracted_texts.len() {
-            let account_full = extracted_texts[i + 3].clone();
-            let account = account_full.as_str();
-            if account.contains(" - ") && account.chars().any(|c| c.is_numeric()) {
-                info!(
-                    "Found account number (with spaces) after 'For the Period': {}",
-                    account
-                );
-                if result.account_spaced.is_none() {
+        if txt.contains(config.account_spaced.text) {
+            // use the configured offset for spaced account token
+            let offset = config.account_spaced.offset;
+            if i + offset < extracted_texts.len() {
+                let account_full = extracted_texts[i + offset].clone();
+                let account = account_full.as_str();
+                if account.contains(" - ") && account.chars().any(|c| c.is_numeric()) {
+                    info!(
+                        "Found account number (with spaces) after 'For the Period': {}",
+                        account
+                    );
                     result.account_spaced = Some(account_full.clone());
+                    // start FOR: search after the account token (offset + 1)
+                    for_search_start = i + offset + 1;
+                    break;
                 }
-                // start FOR: search after the account token
-                for_search_start = i + 4; // i+3 is account token, so start after
-                break;
             }
         }
     }
@@ -240,8 +236,13 @@ fn handle_for_and_extract(
     config: &DetectionConfig,
 ) {
     for (i, txt) in extracted_texts.iter().enumerate().skip(start) {
-        if txt.contains(config.name.text) && i + 1 < extracted_texts.len() {
-            let name_full = extracted_texts[i + 1].clone();
+        if txt.contains(config.name.text) {
+            // name offset: where the actual name token is relative to the FOR: anchor
+            let name_offset = config.name.offset;
+            if i + name_offset >= extracted_texts.len() {
+                continue;
+            }
+            let name_full = extracted_texts[i + name_offset].clone();
             let name = name_full.as_str();
             if !name.is_empty() {
                 let mut ctx: Vec<String> = Vec::new();
@@ -261,7 +262,7 @@ fn handle_for_and_extract(
 
             // Deterministic rule: unconditionally capture the next two non-empty tokens after the name.
             // Prefer a later occurrence of the same name (some PDFs repeat the name and the address appears after the second occurrence).
-            let mut anchor_index = i + 1; // default: position of the name after FOR:
+            let mut anchor_index = i + name_offset; // default: position of the name after FOR:
             for k in (i + 2)..extracted_texts.len() {
                 if extracted_texts[k].contains(&name_full) {
                     anchor_index = k;
@@ -328,19 +329,19 @@ fn handle_for_and_extract(
                 }
 
                 if let Some(ai) = anchor_idx {
-                    let mut next = ai + 1;
-                    while next < extracted_texts.len() {
-                        let cand_full = extracted_texts[next].clone();
-                        if !cand_full.is_empty() {
+                    // use configured offset relative to found anchor
+                    let off = config.account.offset;
+                    let account_idx = ai + off;
+                    if account_idx < extracted_texts.len() {
+                        let account_candidate = extracted_texts[account_idx].clone();
+                        if !account_candidate.is_empty() {
                             info!(
-                                "Found account number after anchor '{}' : {}",
-                                anchor_text, cand_full
+                                "Found account number after anchor '{}' at offset {}: {}",
+                                anchor_text, off, account_candidate
                             );
-                            result.account_ms = Some(cand_full.clone());
+                            result.account_ms = Some(account_candidate.clone());
                             found_via_anchor = true;
-                            break;
                         }
-                        next += 1;
                     }
                 }
 

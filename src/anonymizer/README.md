@@ -83,11 +83,14 @@ publishing. The maintainers make reasonable efforts to identify the following ca
  - Mailing address (two lines)
  - Account number
 
-These are the only PII categories we explicitly target.
+These are the only PII categories we explicitly target for now.
 
-We provide example screenshots showing the text tokens we look for and recommend
-verifying manually:
+# Todo
+## Detect
+- Change the logic so that the search for each AnchorOffset happens from the beginning. This makes algorithm simple, allows for easy configurtion change. It's more maintainable.
+- Add note that Detect step is only for most sensitive data?
 
-![Detected tokens — first page](../../../assets/first_page.png)
-
-![Detected tokens — third page](../../../assets/third_page.png)
+## Replace
+It's not valid to remove every occurance of Beginning Total Value (the amount in dollars) from the pdf because the same value might appear in section used for calculation.
+- Keep the replace logic for most sensitive data.
+- Introduce some additional data format for removing financial data (less sensitive).

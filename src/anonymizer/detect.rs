@@ -6,17 +6,21 @@ pub(crate) struct DetectionConfig {
     pub anchor_ms_account: &'static str,
     pub anchor_for_period: &'static str,
     pub anchor_for_name: &'static str,
+    pub anchor_for_recipient_data: &'static str,
 }
 
+// Find the first `to_be_redacted = anchor + offset`. Replace all `to_be_redacted`
 impl Default for DetectionConfig {
     fn default() -> Self {
         Self {
-            anchor_ms_account: "Morgan Stanley at Work Self-Directed Account",
-            anchor_for_period: "For the Period",
-            anchor_for_name: "FOR:",
+            anchor_ms_account: "Morgan Stanley at Work Self-Directed Account", // +1
+            anchor_for_period: "For the Period", // +3
+            anchor_for_name: "FOR:", // +1
+            anchor_for_recipient_data: "E*TRADE is a business of Morgan Stanley.", // +1, +2, +3, +4
         }
     }
 }
+
 
 #[derive(Default, Debug)]
 pub(crate) struct DetectionResult {

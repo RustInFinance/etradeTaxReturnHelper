@@ -2,25 +2,50 @@ use crate::pdf::{extract_texts_from_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
 use std::error::Error;
 
-pub(crate) struct DetectionConfig {
-    pub anchor_for_account: &'static str,
-    pub anchor_for_account_spaced: &'static str,
-    pub anchor_for_name: &'static str,
-    pub anchor_for_recipient_data: &'static str,
+struct AnchorOffsets {
+    text: &'static str,
+    offsets: &'static [usize],
 }
 
-// Find the first `to_be_redacted = anchor + offset`. Replace all `to_be_redacted`
+pub(crate) struct DetectionConfig {
+    pub account: AnchorOffsets,
+    pub account_spaced: AnchorOffsets,
+    pub name: AnchorOffsets,
+    pub recipient_data: AnchorOffsets,
+}
+
+// Find the first `to_be_redacted = anchor + offset`. Replace all `to_be_redacted` you can find
 impl Default for DetectionConfig {
     fn default() -> Self {
         Self {
-            anchor_for_account: "Morgan Stanley at Work Self-Directed Account", // +1
-            anchor_for_account_spaced: "For the Period", // +3
-            anchor_for_name: "FOR:", // +1
-            anchor_for_recipient_data: "E*TRADE is a business of Morgan Stanley.", // +1, +2, +3, +4
+            // [148] 012-345678-910
+            account: AnchorOffsets {
+                text: "Morgan Stanley at Work Self-Directed Account",
+                offsets: &[1],
+            },
+            // [10] 012 - 345678 - 910 -
+            account_spaced: AnchorOffsets {
+                text: "For the Period",
+                offsets: &[3],
+            },
+            // [14] JAN KOWALSKI
+            name: AnchorOffsets {
+                text: "FOR:",
+                offsets: &[1],
+            },
+            /*
+            [18] #BWNJGWM
+            [19] JAN KOWALSKI
+            [20] UL. SWIETOKRZYSKA 12
+            [21] WARSAW 00-916 POLAND
+            */
+            recipient_data: AnchorOffsets {
+                text: "E*TRADE is a business of Morgan Stanley.",
+                offsets: &[1, 2, 3, 4],
+            },
         }
     }
 }
-
 
 #[derive(Default, Debug)]
 pub(crate) struct DetectionResult {
@@ -53,7 +78,7 @@ pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
 
     let mut result = DetectionResult::default();
     let config = DetectionConfig::default();
-    
+
     for stream in stream_scanner(&pdf_data) {
         if !stream.valid_end_marker {
             warn!(
@@ -115,7 +140,11 @@ pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    print!("replace \"{}\" \"{}\"", input_path.display(), out_path.display());
+    print!(
+        "replace \"{}\" \"{}\"",
+        input_path.display(),
+        out_path.display()
+    );
     for txt in &final_texts {
         let replacement = "X".repeat(txt.len());
         print!(" \"{}\" \"{}\"", txt, replacement);
@@ -124,8 +153,6 @@ pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-
 
 pub(crate) fn analyze_extracted_texts(
     extracted_texts: &[String],
@@ -155,7 +182,7 @@ fn find_account_after_anchor_in_stream(
         && result.address_line2.is_some()
         && result.account_ms.is_none()
     {
-        let anchor_text = config.anchor_for_account;
+        let anchor_text = config.account.text;
         for (idx, t) in extracted_texts.iter().enumerate() {
             if t.contains(anchor_text) {
                 let mut next = idx + 1;
@@ -185,7 +212,7 @@ fn find_spaced_account_and_start(
 ) -> usize {
     let mut for_search_start: usize = 0;
     for (i, txt) in extracted_texts.iter().enumerate() {
-        if txt.contains(config.anchor_for_account_spaced) && i + 3 < extracted_texts.len() {
+        if txt.contains(config.account_spaced.text) && i + 3 < extracted_texts.len() {
             let account_full = extracted_texts[i + 3].clone();
             let account = account_full.as_str();
             if account.contains(" - ") && account.chars().any(|c| c.is_numeric()) {
@@ -213,7 +240,7 @@ fn handle_for_and_extract(
     config: &DetectionConfig,
 ) {
     for (i, txt) in extracted_texts.iter().enumerate().skip(start) {
-        if txt.contains(config.anchor_for_name) && i + 1 < extracted_texts.len() {
+        if txt.contains(config.name.text) && i + 1 < extracted_texts.len() {
             let name_full = extracted_texts[i + 1].clone();
             let name = name_full.as_str();
             if !name.is_empty() {
@@ -291,7 +318,7 @@ fn handle_for_and_extract(
             if result.address_line1.is_some() && result.address_line2.is_some() {
                 // First: look for the specific preceding anchor and take the next token.
                 let mut found_via_anchor = false;
-                let anchor_text = config.anchor_for_account;
+                let anchor_text = config.account.text;
                 let mut anchor_idx = None;
                 for idx in (anchor_index + look)..extracted_texts.len() {
                     if extracted_texts[idx].contains(anchor_text) {

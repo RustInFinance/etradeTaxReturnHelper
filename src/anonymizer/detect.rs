@@ -3,8 +3,8 @@ use log::{debug, info, warn};
 use std::error::Error;
 
 pub(crate) struct DetectionConfig {
-    pub anchor_ms_account: &'static str,
-    pub anchor_for_period: &'static str,
+    pub anchor_for_account: &'static str,
+    pub anchor_for_account_spaced: &'static str,
     pub anchor_for_name: &'static str,
     pub anchor_for_recipient_data: &'static str,
 }
@@ -13,8 +13,8 @@ pub(crate) struct DetectionConfig {
 impl Default for DetectionConfig {
     fn default() -> Self {
         Self {
-            anchor_ms_account: "Morgan Stanley at Work Self-Directed Account", // +1
-            anchor_for_period: "For the Period", // +3
+            anchor_for_account: "Morgan Stanley at Work Self-Directed Account", // +1
+            anchor_for_account_spaced: "For the Period", // +3
             anchor_for_name: "FOR:", // +1
             anchor_for_recipient_data: "E*TRADE is a business of Morgan Stanley.", // +1, +2, +3, +4
         }
@@ -155,7 +155,7 @@ fn find_account_after_anchor_in_stream(
         && result.address_line2.is_some()
         && result.account_ms.is_none()
     {
-        let anchor_text = config.anchor_ms_account;
+        let anchor_text = config.anchor_for_account;
         for (idx, t) in extracted_texts.iter().enumerate() {
             if t.contains(anchor_text) {
                 let mut next = idx + 1;
@@ -185,7 +185,7 @@ fn find_spaced_account_and_start(
 ) -> usize {
     let mut for_search_start: usize = 0;
     for (i, txt) in extracted_texts.iter().enumerate() {
-        if txt.contains(config.anchor_for_period) && i + 3 < extracted_texts.len() {
+        if txt.contains(config.anchor_for_account_spaced) && i + 3 < extracted_texts.len() {
             let account_full = extracted_texts[i + 3].clone();
             let account = account_full.as_str();
             if account.contains(" - ") && account.chars().any(|c| c.is_numeric()) {
@@ -291,7 +291,7 @@ fn handle_for_and_extract(
             if result.address_line1.is_some() && result.address_line2.is_some() {
                 // First: look for the specific preceding anchor and take the next token.
                 let mut found_via_anchor = false;
-                let anchor_text = config.anchor_ms_account;
+                let anchor_text = config.anchor_for_account;
                 let mut anchor_idx = None;
                 for idx in (anchor_index + look)..extracted_texts.len() {
                     if extracted_texts[idx].contains(anchor_text) {

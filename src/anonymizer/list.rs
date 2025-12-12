@@ -1,7 +1,9 @@
 use crate::pdf::{extract_texts_from_stream, read_pdf, stream_scanner};
-use log::{info,warn};
+use log::{info, warn};
+use std::error::Error;
+use std::path::Path;
 
-pub fn list_texts(input_path : &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn list_texts(input_path: &Path) -> Result<(), Box<dyn Error>> {
     let pdf_data = read_pdf(input_path)?;
 
     let mut global_text_id = 0;

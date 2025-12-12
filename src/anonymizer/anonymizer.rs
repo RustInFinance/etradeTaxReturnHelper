@@ -10,6 +10,7 @@ mod replace;
 use clap::{Parser, Subcommand};
 use std::env;
 use std::error::Error;
+use std::path::PathBuf;
 
 /// Tool for anonymizing PDF files by replacing specific strings in FlateDecode streams
 #[derive(Parser)]
@@ -25,19 +26,19 @@ enum Commands {
     /// List all text tokens from FlateDecode streams in the PDF
     List {
         /// Path to the input PDF file
-        input_file: String,
+        input_file: PathBuf,
     },
     /// Detect PII (name, address, account) in the PDF and print replacement command
     Detect {
         /// Path to the input PDF file
-        input_file: String,
+        input_file: PathBuf,
     },
     /// Replace strings in PDF FlateDecode streams and save to output file
     Replace {
         /// Path to the input PDF file
-        input_file: String,
+        input_file: PathBuf,
         /// Path to the output PDF file
-        output_file: String,
+        output_file: PathBuf,
         /// Pairs of strings to replace: <search> <replacement> <search> <replacement> ...
         #[arg(required = true, num_args = 2..)]
         replacements: Vec<String>,
@@ -65,13 +66,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             if replacements.len() % 2 != 0 {
                 return Err("Replacements must be provided as pairs: <search> <replacement>".into());
             }
-            let mut replacement_pairs: Vec<(String, String)> = Vec::new();
-            let mut i = 0;
-            while i < replacements.len() {
-                replacement_pairs.push((replacements[i].clone(), replacements[i + 1].clone()));
-                i += 2;
-            }
-            replace::replace_mode(&input_file, &output_file, replacement_pairs)
+            let replacement_pairs: Vec<(String, String)> = replacements
+                .chunks(2)
+                .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
+                .collect();
+            replace::replace_pii(&input_file, &output_file, &replacement_pairs)
         }
     }
 }
@@ -86,22 +85,22 @@ mod tests {
 
     #[test]
     fn test_detect_mode() -> Result<(), Box<dyn Error>> {
-        let sample = "anonymizer_data/sample_statement.pdf";
-        assert!(std::path::Path::new(sample).exists(), "Required test file missing: {}", sample);
+        let sample = std::path::Path::new("anonymizer_data/sample_statement.pdf");
+        assert!(sample.exists(), "Required test file missing: {}", sample.display());
 
         detect::detect_pii(sample)?;
         Ok(())
     }
 
     #[test]
-    fn test_replace_mode() -> Result<(), Box<dyn Error>> {
-        let sample = "anonymizer_data/sample_statement.pdf";
-        let expected_pdf = "anonymizer_data/expected_statement.pdf";
+    fn test_replace_pii() -> Result<(), Box<dyn Error>> {
+        let sample = std::path::Path::new("anonymizer_data/sample_statement.pdf");
+        let expected_pdf = std::path::Path::new("anonymizer_data/expected_statement.pdf");
         let output_dir = "target/test_outputs";
-        let output_pdf = "target/test_outputs/out_sample_statement.pdf";
+        let output_pdf = std::path::Path::new("target/test_outputs/out_sample_statement.pdf");
 
-        assert!(std::path::Path::new(sample).exists(), "Required test file missing: {}", sample);
-        assert!(std::path::Path::new(expected_pdf).exists(), "Required test file missing: {}", expected_pdf);
+        assert!(sample.exists(), "Required test file missing: {}", sample.display());
+        assert!(expected_pdf.exists(), "Required test file missing: {}", expected_pdf.display());
 
         fs::create_dir_all(output_dir)?;
 
@@ -113,7 +112,7 @@ mod tests {
             ("012-345678-910".to_string(), "XXXXXXXXXXXXXX".to_string()),
         ];
 
-        replace::replace_mode(sample, output_pdf, replacements)?;
+        replace::replace_pii(sample, output_pdf, &replacements)?;
 
         let produced = fs::read(output_pdf)?;
         let expected = fs::read(expected_pdf)?;

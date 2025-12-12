@@ -2,22 +2,21 @@ use super::pdf::{process_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 
 /// Replace occurrences of given `replacements` inside FlateDecode streams of `input_path` and
 /// write modified PDF to `output_path`.
 ///
 /// Each replacement is a `(original, replacement)` pair. Compression is retried to fit
 /// the original stream size; if impossible, the original compressed stream is preserved.
-pub(crate) fn replace_mode<P: AsRef<std::path::Path>>(
-    input_path: P,
-    output_path: P,
-    replacements: Vec<(String, String)>,
+pub(crate) fn replace_pii(
+    input_path: &Path,
+    output_path: &Path,
+    replacements: &[(String, String)],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let input_path_ref = input_path.as_ref();
-    let output_path_ref = output_path.as_ref();
-    info!("Loading: {}", input_path_ref.display());
+    info!("Loading: {}", input_path.display());
 
-    let pdf_data = match read_pdf(input_path_ref) {
+    let pdf_data = match read_pdf(input_path) {
         Ok(d) => d,
         Err(_) => return Ok(()), // header or open error already logged
     };
@@ -54,7 +53,7 @@ pub(crate) fn replace_mode<P: AsRef<std::path::Path>>(
             compressed_data.len()
         );
         let (new_compressed_data, stream_replacement_counts) =
-            process_stream(compressed_data, &replacements)?;
+            process_stream(compressed_data, replacements)?;
         // aggregate counts from this stream
         let mut stream_total = 0usize;
         if !stream_replacement_counts.is_empty() {
@@ -91,8 +90,8 @@ pub(crate) fn replace_mode<P: AsRef<std::path::Path>>(
         }
     }
 
-    info!("Saving: {}", output_path_ref.display());
-    File::create(output_path_ref)?.write_all(&output_data)?;
+    info!("Saving: {}", output_path.display());
+    File::create(output_path)?.write_all(&output_data)?;
 
     info!("DONE!");
     info!(
@@ -107,7 +106,7 @@ pub(crate) fn replace_mode<P: AsRef<std::path::Path>>(
             info!("  '{}' -> {}", k, v);
         }
     }
-    info!("File: {}", output_path_ref.display());
+    info!("File: {}", output_path.display());
 
     Ok(())
 }

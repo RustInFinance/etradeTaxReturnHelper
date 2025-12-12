@@ -44,14 +44,12 @@ impl DetectionResult {
 /// The function inspects FlateDecode streams, extracts text tokens and heuristically
 /// determines name/address/account tokens. It prints a single `replace` command
 /// suitable for shell use.
-pub fn detect_pii<P: AsRef<std::path::Path>>(input_path: P) -> Result<(), Box<dyn Error>> {
-    let input_path_ref = input_path.as_ref();
-    let pdf_data = read_pdf(input_path_ref)?;
+pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let pdf_data = read_pdf(input_path)?;
 
-    // let obj_re = Regex::new(OBJ_STREAM_RE).unwrap(); // Removed old regex initialization
     let mut result = DetectionResult::default();
     let config = DetectionConfig::default();
-
+    
     for stream in stream_scanner(&pdf_data) {
         if !stream.valid_end_marker {
             warn!(
@@ -77,43 +75,43 @@ pub fn detect_pii<P: AsRef<std::path::Path>>(input_path: P) -> Result<(), Box<dy
         }
     }
 
-    let out_path = super::path::anonymous_output_path(input_path_ref);
+    let out_path = super::path::anonymous_output_path(input_path);
 
     // Build final ordered list: name, addr1, addr2, account_spaced, account_ms
     let mut final_texts: Vec<String> = Vec::new();
     let mut inserted = std::collections::HashSet::new();
-    if let Some(id) = result.id.as_ref() {
+    if let Some(id) = &result.id {
         if inserted.insert(id.clone()) {
             final_texts.push(id.clone());
         }
     }
-    if let Some(n) = result.name.as_ref() {
+    if let Some(n) = &result.name {
         if inserted.insert(n.clone()) {
             final_texts.push(n.clone());
         }
     }
-    if let Some(a1) = result.address_line1.as_ref() {
+    if let Some(a1) = &result.address_line1 {
         if inserted.insert(a1.clone()) {
             final_texts.push(a1.clone());
         }
     }
-    if let Some(a2) = result.address_line2.as_ref() {
+    if let Some(a2) = &result.address_line2 {
         if inserted.insert(a2.clone()) {
             final_texts.push(a2.clone());
         }
     }
-    if let Some(sp) = result.account_spaced.as_ref() {
+    if let Some(sp) = &result.account_spaced {
         if inserted.insert(sp.clone()) {
             final_texts.push(sp.clone());
         }
     }
-    if let Some(ms) = result.account_ms.as_ref() {
+    if let Some(ms) = &result.account_ms {
         if inserted.insert(ms.clone()) {
             final_texts.push(ms.clone());
         }
     }
 
-    print!("replace \"{}\" \"{}\"", input_path_ref.display(), out_path.display());
+    print!("replace \"{}\" \"{}\"", input_path.display(), out_path.display());
     for txt in &final_texts {
         let replacement = "X".repeat(txt.len());
         print!(" \"{}\" \"{}\"", txt, replacement);
@@ -325,7 +323,7 @@ fn handle_for_and_extract(
 
 // Validate account spaced vs non-spaced (compare digits-only)
 fn validate_account_match(result: &DetectionResult) {
-    if let (Some(spaced), Some(ms)) = (result.account_spaced.as_ref(), result.account_ms.as_ref()) {
+    if let (Some(spaced), Some(ms)) = (&result.account_spaced, &result.account_ms) {
         let digits_only = |s: &str| s.chars().filter(|c| c.is_numeric()).collect::<String>();
         let ds = digits_only(spaced);
         let dm = digits_only(ms);

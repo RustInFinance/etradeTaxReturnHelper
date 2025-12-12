@@ -3,9 +3,7 @@ use std::path::PathBuf;
 /// Build an output path by prefixing the input filename with `anonymous_`.
 ///
 /// Preserves the parent directory if present and returns a `PathBuf`.
-pub(crate) fn anonymous_output_path<P: AsRef<std::path::Path>>(in_path: P) -> PathBuf {
-    let input_path = in_path.as_ref();
-
+pub(crate) fn anonymous_output_path(input_path: &std::path::Path) -> PathBuf {
     let file_name = input_path
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -26,21 +24,21 @@ mod tests {
 
     #[test]
     fn test_anonymous_output_path_no_parent() {
-        let in_path = "statement.pdf";
+        let in_path = std::path::Path::new("statement.pdf");
         let out = anonymous_output_path(in_path);
         assert_eq!(out, std::path::PathBuf::from("anonymous_statement.pdf"));
     }
 
     #[test]
     fn test_anonymous_output_path_with_parent() {
-        let in_path = "some/dir/statement.pdf";
+        let in_path = std::path::Path::new("some/dir/statement.pdf");
         let out = anonymous_output_path(in_path);
         assert_eq!(out, std::path::PathBuf::from("some/dir/anonymous_statement.pdf"));
     }
 
     #[test]
     fn test_anonymous_output_path_unicode_filename() {
-        let in_path = "résumé.pdf";
+        let in_path = std::path::Path::new("résumé.pdf");
         let out = anonymous_output_path(in_path);
         assert_eq!(out, std::path::PathBuf::from("anonymous_résumé.pdf"));
     }

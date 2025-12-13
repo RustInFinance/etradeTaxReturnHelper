@@ -87,8 +87,8 @@ impl DetectionResult {
 pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
     let pdf_data = read_pdf(input_path)?;
 
-    let mut result = DetectionResult::default();
     let config = DetectionConfig::default();
+    let mut result = DetectionResult::default();
 
     for stream in stream_scanner(&pdf_data) {
         if !stream.valid_end_marker {
@@ -100,9 +100,9 @@ pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
         }
         match extract_texts_from_stream(stream.compressed) {
             Ok(extracted) => {
-                analyze_extracted_texts(&extracted, &mut result, &config);
+                result = analyze_extracted_texts(&extracted, &config);
                 if result.all_found() {
-                    debug!("All target PII categories found; stopping search early.");
+                    debug!("All target PII categories found.");
                     break;
                 }
             }
@@ -167,36 +167,77 @@ pub fn detect_pii(input_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
 
 pub(crate) fn analyze_extracted_texts(
     extracted_texts: &[String],
-    result: &mut DetectionResult,
     config: &DetectionConfig,
-) {
+) -> DetectionResult {
     debug!("Analyzing {} extracted tokens", extracted_texts.len());
     for (i, txt) in extracted_texts.iter().enumerate() {
         debug!("  [{}] {}", i, txt);
     }
 
-    // Per README TODO: search for each AnchorOffset from the beginning.
-    // 1) Find spaced account anywhere in the stream
-    let _start = find_spaced_account_and_start(extracted_texts, result, config);
+    let id = get_string_by_anchor(&config.recipient_code, extracted_texts);
+    let name = get_string_by_anchor(&config.name, extracted_texts);
+    let address_line1 = get_string_by_anchor(&config.recipient_address_line1, extracted_texts);
+    let address_line2 = get_string_by_anchor(&config.recipient_address_line2, extracted_texts);
+    let account_spaced = get_string_by_anchor(&config.account_spaced, extracted_texts);
+    let account_ms = get_string_by_anchor(&config.account, extracted_texts);
+    // Log what we found or didn't find
+    if let Some(ref v) = id {
+        info!("Found recipient code: {}", v);
+    } else {
+        warn!(
+            "Recipient code not found via anchor: {}",
+            config.recipient_code.text
+        );
+    }
+    if let Some(ref v) = name {
+        info!("Found name: {}", v);
+    } else {
+        warn!("Name not found via anchor: {}", config.name.text);
+    }
+    if let Some(ref v) = address_line1 {
+        info!("Found address_line1: {}", v);
+    } else {
+        warn!(
+            "Address line 1 not found via anchor: {}",
+            config.recipient_address_line1.text
+        );
+    }
+    if let Some(ref v) = address_line2 {
+        info!("Found address_line2: {}", v);
+    } else {
+        warn!(
+            "Address line 2 not found via anchor: {}",
+            config.recipient_address_line2.text
+        );
+    }
+    if let Some(ref v) = account_spaced {
+        info!("Found spaced account: {}", v);
+    } else {
+        warn!(
+            "Spaced account not found via anchor: {}",
+            config.account_spaced.text
+        );
+    }
+    if let Some(ref v) = account_ms {
+        info!("Found ms account: {}", v);
+    } else {
+        warn!("MS account not found via anchor: {}", config.account.text);
+    }
 
-    // 2) Run FOR: name/address extraction from the beginning
-    handle_for_and_extract(extracted_texts, 0, result, config);
-
-    // 3) Populate recipient/address/account fields directly from anchors if not already found
-    if result.address_line1.is_none() {
-        result.address_line1 = get_string_by_anchor(&config.recipient_address_line1, extracted_texts);
+    let acct_validation = validate_account_match(&account_spaced, &account_ms);
+    match acct_validation {
+        Some(true) => info!("Account validation: MATCH"),
+        Some(false) => warn!("Account validation: MISMATCH"),
+        None => warn!("Account validation: SKIPPED (missing token)"),
     }
-    if result.address_line2.is_none() {
-        result.address_line2 = get_string_by_anchor(&config.recipient_address_line2, extracted_texts);
+    DetectionResult {
+        id,
+        name,
+        address_line1,
+        address_line2,
+        account_spaced,
+        account_ms,
     }
-    if result.account_spaced.is_none() {
-        result.account_spaced = get_string_by_anchor(&config.account_spaced, extracted_texts);
-    }
-    if result.account_ms.is_none() {
-        result.account_ms = get_string_by_anchor(&config.account, extracted_texts);
-    }
-
-    validate_account_match(result);
 }
 
 fn get_string_by_anchor(
@@ -214,177 +255,19 @@ fn get_string_by_anchor(
     None
 }
 
-// look for spaced account after "For the Period" and return start index for FOR: scanning
-fn find_spaced_account_and_start(
-    extracted_texts: &[String],
-    result: &mut DetectionResult,
-    config: &DetectionConfig,
-) -> usize {
-    let mut for_search_start: usize = 0;
-    for (i, txt) in extracted_texts.iter().enumerate() {
-        if txt.contains(config.account_spaced.text) {
-            // use the configured offset for spaced account token
-            let offset = config.account_spaced.offset;
-            if i + offset < extracted_texts.len() {
-                let account_full = extracted_texts[i + offset].clone();
-                let account = account_full.as_str();
-                if account.contains(" - ") && account.chars().any(|c| c.is_numeric()) {
-                    info!(
-                        "Found account number (with spaces) after 'For the Period': {}",
-                        account
-                    );
-                    result.account_spaced = Some(account_full.clone());
-                    // start FOR: search after the account token (offset + 1)
-                    for_search_start = i + offset + 1;
-                    break;
-                }
-            }
+// Validate account spaced vs non-spaced (compare digits-only). Logs a warning on mismatch.
+fn validate_account_match(spaced: &Option<String>, ms: &Option<String>) -> Option<bool> {
+    let digits_only = |s: &str| s.chars().filter(|c| c.is_numeric()).collect::<String>();
+
+    match (spaced, ms) {
+        (Some(s), Some(m)) => {
+            let ds = digits_only(s);
+            let dm = digits_only(m);
+            Some(ds == dm)
         }
-    }
-    for_search_start
-}
-
-// handle FOR: marker - extract name and next two non-empty tokens as address lines; attempt anchor-based ms account after
-fn handle_for_and_extract(
-    extracted_texts: &[String],
-    start: usize,
-    result: &mut DetectionResult,
-    config: &DetectionConfig,
-) {
-    for (i, txt) in extracted_texts.iter().enumerate().skip(start) {
-        if txt.contains(config.name.text) {
-            // name offset: where the actual name token is relative to the FOR: anchor
-            let name_offset = config.name.offset;
-            if i + name_offset >= extracted_texts.len() {
-                continue;
-            }
-            let name_full = extracted_texts[i + name_offset].clone();
-            let name = name_full.as_str();
-            if !name.is_empty() {
-                let mut ctx: Vec<String> = Vec::new();
-                for j in 0..4 {
-                    if i + 1 + j < extracted_texts.len() {
-                        ctx.push(extracted_texts[i + 1 + j].clone());
-                    }
-                }
-                info!(
-                    "Found name after 'FOR:': {} -- context: {:?}",
-                    name_full, ctx
-                );
-                if result.name.is_none() {
-                    result.name = Some(name_full.clone());
-                }
-            }
-
-            // Deterministic rule: unconditionally capture the next two non-empty tokens after the name.
-            // Prefer a later occurrence of the same name (some PDFs repeat the name and the address appears after the second occurrence).
-            let mut anchor_index = i + name_offset; // default: position of the name after FOR:
-            for k in (i + 2)..extracted_texts.len() {
-                if extracted_texts[k].contains(&name_full) {
-                    anchor_index = k;
-                    break;
-                }
-            }
-
-            // If we found a later occurrence, check for ID immediately before it.
-            if anchor_index > i + 1 {
-                let id_candidate = &extracted_texts[anchor_index - 1];
-                if !id_candidate.is_empty() {
-                    info!("Found ID before name anchor: {}", id_candidate);
-                    result.id = Some(id_candidate.clone());
-                }
-            }
-
-            let mut collected = 0;
-            let mut look = 1; // start looking after the anchor name
-            while collected < 2 && anchor_index + look < extracted_texts.len() {
-                let candidate_full = extracted_texts[anchor_index + look].clone();
-                let candidate = candidate_full.as_str();
-                look += 1;
-                if candidate.is_empty() {
-                    continue;
-                }
-
-                // Always capture the next two non-empty tokens as address lines.
-                collected += 1;
-                if collected == 1 {
-                    info!(
-                        "Captured address_line1 after name (anchor_index={}): {} -- token_index={}",
-                        anchor_index,
-                        candidate,
-                        anchor_index + look - 1
-                    );
-                    if result.address_line1.is_none() {
-                        result.address_line1 = Some(candidate_full.clone());
-                    }
-                } else {
-                    info!(
-                        "Captured address_line2 after name (anchor_index={}): {} -- token_index={}",
-                        anchor_index,
-                        candidate,
-                        anchor_index + look - 1
-                    );
-                    if result.address_line2.is_none() {
-                        result.address_line2 = Some(candidate_full.clone());
-                    }
-                }
-            }
-
-            // Immediately after capturing the two address lines, pick the first non-empty token
-            // that follows anchor
-            if result.address_line1.is_some() && result.address_line2.is_some() {
-                // First: look for the specific preceding anchor and take the next token.
-                let mut found_via_anchor = false;
-                let anchor_text = config.account.text;
-                let mut anchor_idx = None;
-                for idx in (anchor_index + look)..extracted_texts.len() {
-                    if extracted_texts[idx].contains(anchor_text) {
-                        anchor_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(ai) = anchor_idx {
-                    // use configured offset relative to found anchor
-                    let off = config.account.offset;
-                    let account_idx = ai + off;
-                    if account_idx < extracted_texts.len() {
-                        let account_candidate = extracted_texts[account_idx].clone();
-                        if !account_candidate.is_empty() {
-                            info!(
-                                "Found account number after anchor '{}' at offset {}: {}",
-                                anchor_text, off, account_candidate
-                            );
-                            result.account_ms = Some(account_candidate.clone());
-                            found_via_anchor = true;
-                        }
-                    }
-                }
-
-                if found_via_anchor {
-                    return; // found via anchor, we're done
-                }
-            }
-        }
-    }
-}
-
-// Validate account spaced vs non-spaced (compare digits-only)
-fn validate_account_match(result: &DetectionResult) {
-    if let (Some(spaced), Some(ms)) = (&result.account_spaced, &result.account_ms) {
-        let digits_only = |s: &str| s.chars().filter(|c| c.is_numeric()).collect::<String>();
-        let ds = digits_only(spaced);
-        let dm = digits_only(ms);
-        if ds == dm {
-            info!(
-                "Validated account: spaced='{}' matches non-spaced='{}'",
-                spaced, ms
-            );
-        } else {
-            warn!(
-                "Account mismatch: spaced='{}' vs non-spaced='{}' (digits: {} != {})",
-                spaced, ms, ds, dm
-            );
+        _ => {
+            // One or both values missing; nothing to validate.
+            None
         }
     }
 }
@@ -395,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_analyze_extracted_texts() {
-        // Realistic token stream: FOR: name, address tokens, then account anchor and number
+        // Semi-realistic token stream
         let tokens: Vec<String> = [
             "Beginning Total Value ",
             "$",
@@ -430,7 +313,34 @@ mod tests {
         let res = analyze_extracted_texts(&tokens, &config);
         assert_eq!(res.name, Some("John Doe".to_string()));
         assert_eq!(res.address_line1, Some("123 Market St".to_string()));
-        assert_eq!(res.address_line2, Some("Cityville 12345".to_string()));
+        assert_eq!(
+            res.address_line2,
+            Some("Cityville 12345 WHOKNOWS".to_string())
+        );
         assert_eq!(res.account_ms, Some("987654321".to_string()));
+    }
+
+    #[test]
+    fn test_validate_account_match_matching() {
+        let spaced = Some("012 - 345678 - 910 -".to_string());
+        let ms = Some("012345678910".to_string());
+        let res = validate_account_match(&spaced, &ms);
+        assert_eq!(res, Some(true));
+    }
+
+    #[test]
+    fn test_validate_account_match_mismatch() {
+        let spaced = Some("012 - 345678 - 910 -".to_string());
+        let ms = Some("987654321".to_string());
+        let res = validate_account_match(&spaced, &ms);
+        assert_eq!(res, Some(false));
+    }
+
+    #[test]
+    fn test_validate_account_match_missing() {
+        let spaced: Option<String> = None;
+        let ms = Some("987654321".to_string());
+        let res = validate_account_match(&spaced, &ms);
+        assert_eq!(res, None);
     }
 }

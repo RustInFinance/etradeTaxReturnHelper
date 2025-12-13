@@ -87,7 +87,6 @@ These are the only PII categories we explicitly target for now.
 
 # Todo
 ## Detect
-- Change the logic so that the search for each AnchorOffset happens from the beginning. This makes algorithm simple, allows for easy configurtion change. It's more maintainable.
 - Add note that Detect step is only for most sensitive data?
 
 ## Replace

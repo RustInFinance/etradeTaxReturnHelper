@@ -1,3 +1,18 @@
+// SPDX-FileCopyrightText: 2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
+//! String replacement module for anonymizer.
+//!
+//! This module applies specified text replacements to all FlateDecode streams in a PDF.
+//! For each stream, the module:
+//! 1. Decompresses the stream data
+//! 2. Applies all specified string replacements
+//! 3. Recompresses the modified text to the exact original size (with padding if necessary)
+//! 4. Writes the modified PDF to the output file
+//!
+//! The in-place replacement strategy avoids rebuilding the PDF's XREF table,
+//! ensuring the output PDF remains valid without full PDF structure parsing.
+
 use super::pdf::{process_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
 use std::fs::File;

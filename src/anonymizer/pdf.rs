@@ -1,14 +1,18 @@
+// SPDX-FileCopyrightText: 2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! PDF parsing utilities: header validation, stream extraction, text token parsing.
 //! This module is intentionally strict and only supports a narrow subset of PDF
 //! objects used by the target documents: FlateDecode streams with explicit /Length.
+
 use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use flate2::Compression;
 use log::{debug, error, info, warn};
 use regex::bytes::Regex;
+use std::error::Error;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::error::Error;
 
 // Centralized constants and helpers for PDF parsing to reduce duplication between detect/replace.
 /// Expected PDF header (strictly enforced).
@@ -182,8 +186,7 @@ pub(crate) fn extract_texts_from_stream(
     let mut decoder = ZlibDecoder::new(compressed_data);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
-    let text_re =
-        Regex::new(r"\(([^)]+)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    let text_re = Regex::new(r"\(([^)]+)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn Error>)?;
     let mut extracted_texts: Vec<String> = Vec::new();
     for text_caps in text_re.captures_iter(&decompressed) {
         if let Some(txt) = text_caps.get(1) {

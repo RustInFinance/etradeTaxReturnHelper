@@ -1,5 +1,15 @@
-// SPDX-FileCopyrightText: 2024-2025 RustInFinance
+// SPDX-FileCopyrightText: 2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
+
+//! etradeAnonymizer - PDF anonymization tool for E*TRADE / Morgan Stanley statements.
+//!
+//! This tool provides three subcommands:
+//! - `list`: List all text tokens from FlateDecode streams in a PDF
+//! - `detect`: Heuristically detect PII and print a replacement command
+//! - `replace`: Apply explicit string replacements to PDF FlateDecode streams
+//!
+//! The tool operates on tightly structured PDF FlateDecode streams and preserves
+//! the original file structure by performing in-place replacements with exact-size matching.
 
 mod list;
 mod detect;
@@ -39,7 +49,7 @@ enum Commands {
         input_file: PathBuf,
         /// Path to the output PDF file
         output_file: PathBuf,
-        /// Pairs of strings to replace: <search> <replacement> <search> <replacement> ...
+        /// Pairs of strings to replace: `"<search>" "<replacement>" "<search>" "<replacement>" ...`
         #[arg(required = true, num_args = 2..)]
         replacements: Vec<String>,
     },

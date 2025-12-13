@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2025 RustInFinance
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
 # etradeAnonymizer
 
 Minimal Rust tool for:

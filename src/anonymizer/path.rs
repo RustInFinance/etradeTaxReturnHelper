@@ -1,8 +1,24 @@
+// SPDX-FileCopyrightText: 2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
+//! Path utility module for anonymizer.
+//!
+//! Provides helper functions for generating anonymized output file paths
+//! by prefixing filenames with `anonymous_` while preserving directory structure.
+
 use std::path::PathBuf;
 
 /// Build an output path by prefixing the input filename with `anonymous_`.
 ///
 /// Preserves the parent directory if present and returns a `PathBuf`.
+///
+/// # Examples
+/// ```ignore
+/// use std::path::Path;
+/// let input = Path::new("data/statement.pdf");
+/// let output = anonymous_output_path(input);
+/// assert_eq!(output, Path::new("data/anonymous_statement.pdf"));
+/// ```
 pub(crate) fn anonymous_output_path(input_path: &std::path::Path) -> PathBuf {
     let file_name = input_path
         .file_name()

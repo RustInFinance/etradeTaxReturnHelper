@@ -1,12 +1,36 @@
+// SPDX-FileCopyrightText: 2025 RustInFinance
+// SPDX-License-Identifier: BSD-3-Clause
+
+//! PII detection module for anonymizer.
+//!
+//! This module provides heuristic detection of personally identifiable information (PII)
+//! in E*TRADE / Morgan Stanley PDF statement FlateDecode streams. It searches for:
+//! - Recipient code (ID)
+//! - Name
+//! - Address lines (two lines)
+//! - Account numbers (spaced and non-spaced formats)
+//!
+//! Detection is based on anchor text patterns and relative offsets within the token stream.
+//! Once all PII categories are found, the module prints a `replace` command suitable for
+//! shell invocation with the detected tokens.
+
 use crate::pdf::{extract_texts_from_stream, read_pdf, stream_scanner};
 use log::{debug, info, warn};
 use std::error::Error;
 
+/// Configuration for locating a token via an anchor text and offset.
+///
+/// The `text` field identifies an anchor string in the token stream,
+/// and `offset` specifies how many tokens ahead the target token is located.
 pub(crate) struct AnchorOffset {
     pub text: &'static str,
     pub offset: usize,
 }
 
+/// Detection configuration specifying anchor patterns for each PII category.
+///
+/// Each field is an `AnchorOffset` that defines the anchor text and relative position
+/// of the target PII token within the extracted text stream.
 pub(crate) struct DetectionConfig {
     pub account: AnchorOffset,
     pub account_spaced: AnchorOffset,
@@ -58,6 +82,9 @@ impl Default for DetectionConfig {
     }
 }
 
+/// Result of PII detection, holding detected tokens for each category.
+///
+/// Fields are `None` if the corresponding PII was not found.
 #[derive(Default, Debug)]
 pub(crate) struct DetectionResult {
     id: Option<String>,

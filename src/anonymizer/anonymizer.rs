@@ -11,8 +11,8 @@
 //! The tool operates on tightly structured PDF FlateDecode streams and preserves
 //! the original file structure by performing in-place replacements with exact-size matching.
 
-mod list;
 mod detect;
+mod list;
 mod path;
 mod pdf;
 mod replace;
@@ -74,7 +74,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             replacements,
         } => {
             if replacements.len() % 2 != 0 {
-                return Err("Replacements must be provided as pairs: <search> <replacement>".into());
+                return Err(
+                    "Replacements must be provided as pairs: <search> <replacement>".into(),
+                );
             }
             let replacement_pairs: Vec<(String, String)> = replacements
                 .chunks(2)
@@ -96,7 +98,11 @@ mod tests {
     #[test]
     fn test_detect_mode() -> Result<(), Box<dyn Error>> {
         let sample = std::path::Path::new("anonymizer_data/sample_statement.pdf");
-        assert!(sample.exists(), "Required test file missing: {}", sample.display());
+        assert!(
+            sample.exists(),
+            "Required test file missing: {}",
+            sample.display()
+        );
 
         detect::detect_pii(sample)?;
         Ok(())
@@ -109,16 +115,33 @@ mod tests {
         let output_dir = "target/test_outputs";
         let output_pdf = std::path::Path::new("target/test_outputs/out_sample_statement.pdf");
 
-        assert!(sample.exists(), "Required test file missing: {}", sample.display());
-        assert!(expected_pdf.exists(), "Required test file missing: {}", expected_pdf.display());
+        assert!(
+            sample.exists(),
+            "Required test file missing: {}",
+            sample.display()
+        );
+        assert!(
+            expected_pdf.exists(),
+            "Required test file missing: {}",
+            expected_pdf.display()
+        );
 
         fs::create_dir_all(output_dir)?;
 
         let replacements = vec![
             ("JAN KOWALSKI".to_string(), "XXXXXXXXXXXX".to_string()),
-            ("UL. SWIETOKRZYSKA 12".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
-            ("WARSAW 00-916 POLAND".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
-            ("012 - 345678 - 910 -".to_string(), "XXXXXXXXXXXXXXXXXXXX".to_string()),
+            (
+                "UL. SWIETOKRZYSKA 12".to_string(),
+                "XXXXXXXXXXXXXXXXXXXX".to_string(),
+            ),
+            (
+                "WARSAW 00-916 POLAND".to_string(),
+                "XXXXXXXXXXXXXXXXXXXX".to_string(),
+            ),
+            (
+                "012 - 345678 - 910 -".to_string(),
+                "XXXXXXXXXXXXXXXXXXXX".to_string(),
+            ),
             ("012-345678-910".to_string(), "XXXXXXXXXXXXXX".to_string()),
         ];
 

@@ -36,10 +36,14 @@ pub fn list_texts(input_path: &Path) -> Result<(), Box<dyn Error>> {
         }
         match extract_texts_from_stream(stream.compressed) {
             Ok(extracted_texts) => {
-                info!("stream {} has {} extracted tokens", stream_id, extracted_texts.len());
+                info!(
+                    "stream {} has {} extracted tokens",
+                    stream_id,
+                    extracted_texts.len()
+                );
                 for txt in extracted_texts.iter() {
                     println!("  [{}] {}", global_text_id, txt);
-                    global_text_id+=1;
+                    global_text_id += 1;
                 }
             }
             Err(e) => {

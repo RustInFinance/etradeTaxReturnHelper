@@ -49,7 +49,10 @@ mod tests {
     fn test_anonymous_output_path_with_parent() {
         let in_path = std::path::Path::new("some/dir/statement.pdf");
         let out = anonymous_output_path(in_path);
-        assert_eq!(out, std::path::PathBuf::from("some/dir/anonymous_statement.pdf"));
+        assert_eq!(
+            out,
+            std::path::PathBuf::from("some/dir/anonymous_statement.pdf")
+        );
     }
 
     #[test]

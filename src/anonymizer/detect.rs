@@ -21,11 +21,20 @@ impl Default for DetectionConfig {
     fn default() -> Self {
         Self {
             // [148] 012-345678-910
-            account: AnchorOffset { text: "Morgan Stanley at Work Self-Directed Account", offset: 1 },
+            account: AnchorOffset {
+                text: "Morgan Stanley at Work Self-Directed Account",
+                offset: 1,
+            },
             // [10] 012 - 345678 - 910 -
-            account_spaced: AnchorOffset { text: "For the Period", offset: 3 },
+            account_spaced: AnchorOffset {
+                text: "For the Period",
+                offset: 3,
+            },
             // [14] JAN KOWALSKI
-            name: AnchorOffset { text: "FOR:", offset: 1 },
+            name: AnchorOffset {
+                text: "FOR:",
+                offset: 1,
+            },
             /*
             [18] #ABCDEFG
             [19] JAN KOWALSKI
@@ -33,9 +42,18 @@ impl Default for DetectionConfig {
             [21] WARSAW 00-916 POLAND
             */
             // recipient tokens follow the same anchor; offsets are 1, 3, 4
-            recipient_code: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 1 },
-            recipient_address_line1: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 3 },
-            recipient_address_line2: AnchorOffset { text: "E*TRADE is a business of Morgan Stanley.", offset: 4 },
+            recipient_code: AnchorOffset {
+                text: "E*TRADE is a business of Morgan Stanley.",
+                offset: 1,
+            },
+            recipient_address_line1: AnchorOffset {
+                text: "E*TRADE is a business of Morgan Stanley.",
+                offset: 3,
+            },
+            recipient_address_line2: AnchorOffset {
+                text: "E*TRADE is a business of Morgan Stanley.",
+                offset: 4,
+            },
         }
     }
 }
@@ -156,46 +174,44 @@ pub(crate) fn analyze_extracted_texts(
     for (i, txt) in extracted_texts.iter().enumerate() {
         debug!("  [{}] {}", i, txt);
     }
-    // Run the composed helpers (implemented as top-level private helpers)
-    if find_account_after_anchor_in_stream(extracted_texts, result, config) {
-        return;
+
+    // Per README TODO: search for each AnchorOffset from the beginning.
+    // 1) Find spaced account anywhere in the stream
+    let _start = find_spaced_account_and_start(extracted_texts, result, config);
+
+    // 2) Run FOR: name/address extraction from the beginning
+    handle_for_and_extract(extracted_texts, 0, result, config);
+
+    // 3) Populate recipient/address/account fields directly from anchors if not already found
+    if result.address_line1.is_none() {
+        result.address_line1 = get_string_by_anchor(&config.recipient_address_line1, extracted_texts);
     }
-    let for_search_start = find_spaced_account_and_start(extracted_texts, result, config);
-    handle_for_and_extract(extracted_texts, for_search_start, result, config);
+    if result.address_line2.is_none() {
+        result.address_line2 = get_string_by_anchor(&config.recipient_address_line2, extracted_texts);
+    }
+    if result.account_spaced.is_none() {
+        result.account_spaced = get_string_by_anchor(&config.account_spaced, extracted_texts);
+    }
+    if result.account_ms.is_none() {
+        result.account_ms = get_string_by_anchor(&config.account, extracted_texts);
+    }
+
     validate_account_match(result);
 }
 
-// helper: if address lines already known, look for the anchor in this stream and pick following token
-fn find_account_after_anchor_in_stream(
+fn get_string_by_anchor(
+    anchor_offset: &AnchorOffset,
     extracted_texts: &[String],
-    result: &mut DetectionResult,
-    config: &DetectionConfig,
-) -> bool {
-    if result.address_line1.is_some()
-        && result.address_line2.is_some()
-        && result.account_ms.is_none()
-    {
-        let anchor_text = config.account.text;
-        for (idx, t) in extracted_texts.iter().enumerate() {
-            if t.contains(anchor_text) {
-                // use the configured offset for account token
-                let off = config.account.offset;
-                let account_idx = idx + off;
-                if account_idx < extracted_texts.len() {
-                    let account_candidate = &extracted_texts[account_idx];
-                    if !account_candidate.is_empty() {
-                        info!(
-                            "Found account number after anchor at offset {}: {}",
-                            off, account_candidate
-                        );
-                        result.account_ms = Some(account_candidate.clone());
-                        return true;
-                    }
-                }
+) -> Option<String> {
+    for (idx, t) in extracted_texts.iter().enumerate() {
+        if t.contains(anchor_offset.text) {
+            let target_idx = idx + anchor_offset.offset;
+            if target_idx < extracted_texts.len() {
+                return Some(extracted_texts[target_idx].clone());
             }
         }
     }
-    false
+    None
 }
 
 // look for spaced account after "For the Period" and return start index for FOR: scanning
@@ -378,36 +394,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_find_spaced_account_after_for_period() {
-        // Simulate a small token stream that might appear near the account header
-        let tokens = vec![
-            "Account Summary".to_string(),
-            "For the Period September 1".to_string(),
-            "-".to_string(),
-            "30, 2025".to_string(),
-            "123 - 456789 - 012".to_string(),
-        ];
-        let mut res = DetectionResult::default();
-        let config = DetectionConfig::default();
-        analyze_extracted_texts(&tokens, &mut res, &config);
-        assert_eq!(res.account_spaced, Some("123 - 456789 - 012".to_string()));
-    }
-
-    #[test]
-    fn test_for_name_and_address_extraction_and_anchor_account() {
+    fn test_analyze_extracted_texts() {
         // Realistic token stream: FOR: name, address tokens, then account anchor and number
-        let tokens = vec![
-            "FOR:".to_string(),
-            "John Doe".to_string(),
-            "123 Market St".to_string(),
-            "Cityville 12345".to_string(),
-            "Account Details".to_string(),
-            "Morgan Stanley at Work Self-Directed Account".to_string(),
-            "987654321".to_string(),
-        ];
-        let mut res = DetectionResult::default();
+        let tokens: Vec<String> = [
+            "Beginning Total Value ",
+            "$",
+            "12,345.67",
+            "Ending Total Value ",
+            "$1.23",
+            "Includes Accrued Interest",
+            "CLIENT STATEMENT     ",
+            "For the Period September 1",
+            "-",
+            "30, 2025",
+            "012 - 345678 - 910 -",
+            "4 - 1",
+            "STATEMENT",
+            " FOR:",
+            "John Doe",
+            "",
+            "Morgan Stanley Smith Barney LLC. Member SIPC.",
+            "E*TRADE is a business of Morgan Stanley.",
+            "#ABCDEFG",
+            "John Doe",
+            "123 Market St",
+            "Cityville 12345 WHOKNOWS",
+            "Account Details",
+            "Morgan Stanley at Work Self-Directed Account",
+            "987654321",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
         let config = DetectionConfig::default();
-        analyze_extracted_texts(&tokens, &mut res, &config);
+        let res = analyze_extracted_texts(&tokens, &config);
         assert_eq!(res.name, Some("John Doe".to_string()));
         assert_eq!(res.address_line1, Some("123 Market St".to_string()));
         assert_eq!(res.address_line2, Some("Cityville 12345".to_string()));

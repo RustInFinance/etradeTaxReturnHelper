@@ -18,10 +18,6 @@ name = "etradeTaxReturnHelper"
 path = "src/main.rs"
 
 [[bin]]
-name = "etradeAnonymizer"
-path = "src/anonymizer/anonymizer.rs"
-
-[[bin]]
 name = "gen_exchange_rates"
 path = "src/bin/gen_exchange_rates.rs"
 required-features = ["gen_exchange_rates"]
@@ -51,7 +47,5 @@ polars = "0.35.4"
 csv = "1.3.0"
 serde_json = { version = "=1.0.133", optional = true }
 holidays = { version = "0.1.0", default-features = false, features = ["PL"] }
-lopdf = { version =  "0.38.0" }
-
 
 

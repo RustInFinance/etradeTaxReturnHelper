@@ -180,21 +180,183 @@ pub(crate) fn extract_stream_bytes<'a>(
 
 /// Decompress stream and extract text tokens from PDF text operators
 /// Decompress a FlateDecode stream and extract text tokens appearing in `( .. ) Tj` operators.
+/// Handles escaped parentheses `\(` and `\)` within PDF string literals.
 pub(crate) fn extract_texts_from_stream(
     compressed_data: &[u8],
 ) -> Result<Vec<String>, Box<dyn Error>> {
     let mut decoder = ZlibDecoder::new(compressed_data);
     let mut decompressed = Vec::new();
     decoder.read_to_end(&mut decompressed)?;
-    let text_re = Regex::new(r"\(([^)]+)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn Error>)?;
+    // Updated regex to handle escaped characters: (?:[^)\\]|\\.)* matches either
+    // a non-special char OR a backslash followed by any char (handles \(, \), \\, \n, etc.)
+    let text_re =
+        Regex::new(r"\(((?:[^)\\]|\\.)*)\)\s*Tj").map_err(|e| Box::new(e) as Box<dyn Error>)?;
     let mut extracted_texts: Vec<String> = Vec::new();
     for text_caps in text_re.captures_iter(&decompressed) {
         if let Some(txt) = text_caps.get(1) {
-            extracted_texts.push(String::from_utf8_lossy(txt.as_bytes()).to_string());
+            let text_bytes = txt.as_bytes();
+            // Unescape PDF string literal escape sequences
+            let unescaped = unescape_pdf_string(text_bytes);
+            extracted_texts.push(String::from_utf8_lossy(&unescaped).to_string());
         }
     }
 
     Ok(extracted_texts)
+}
+
+/// Unescape PDF string literal escape sequences per PDF 1.3 spec (Table 3.2).
+/// Handles: \n \r \t \b \f \( \) \\ and \ddd (octal, 1-3 digits).
+/// Per spec: "If the character following the backslash is not one of those shown
+/// in the table, the backslash is ignored."
+fn unescape_pdf_string(data: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(data.len());
+    let mut i = 0;
+
+    while i < data.len() {
+        if data[i] == b'\\' && i + 1 < data.len() {
+            let (output, bytes_consumed) = handle_pdf_escape(&data[i + 1..]);
+            if let Some(byte) = output {
+                result.push(byte);
+            }
+            i += bytes_consumed;
+        } else {
+            result.push(data[i]);
+            i += 1;
+        }
+    }
+    result
+}
+
+/// Handle a single PDF escape sequence starting after the backslash.
+/// Returns (output byte if any, number of bytes to advance including the backslash).
+fn handle_pdf_escape(data: &[u8]) -> (Option<u8>, usize) {
+    if data.is_empty() {
+        return (None, 1); // Lone backslash at end
+    }
+
+    match data[0] {
+        b'n' => (Some(b'\n'), 2),
+        b'r' => (Some(b'\r'), 2),
+        b't' => (Some(b'\t'), 2),
+        b'b' => (Some(b'\x08'), 2), // backspace
+        b'f' => (Some(b'\x0C'), 2), // form feed
+        b'(' => (Some(b'('), 2),
+        b')' => (Some(b')'), 2),
+        b'\\' => (Some(b'\\'), 2),
+        b'0'..=b'7' => parse_pdf_octal_escape(data),
+        // Per spec: ignore backslash for unrecognized escapes
+        _ => (Some(data[0]), 2),
+    }
+}
+
+/// Parse octal escape sequence \ddd (1-3 octal digits).
+/// Returns (parsed byte, bytes consumed including backslash).
+fn parse_pdf_octal_escape(data: &[u8]) -> (Option<u8>, usize) {
+    let mut end = 0;
+    // Consume up to 3 octal digits
+    while end < data.len() && end < 3 && data[end].is_ascii_digit() && data[end] <= b'7' {
+        end += 1;
+    }
+
+    if let Ok(octal_str) = std::str::from_utf8(&data[..end]) {
+        if let Ok(value) = u8::from_str_radix(octal_str, 8) {
+            return (Some(value), end + 1); // +1 for the backslash
+        }
+    }
+
+    // Fallback: ignore backslash if parsing fails
+    (Some(data[0]), 2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unescape_simple_escapes() {
+        // Test all simple escape sequences
+        assert_eq!(unescape_pdf_string(br"\n"), b"\n");
+        assert_eq!(unescape_pdf_string(br"\r"), b"\r");
+        assert_eq!(unescape_pdf_string(br"\t"), b"\t");
+        assert_eq!(unescape_pdf_string(br"\b"), b"\x08"); // backspace
+        assert_eq!(unescape_pdf_string(br"\f"), b"\x0C"); // form feed
+        assert_eq!(unescape_pdf_string(br"\("), b"(");
+        assert_eq!(unescape_pdf_string(br"\)"), b")");
+        assert_eq!(unescape_pdf_string(br"\\"), b"\\");
+    }
+
+    #[test]
+    fn test_unescape_octal_sequences() {
+        // Single digit octal
+        assert_eq!(unescape_pdf_string(br"\0"), b"\x00");
+        assert_eq!(unescape_pdf_string(br"\7"), b"\x07");
+
+        // Two digit octal
+        assert_eq!(unescape_pdf_string(br"\53"), b"+"); // \053 = 43 decimal = '+'
+
+        // Three digit octal
+        assert_eq!(unescape_pdf_string(br"\053"), b"+");
+        assert_eq!(unescape_pdf_string(br"\245"), b"\xA5"); // 165 decimal
+        assert_eq!(unescape_pdf_string(br"\307"), b"\xC7"); // 199 decimal
+
+        // Octal followed by non-digit (from PDF spec example)
+        assert_eq!(unescape_pdf_string(br"\0053"), b"\x053"); // \005 + '3'
+    }
+
+    #[test]
+    fn test_unescape_real_world_case() {
+        // The actual case from the PDF that was failing
+        assert_eq!(
+            unescape_pdf_string(br"NET CREDITS/\(DEBITS\)"),
+            b"NET CREDITS/(DEBITS)"
+        );
+
+        // Dollar amount with parentheses
+        assert_eq!(unescape_pdf_string(br"\(6,085.80\)"), b"(6,085.80)");
+
+        // Date range
+        assert_eq!(
+            unescape_pdf_string(br"\(9/1/25-9/30/25\)"),
+            b"(9/1/25-9/30/25)"
+        );
+    }
+
+    #[test]
+    fn test_unescape_unrecognized_escape() {
+        // Per spec: "If the character following the backslash is not one of those
+        // shown in the table, the backslash is ignored."
+        assert_eq!(unescape_pdf_string(br"\x"), b"x");
+        assert_eq!(unescape_pdf_string(br"\q"), b"q");
+        assert_eq!(unescape_pdf_string(br"\Z"), b"Z");
+    }
+
+    #[test]
+    fn test_unescape_mixed_content() {
+        // Mix of regular text, escapes, and parentheses
+        assert_eq!(
+            unescape_pdf_string(br"Hello\nWorld\t\(test\)"),
+            b"Hello\nWorld\t(test)"
+        );
+
+        // \\ becomes \, then 053 is literal text (not preceded by backslash after unescape)
+        // Then \245 becomes byte 0xA5
+        assert_eq!(
+            unescape_pdf_string(br"Price: \(\\053\245\)"),
+            b"Price: (\\053\xA5)"
+        );
+    }
+
+    #[test]
+    fn test_unescape_edge_cases() {
+        // Empty string
+        assert_eq!(unescape_pdf_string(b""), b"");
+
+        // No escapes
+        assert_eq!(unescape_pdf_string(b"plain text"), b"plain text");
+
+        // Backslash at end (no following character)
+        assert_eq!(unescape_pdf_string(b"text\\"), b"text\\");
+    }
 }
 
 // === Stream replacement & recompression utilities (migrated from streams.rs) ===

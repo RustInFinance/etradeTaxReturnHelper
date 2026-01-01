@@ -16,6 +16,7 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
+// TODO: Extend structure of TaxCalculationResult with country and company
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem
 // require one page not two
 // TODO: remove support for account statement of investment account of revolut

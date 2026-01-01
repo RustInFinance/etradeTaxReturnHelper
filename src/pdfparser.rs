@@ -450,8 +450,8 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 }
 
 fn process_transaction(
-    interests_transactions: &mut Vec<(String, f32, f32)>,
-    div_transactions: &mut Vec<(String, f32, f32)>,
+    interests_transactions: &mut Vec<(String, f32, f32,Option<String>)>,
+    div_transactions: &mut Vec<(String, f32, f32, Option<String>)>,
     sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
     actual_string: &pdf::primitive::PdfString,
     transaction_dates: &mut Vec<String>,
@@ -519,6 +519,7 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                             0.0, // No tax info yet. It may be added later in Tax section
+                            None,
                         ));
                         log::info!("Completed parsing Interests transaction");
                     }
@@ -535,6 +536,7 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                             0.0, // No tax info yet. It will be added later in Tax section
+                            Some("KUPA".to_string()),
                         ));
                         log::info!("Completed parsing Dividend transaction");
                     }
@@ -570,8 +572,8 @@ fn parse_brokerage_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
+        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
@@ -580,7 +582,7 @@ fn parse_brokerage_statement<'a, I>(
 where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
-    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
+    let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingTransactionEntry;
@@ -686,6 +688,7 @@ where
                                                                         transaction_dates.pop().expect("Error: missing transaction dates when parsing"),
                                                                         gross_us,
                                                                         tax_us,
+                                                                        None,
                                                                     ));
                                                                 }
                                                                 TransactionType::Sold => {
@@ -823,8 +826,8 @@ fn parse_account_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
+        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
@@ -833,8 +836,8 @@ fn parse_account_statement<'a, I>(
 where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
-    let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
+    let mut interests_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingYear;
@@ -941,15 +944,15 @@ where
 ///  Sold stock transactions (sold_transactions)
 ///  information on transactions in case of parsing trade document (trades)
 ///  Dividends paid transaction is:
-///        transaction date, gross_us, tax_us,
+///        transaction date, gross_us, tax_us, company 
 ///  Sold stock transaction is :
-///     (trade_date, settlement_date, quantity, price, amount_sold)
+///     (trade_date, settlement_date, quantity, price, amount_sold, company)
 pub fn parse_statement(
     pdftoparse: &str,
 ) -> Result<
     (
-        Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
+        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),

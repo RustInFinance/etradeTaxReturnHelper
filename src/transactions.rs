@@ -37,11 +37,11 @@ pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T, T)>) -> R
 
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions<T>(
-    div_transactions: &Vec<(String, T, T)>,
+    div_transactions: &Vec<(String, T, T, Option<String>)>,
 ) -> Result<(), String> {
     let mut trans = div_transactions.iter();
     let transaction_date = match trans.next() {
-        Some((x, _, _)) => x,
+        Some((x, _, _, _)) => x,
         None => {
             log::info!("No Dividends transactions");
             return Ok(());
@@ -52,7 +52,7 @@ pub fn verify_dividends_transactions<T>(
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
-    trans.try_for_each(|(tr_date, _, _)| {
+    trans.try_for_each(|(tr_date, _, _, _)| {
         let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
@@ -168,6 +168,7 @@ pub fn create_detailed_revolut_transactions(
                 tax_paid: *tax,
                 exchange_rate_date,
                 exchange_rate,
+                company : Some("KUPA REVOLUTA".to_string())
             };
 
             let msg = transaction.format_to_print("REVOLUT")?;
@@ -199,6 +200,7 @@ pub fn create_detailed_interests_transactions(
                 tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
+                company : None,   // No company info when interests are paid on money
             };
 
             let msg = transaction.format_to_print("INTERESTS")?;
@@ -230,6 +232,7 @@ pub fn create_detailed_div_transactions(
                 tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
+                company : Some("KUPA DIVIDENDOWA".to_string())
             };
 
             let msg = transaction.format_to_print("DIV")?;
@@ -529,6 +532,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
+                    None,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -536,6 +540,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
+                    None,
                 },
             ])
         );

@@ -65,6 +65,7 @@ pub struct Transaction {
     pub tax_paid: Currency,
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
+    pub company : Option<String>,
 }
 
 impl Transaction {
@@ -114,6 +115,9 @@ pub struct SoldTransaction {
     pub exchange_rate_settlement: f32,
     pub exchange_rate_acquisition_date: String,
     pub exchange_rate_acquisition: f32,
+    // TODO
+    //pub country : Option<String>,
+    //pub company : Option<String>,
 }
 
 impl SoldTransaction {
@@ -371,11 +375,11 @@ pub fn run_taxation(
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
-    let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
+    let mut parsed_interests_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency, Option<String>)> = vec![];
     let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions

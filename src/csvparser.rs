@@ -32,11 +32,12 @@ struct TransactionAccumulator {
     pub dates: Vec<String>,
     pub incomes: Vec<crate::Currency>,
     pub taxes: Vec<crate::Currency>,
+    pub symbols: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct RevolutTransactions {
-    pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency)>,
+    pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)>,
     pub sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
     pub crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
 }
@@ -115,10 +116,11 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
 
 fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
     let df_transactions = if df.get_column_names().contains(&"Currency") {
-        df.select(["Date", "Gross amount", "Withholding tax", "Currency"])
+        df.select(["Date", "Symbol", "Gross amount", "Withholding tax", "Currency"])
     } else {
         df.select([
             "Date",
+            "Symbol",
             "Gross amount base currency",
             "Net amount base currency",
         ])
@@ -222,6 +224,31 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
 
     Ok(filtred_df)
 }
+
+fn parse_symbols(
+    df: &DataFrame,
+    col_name: &str,
+) -> Result<Vec<String>, &'static str> {
+    let symbol = df
+        .column(col_name)
+        .map_err(|_| "Error: Unable to select Symbol")?;
+    let mut symbols: Vec<String> = vec![];
+    let possible_symbols = symbol
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+
+     possible_symbols.into_iter().try_for_each(|maybe_symbol| {
+            if let Some(s) = maybe_symbol {
+                symbols.push(s.to_string());
+                Ok::<(), &str>(())
+            } else {
+                Err("Error: Missing Ticker Symbol")
+            }
+    })?;
+
+    Ok(symbols)
+}
+
 
 fn parse_investment_transaction_dates(
     df: &DataFrame,
@@ -403,6 +430,8 @@ fn process_tax_consolidated_data(
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
 
+            ta.symbols.extend(parse_symbols(&filtred_df, "Symbol")?);
+
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross amount base currency")?;
             // parse taxes
@@ -447,12 +476,12 @@ fn process_tax_consolidated_data(
 
 /// Parse revolut CSV documents (savings account, trading, crypto)
 /// returns: (
-/// dividend transactions in a form: date, gross income, tax taken
+/// dividend transactions in a form: date, gross income, tax taken, company name (if available)
 /// sold transactions in a form date acquired, date sold, cost basis, gross income
 /// crypto transactions in a form date acquired, date sold, cost basis, gross income
 /// )
 pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransactions, String> {
-    let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency)> = vec![];
+    let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)> = vec![];
     let mut sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
     let mut crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
 
@@ -669,9 +698,9 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     log::info!("Dividend Dates: {:?}", ta.dates);
     log::info!("Dividend Incomes: {:?}", ta.incomes);
     log::info!("Dividend Taxes: {:?}", ta.taxes);
-    let iter = std::iter::zip(ta.dates, std::iter::zip(ta.incomes, ta.taxes));
-    iter.for_each(|(d, (m, t))| {
-        dividend_transactions.push((d, m, t));
+    let iter = std::iter::zip(ta.dates, std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes)));
+    iter.for_each(|(d, (s, (m, t)))| {
+        dividend_transactions.push((d, m, t, Some(s)));
     });
     Ok(RevolutTransactions {
         dividend_transactions,
@@ -794,6 +823,25 @@ mod tests {
         let expected_dates = vec!["08/25/23".to_string(), "09/01/23".to_string()];
 
         test_parse_date_helper(description, input_dates, expected_dates)
+    }
+
+    #[test]
+    fn test_parse_symbols() -> Result<(), &'static str> {
+        let dates = vec!["25 Aug 2023", "1 Sep 2023"];
+        let symbols = vec!["AAPL", "MSFT"];
+        let expected_symbols = symbols.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+
+        let input_date_series = Series::new("Date", dates);
+        let input_symbols = Series::new("Symbol", symbols);
+
+        let df = DataFrame::new(vec![input_date_series, input_symbols])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(
+            parse_symbols(&df, "Symbol"),
+            Ok(expected_symbols)
+        );
+        Ok(())
     }
 
     #[test]

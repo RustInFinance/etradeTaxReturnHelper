@@ -1027,7 +1027,7 @@ mod tests {
         parsed
             .dividend_transactions
             .iter()
-            .for_each(|(_, amount, _)| match amount {
+            .for_each(|(_, amount, _, _)| match amount {
                 crate::Currency::EUR(v) => sum_eur += v,
                 crate::Currency::PLN(v) => sum_pln += v,
                 _ => (),

@@ -149,14 +149,14 @@ pub fn reconstruct_sold_transactions(
 }
 
 pub fn create_detailed_revolut_transactions(
-    transactions: Vec<(String, crate::Currency, crate::Currency)>,
+    transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
 
     transactions
         .iter()
-        .try_for_each(|(transaction_date, gross, tax)| {
+        .try_for_each(|(transaction_date, gross, tax, company)| {
             let (exchange_rate_date, exchange_rate) = dates
                 [&gross.derive_exchange(transaction_date.clone())]
                 .clone()
@@ -168,7 +168,7 @@ pub fn create_detailed_revolut_transactions(
                 tax_paid: *tax,
                 exchange_rate_date,
                 exchange_rate,
-                company : Some("KUPA REVOLUTA".to_string())
+                company : company.clone() 
             };
 
             let msg = transaction.format_to_print("REVOLUT")?;
@@ -214,13 +214,13 @@ pub fn create_detailed_interests_transactions(
 }
 
 pub fn create_detailed_div_transactions(
-    transactions: Vec<(String, f32, f32)>,
+    transactions: Vec<(String, f32, f32, Option<String>)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
     transactions
         .iter()
-        .try_for_each(|(transaction_date, gross_us, tax_us)| {
+        .try_for_each(|(transaction_date, gross_us, tax_us, company)| {
             let (exchange_rate_date, exchange_rate) = dates
                 [&crate::Exchange::USD(transaction_date.clone())]
                 .clone()
@@ -232,7 +232,7 @@ pub fn create_detailed_div_transactions(
                 tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
-                company : Some("KUPA DIVIDENDOWA".to_string())
+                company: company.clone()
             };
 
             let msg = transaction.format_to_print("DIV")?;

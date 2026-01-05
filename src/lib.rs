@@ -375,7 +375,7 @@ pub fn run_taxation(
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
-    let mut parsed_interests_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
@@ -436,7 +436,7 @@ pub fn run_taxation(
         });
     parsed_div_transactions
         .iter()
-        .for_each(|(trade_date, _, _)| {
+        .for_each(|(trade_date, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -460,7 +460,7 @@ pub fn run_taxation(
     );
     parsed_revolut_dividends_transactions
         .iter()
-        .for_each(|(trade_date, gross, _)| {
+        .for_each(|(trade_date, gross, _, _)| {
             let ex = gross.derive_exchange(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);

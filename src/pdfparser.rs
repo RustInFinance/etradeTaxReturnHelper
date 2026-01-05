@@ -450,7 +450,7 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 }
 
 fn process_transaction(
-    interests_transactions: &mut Vec<(String, f32, f32,Option<String>)>,
+    interests_transactions: &mut Vec<(String, f32, f32)>,
     div_transactions: &mut Vec<(String, f32, f32, Option<String>)>,
     sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
     actual_string: &pdf::primitive::PdfString,
@@ -497,9 +497,14 @@ fn process_transaction(
                         // Here we just go through registered transactions and pick the one where
                         // income is higher than tax and apply tax value and where tax was not yet
                         // applied
+                        let mut interests_as_div: Vec<(String, f32, f32, Option<String>)> = interests_transactions
+                            .iter_mut()
+                            .map(|x| (x.0.clone(), x.1, x.2, None))
+                            .collect();
+
                         let subject_to_tax = div_transactions
                             .iter_mut()
-                            .chain(interests_transactions.iter_mut())
+                            .chain(interests_as_div.iter_mut())
                             .find(|x| x.1 > tax_us && x.2 == 0.0f32)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
@@ -519,7 +524,6 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                             0.0, // No tax info yet. It may be added later in Tax section
-                            None,
                         ));
                         log::info!("Completed parsing Interests transaction");
                     }
@@ -572,7 +576,7 @@ fn parse_brokerage_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -826,7 +830,7 @@ fn parse_account_statement<'a, I>(
     pages_iter: I,
 ) -> Result<
     (
-        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
@@ -836,7 +840,7 @@ fn parse_account_statement<'a, I>(
 where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
-    let mut interests_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
@@ -951,7 +955,7 @@ pub fn parse_statement(
     pdftoparse: &str,
 ) -> Result<
     (
-        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32)>,
         Vec<(String, f32, f32, Option<String>)>,
         Vec<(String, String, f32, f32, f32)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,

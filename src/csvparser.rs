@@ -163,7 +163,7 @@ fn extract_investment_gains_and_costs_transactions(
     df: &DataFrame,
 ) -> Result<DataFrame, &'static str> {
     let df_transactions = df
-        .select(["Date", "Type", "Total Amount"])
+        .select(["Date", "Ticker", "Type", "Total Amount"])
         .map_err(|_| "Error: Unable to select description")?;
 
     let intrest_rate_mask = df_transactions
@@ -231,22 +231,22 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
     Ok(filtred_df)
 }
 
-fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<String>, &'static str> {
+fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, &'static str> {
     let symbol = df
         .column(col_name)
         .map_err(|_| "Error: Unable to select Symbol")?;
-    let mut symbols: Vec<String> = vec![];
+    let mut symbols: Vec<Option<String>> = vec![];
     let possible_symbols = symbol
         .utf8()
         .map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_symbols.into_iter().try_for_each(|maybe_symbol| {
         if let Some(s) = maybe_symbol {
-            symbols.push(s.to_string());
-            Ok::<(), &str>(())
+            symbols.push(Some(s.to_string()));
         } else {
-            Err("Error: Missing Ticker Symbol")
+            symbols.push(None);
         }
+        Ok::<(), &str>(())
     })?;
 
     Ok(symbols)
@@ -434,12 +434,7 @@ fn process_tax_consolidated_data(
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
 
-            ta.symbols.extend(
-                parse_symbols(&filtred_df, "Symbol")?
-                    .into_iter()
-                    .map(|s| Some(s))
-                    .collect::<Vec<Option<String>>>(),
-            );
+            ta.symbols.extend(parse_symbols(&filtred_df, "Symbol")?);
 
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross amount base currency")?;
@@ -535,6 +530,8 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         // Taxes are not automatically taken from savings account
         // so we will put zeros as tax taken
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
+        ta.symbols
+            .extend(std::iter::repeat(None).take(ta.incomes.len()));
     } else if result.iter().any(|field| field == "Price per share") {
         log::info!("Detected Investment account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
@@ -548,6 +545,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         let filtred_df = extract_investment_gains_and_costs_transactions(&df)?;
         log::info!("Filtered Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
+        ta.symbols = parse_symbols(&filtred_df, "Ticker")?;
         ta.incomes = parse_incomes(&filtred_df, "Total Amount")?;
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
@@ -604,6 +602,9 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Dividend Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
+        // parse symbols of companies
+        ta.symbols = parse_symbols(&filtred_df, "Symbol")?;
+
         // parse income
         ta.incomes = parse_income_with_currency(&filtred_df, "Gross amount", "Currency")?;
         // parse taxes
@@ -708,6 +709,20 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     log::info!("Dividend Dates: {:?}", ta.dates);
     log::info!("Dividend Incomes: {:?}", ta.incomes);
     log::info!("Dividend Taxes: {:?}", ta.taxes);
+
+    if ta.dates.len() != ta.incomes.len()
+        || ta.dates.len() != ta.taxes.len()
+        || ta.dates.len() != ta.symbols.len()
+    {
+        return Err(format!(
+            "ERROR: Different number of dividend dates({}), incomes({}), taxes({}) or symbols({})",
+            ta.dates.len(),
+            ta.incomes.len(),
+            ta.taxes.len(),
+            ta.symbols.len()
+        ));
+    }
+
     let iter = std::iter::zip(
         ta.dates,
         std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes)),
@@ -844,8 +859,8 @@ mod tests {
         let symbols = vec!["AAPL", "MSFT"];
         let expected_symbols = symbols
             .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
+            .map(|s| Some(s.to_string()))
+            .collect::<Vec<Option<String>>>();
 
         let input_date_series = Series::new("Date", dates);
         let input_symbols = Series::new("Symbol", symbols);

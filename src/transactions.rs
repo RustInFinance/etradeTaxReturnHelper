@@ -372,25 +372,27 @@ mod tests {
 
     #[test]
     fn test_dividends_verification_ok() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32)> = vec![
-            ("06/01/21".to_string(), 100.0, 25.0),
-            ("03/01/21".to_string(), 126.0, 10.0),
+        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+            ("06/01/21".to_string(), 100.0, 25.0,Some("INTEL CORP".to_owned())),
+            ("03/01/21".to_string(), 126.0, 10.0,Some("INTEL CORP".to_owned())),
         ];
         verify_dividends_transactions(&transactions)
     }
 
     #[test]
     fn test_dividends_verification_false() -> Result<(), String> {
-        let transactions: Vec<(String, Currency, Currency)> = vec![
+        let transactions: Vec<(String, Currency, Currency, Option<String>)> = vec![
             (
                 "06/01/21".to_string(),
                 Currency::PLN(10.0),
                 Currency::PLN(2.0),
+                Some("INTEL CORP".to_owned())
             ),
             (
                 "03/01/22".to_string(),
                 Currency::PLN(126.0),
                 Currency::PLN(10.0),
+                Some("INTEL CORP".to_owned())
             ),
         ];
         assert_eq!(
@@ -407,11 +409,13 @@ mod tests {
                 "03/01/21".to_owned(),
                 crate::Currency::EUR(0.05),
                 crate::Currency::EUR(0.00),
+                None,
             ),
             (
                 "04/11/21".to_owned(),
                 crate::Currency::EUR(0.07),
                 crate::Currency::EUR(0.00),
+                None,
             ),
         ];
 
@@ -438,6 +442,7 @@ mod tests {
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
+                    company : None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -445,6 +450,7 @@ mod tests {
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
+                    company : None,
                 },
             ])
         );
@@ -458,11 +464,13 @@ mod tests {
                 "03/01/21".to_owned(),
                 crate::Currency::PLN(0.44),
                 crate::Currency::PLN(0.00),
+                None,
             ),
             (
                 "04/11/21".to_owned(),
                 crate::Currency::PLN(0.45),
                 crate::Currency::PLN(0.00),
+                None,
             ),
         ];
 
@@ -489,6 +497,7 @@ mod tests {
                     tax_paid: crate::Currency::PLN(0.0),
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
+                    company : None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -496,6 +505,7 @@ mod tests {
                     tax_paid: crate::Currency::PLN(0.0),
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
+                    company : None,
                 },
             ])
         );
@@ -532,7 +542,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
-                    None,
+                    company : None,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -540,7 +550,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
-                    None,
+                    company : None,
                 },
             ])
         );
@@ -549,9 +559,9 @@ mod tests {
 
     #[test]
     fn test_create_detailed_div_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, f32, f32)> = vec![
-            ("04/11/21".to_string(), 100.0, 25.0),
-            ("03/01/21".to_string(), 126.0, 10.0),
+        let parsed_transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+            ("04/11/21".to_string(), 100.0, 25.0, Some("INTEL CORP".to_owned())),
+            ("03/01/21".to_string(), 126.0, 10.0, Some("INTEL CORP".to_owned())),
         ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
@@ -577,6 +587,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(25.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
+                    company : Some("INTEL CORP".to_owned())
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -584,6 +595,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
+                    company : Some("INTEL CORP".to_owned())
                 },
             ])
         );
@@ -719,15 +731,15 @@ mod tests {
 
     #[test]
     fn test_dividends_verification_empty_ok() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32)> = vec![];
+        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
         verify_dividends_transactions(&transactions)
     }
 
     #[test]
     fn test_dividends_verification_fail() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32)> = vec![
-            ("04/11/22".to_string(), 100.0, 25.0),
-            ("03/01/21".to_string(), 126.0, 10.0),
+        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+            ("04/11/22".to_string(), 100.0, 25.0,Some("INTEL CORP".to_owned())),
+            ("03/01/21".to_string(), 126.0, 10.0,Some("INTEL CORP".to_owned())),
         ];
         assert!(verify_dividends_transactions(&transactions).is_err());
         Ok(())

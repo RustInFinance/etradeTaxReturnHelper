@@ -1256,7 +1256,7 @@ mod tests {
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![("12/1/23".to_owned(), 1.22, 0.00)],
-                vec![("12/1/23".to_owned(), 386.50, 57.98),],
+                vec![("12/1/23".to_owned(), 386.50, 57.98, Some("INTEL CORP".to_string())),],
                 vec![(
                     "12/21/23".to_owned(),
                     "12/26/23".to_owned(),
@@ -1304,8 +1304,8 @@ mod tests {
                     ("1/2/24".to_owned(), 0.49, 0.00)
                 ],
                 vec![
-                    ("6/3/24".to_owned(), 57.25, 8.59), // Dividends date, gross, tax_us
-                    ("3/1/24".to_owned(), 380.25, 57.04)
+                    ("6/3/24".to_owned(), 57.25, 8.59, Some("INTEL CORP".to_owned())), // Dividends date, gross, tax_us
+                    ("3/1/24".to_owned(), 380.25, 57.04, Some("INTEL CORP".to_owned()))
                 ],
                 vec![
                     (
@@ -1525,7 +1525,7 @@ mod tests {
             parse_statement("data/example-divs.pdf"),
             (Ok((
                 vec![],
-                vec![("03/01/22".to_owned(), 698.25, 104.74)],
+                vec![("03/01/22".to_owned(), 698.25, 104.74, Some("INTC".to_owned()))],
                 vec![],
                 vec![]
             )))

@@ -581,6 +581,7 @@ mod tests {
             tax_paid: crate::Currency::USD(25.0),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
+            company : Some("INTEL CORP".to_owned())
         }];
         assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
         Ok(())
@@ -596,6 +597,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(25.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
+                company : Some("INTEL CORP".to_owned())
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
@@ -603,6 +605,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(10.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
+                company : Some("INTEL CORP".to_owned())
             },
         ];
         assert_eq!(
@@ -620,6 +623,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
+                company : None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -627,6 +631,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
+                company : None,
             },
         ];
         assert_eq!(
@@ -645,6 +650,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
+                company : None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -652,6 +658,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
+                company : None,
             },
         ];
         assert_eq!(

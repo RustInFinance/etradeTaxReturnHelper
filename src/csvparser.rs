@@ -1064,16 +1064,19 @@ mod tests {
                     "01/03/24".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                 ),
                 (
                     "01/04/24".to_owned(),
                     crate::Currency::EUR(0.02),
                     crate::Currency::EUR(0.00),
+                    None,
                 ),
                 (
                     "12/31/24".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                 ),
             ],
             sold_transactions: vec![],
@@ -1095,58 +1098,71 @@ mod tests {
                     "01/01/24".to_owned(),
                     crate::Currency::EUR(0.26),
                     crate::Currency::EUR(0.00),
+                    None,
                 ),
                 (
                     "04/12/24".to_owned(),
                     crate::Currency::EUR(0.24),
                     crate::Currency::EUR(0.00),
+                    None,
                 ),
                 // PLN interests
                 (
                     "01/04/24".to_owned(),
                     crate::Currency::PLN(0.86),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "05/31/24".to_owned(),
                     crate::Currency::PLN(1.26),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 // Euro dividends
                 (
                     "08/26/24".to_owned(),
                     crate::Currency::PLN(302.43),
                     crate::Currency::PLN(302.43 - 222.65),
+                    Some("DE000A289XJ2".to_string())
                 ),
                 // USD dividends
                 (
                     "03/04/24".to_owned(),
                     crate::Currency::PLN(617.00),
                     crate::Currency::PLN(617.00 - 524.43),
+                    Some("TFC".to_string())
                 ),
                 (
                     "03/21/24".to_owned(),
                     crate::Currency::PLN(259.17),
                     crate::Currency::PLN(0.0),
+                    Some("AMCR".to_string())
                 ),
                 (
                     "12/17/24".to_owned(),
                     crate::Currency::PLN(903.35),
                     crate::Currency::PLN(903.35 - 767.83),
+                    Some("EPR".to_string())
                 ),
             ],
+            // TODO: symbols
             sold_transactions: vec![
                 (
                     "07/29/24".to_owned(),
                     "10/28/24".to_owned(),
                     crate::Currency::PLN(13037.94 + 65.94),
                     crate::Currency::PLN(13348.22),
+//                    Some("EU000A3K4DJ5".to_string())
+
                 ),
                 (
                     "09/09/24".to_owned(),
                     "11/21/24".to_owned(),
                     crate::Currency::PLN(16097.86 + 81.41),
                     crate::Currency::PLN(16477.91),
+   //                 Some("XS1218821756".to_string())
+
                 ),
                 (
                     "11/20/23".to_owned(),
@@ -1190,21 +1206,25 @@ mod tests {
                     "06/04/24".to_owned(),
                     crate::Currency::PLN(2.80),
                     crate::Currency::PLN(0.68),
+                    Some("QDVY".to_string())
                 ),
                 (
                     "06/20/24".to_owned(),
                     crate::Currency::PLN(0.34),
                     crate::Currency::PLN(0.08),
+                    Some("EXI2".to_string())
                 ),
                 (
                     "06/28/24".to_owned(),
                     crate::Currency::PLN(3.79),
                     crate::Currency::PLN(0.94),
+                    Some("IS3K".to_string())
                 ),
                 (
                     "07/01/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
+                    Some("IBCD".to_string())
                 ),
             ],
             sold_transactions: vec![],
@@ -1227,46 +1247,55 @@ mod tests {
                     "06/04/24".to_owned(),
                     crate::Currency::PLN(2.80),
                     crate::Currency::PLN(0.68),
+                    Some("QDVY".to_string())
                 ),
                 (
                     "06/20/24".to_owned(),
                     crate::Currency::PLN(0.34),
                     crate::Currency::PLN(0.08),
+                    Some("EXI2".to_string())
                 ),
                 (
                     "06/28/24".to_owned(),
                     crate::Currency::PLN(3.79),
                     crate::Currency::PLN(0.94),
+                    Some("IS3K".to_string())
                 ),
                 (
                     "07/01/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
+                    Some("IBCD".to_string())
                 ),
                 (
                     "09/27/24".to_owned(),
                     crate::Currency::PLN(1.02),
                     crate::Currency::PLN(0.25),
+                    Some("IBCD".to_string())
                 ),
                 (
                     "09/27/24".to_owned(),
                     crate::Currency::PLN(1.71),
                     crate::Currency::PLN(0.42),
+                    Some("IUSU".to_string())
                 ),
                 (
                     "11/29/24".to_owned(),
                     crate::Currency::PLN(2.92),
                     crate::Currency::PLN(0.73),
+                    Some("QDVY".to_string())
                 ),
                 (
                     "12/17/24".to_owned(),
                     crate::Currency::PLN(0.04),
                     crate::Currency::PLN(0.0),
+                    Some("EXI2".to_string())
                 ),
                 (
                     "12/31/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
+                    Some("IBCD".to_string())
                 ),
             ],
             sold_transactions: vec![],
@@ -1289,81 +1318,97 @@ mod tests {
                     "03/04/24".to_owned(),
                     crate::Currency::PLN(617.00),
                     crate::Currency::PLN(92.57),
+                    Some("TFC".to_string())
                 ),
                 (
                     "03/21/24".to_owned(),
                     crate::Currency::PLN(259.17),
                     crate::Currency::PLN(0.0),
+                    Some("AMCR".to_string())
                 ),
                 (
                     "03/25/24".to_owned(),
                     crate::Currency::PLN(212.39),
                     crate::Currency::PLN(31.87),
+                    Some("PXD".to_string())
                 ),
                 (
                     "05/16/24".to_owned(),
                     crate::Currency::PLN(700.17),
                     crate::Currency::PLN(105.04),
+                    Some("EPR".to_string())
                 ),
                 (
                     "05/31/24".to_owned(),
                     crate::Currency::PLN(875.82),
                     crate::Currency::PLN(131.38),
+                    Some("UPS".to_string())
                 ),
                 (
                     "06/03/24".to_owned(),
                     crate::Currency::PLN(488.26),
                     crate::Currency::PLN(73.25),
+                    Some("ABR".to_string())
                 ),
                 (
                     "06/04/24".to_owned(),
                     crate::Currency::PLN(613.2),
                     crate::Currency::PLN(92.00),
+                    Some("TFC".to_string())
                 ),
                 (
                     "06/11/24".to_owned(),
                     crate::Currency::PLN(186.16),
                     crate::Currency::PLN(27.92),
+                    Some("XOM".to_string())
                 ),
                 (
                     "06/13/24".to_owned(),
                     crate::Currency::PLN(264.74),
                     crate::Currency::PLN(0.00),
+                    Some("AMCR".to_string())
                 ),
                 (
                     "06/18/24".to_owned(),
                     crate::Currency::PLN(858.33),
                     crate::Currency::PLN(128.74),
+                    Some("EPR".to_string())
                 ),
                 (
                     "07/12/24".to_owned(),
                     crate::Currency::PLN(421.5),
                     crate::Currency::PLN(63.23),
+                    Some("BBY".to_string())
                 ),
                 (
                     "07/16/24".to_owned(),
                     crate::Currency::PLN(834.55),
                     crate::Currency::PLN(125.18),
+                    Some("EPR".to_string())
                 ),
                 (
                     "08/16/24".to_owned(),
                     crate::Currency::PLN(834.79),
                     crate::Currency::PLN(125.23),
+                    Some("EPR".to_string())
                 ),
                 (
                     "08/26/24".to_owned(),
                     crate::Currency::PLN(302.43),
                     crate::Currency::PLN(79.77),
+                    Some("DE000A289XJ2".to_string())
                 ),
                 (
                     "08/29/24".to_owned(),
                     crate::Currency::PLN(801.25),
                     crate::Currency::PLN(0.0),
+                    Some("BMO".to_string())
                 ),
                 (
                     "08/30/24".to_owned(),
                     crate::Currency::PLN(872.56),
                     crate::Currency::PLN(130.90),
+                    Some("CAG".to_string())
                 ),
             ],
             sold_transactions: vec![(
@@ -1393,96 +1438,115 @@ mod tests {
                     "12/12/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/13/23".to_owned(),
                     crate::Currency::PLN(0.20),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/15/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/16/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/17/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/18/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/19/23".to_owned(),
                     crate::Currency::PLN(0.41),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/20/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/21/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/22/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/23/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/24/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/25/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/26/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/27/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/28/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/29/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/30/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
                 (
                     "12/31/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                 ),
             ],
             sold_transactions: vec![],
@@ -1504,16 +1568,19 @@ mod tests {
                     "11/02/23".to_owned(),
                     crate::Currency::USD(-0.02),
                     crate::Currency::USD(0.00),
+                    None,
                 ),
                 (
                     "12/01/23".to_owned(),
                     crate::Currency::USD(-0.51),
                     crate::Currency::USD(0.00),
+                    None,
                 ),
                 (
                     "12/14/23".to_owned(),
                     crate::Currency::USD(2.94),
                     crate::Currency::USD(0.00),
+                    Some("AMCR".to_string())
                 ),
             ],
             sold_transactions: vec![],

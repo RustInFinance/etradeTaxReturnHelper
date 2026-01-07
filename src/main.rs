@@ -16,7 +16,7 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
-// TODO: UT for csvparser::parse_symbols
+// TODO: Fixing UT. Why revolut transaction does have only dividend_transactions not interests?
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Extend structure of TaxCalculationResult with country and company
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem

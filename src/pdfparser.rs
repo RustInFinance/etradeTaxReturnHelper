@@ -227,6 +227,10 @@ fn create_qualified_dividend_parsing_sequence(
 }
 
 fn create_sold_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+    })); // INTC, DLB
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Quantity
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
@@ -331,6 +335,11 @@ fn yield_sold_transaction(
     transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
     transaction_dates: &mut Vec<String>,
 ) -> Option<(String, String, f32, f32, f32)> {
+    let _symbol = transaction
+        .next()
+        .unwrap()
+        .getstring()
+        .expect_and_log("Processing of Sold transaction went wrong"); // TODO: make sold to report symbol
     let quantity = transaction
         .next()
         .unwrap()
@@ -470,8 +479,16 @@ fn process_transaction(
             // attach to sequence the same string parser if pattern is not met
             match obj.getstring() {
                 Some(token) => {
-                    if obj.is_pattern() == false && token != "$" {
-                        sequence.push_front(obj);
+                    let support_companies =
+                        vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()];
+                    if obj.is_pattern() == true {
+                        if support_companies.contains(&token) == true {
+                            processed_sequence.push(obj);
+                        }
+                    } else {
+                        if token != "$" {
+                            sequence.push_front(obj);
+                        }
                     }
                 }
 
@@ -529,6 +546,11 @@ fn process_transaction(
                         log::info!("Completed parsing Interests transaction");
                     }
                     TransactionType::Dividends => {
+                        let symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Dividend transaction went wrong");
                         let gross_us = transaction
                             .next()
                             .unwrap()
@@ -541,7 +563,7 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                             0.0, // No tax info yet. It will be added later in Tax section
-                            Some("KUPA".to_string()),
+                            Some(symbol),
                         ));
                         log::info!("Completed parsing Dividend transaction");
                     }
@@ -570,197 +592,6 @@ fn process_transaction(
         }
     }
     Ok(state)
-}
-
-/// Parse borkerage statement document type
-fn parse_brokerage_statement<'a, I>(
-    pages_iter: I,
-) -> Result<
-    (
-        Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32, Option<String>)>,
-        Vec<(String, String, f32, f32, f32)>,
-        Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
-    ),
-    String,
->
-where
-    I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
-{
-    let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
-    let mut state = ParserState::SearchingTransactionEntry;
-    let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-        std::collections::VecDeque::new();
-    let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
-    // Queue for transaction dates. Pop last one or last two as trade and settlement dates
-    let mut transaction_dates: Vec<String> = vec![];
-
-    for page in pages_iter {
-        let page = page.unwrap();
-        let contents = page.contents.as_ref().unwrap();
-        for op in contents.operations.iter() {
-            match op.operator.as_ref() {
-                "TJ" => {
-                    // Text show
-                    if op.operands.len() > 0 {
-                        //transaction_date = op.operands[0];
-                        let a = &op.operands[0];
-                        log::trace!("Detected PDF object: {a}");
-                        match a {
-                            Primitive::Array(c) => {
-                                for e in c {
-                                    if let Primitive::String(actual_string) = e {
-                                        match state {
-                                            ParserState::SearchingYear
-                                            | ParserState::ProcessingYear => {
-                                                log::error!("Brokerage documents do not have \"For the Period\" block!")
-                                            }
-                                            ParserState::SearchingCashFlowBlock => {
-                                                log::error!("Brokerage documents do not have cashflow  block!")
-                                            }
-                                            ParserState::SearchingTransactionEntry => {
-                                                let rust_string =
-                                                    actual_string.clone().into_string().unwrap();
-                                                //println!("rust_string: {}", rust_string);
-                                                if rust_string == "Dividend" {
-                                                    create_dividend_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Dividends,
-                                                    );
-                                                } else if rust_string == "Sold" {
-                                                    create_sold_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Sold,
-                                                    );
-                                                } else if rust_string == "TYPE" {
-                                                    create_trade_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Trade,
-                                                    );
-                                                } else {
-                                                    //if this is date then store it
-                                                    if chrono::NaiveDate::parse_from_str(
-                                                        &rust_string,
-                                                        "%m/%d/%y",
-                                                    )
-                                                    .is_ok()
-                                                    {
-                                                        transaction_dates.push(rust_string.clone());
-                                                    }
-                                                }
-                                            }
-                                            ParserState::ProcessingTransaction(
-                                                transaction_type,
-                                            ) => {
-                                                // So process transaction element and store it in SOLD
-                                                // or DIV
-                                                let possible_obj = sequence.pop_front();
-                                                match possible_obj {
-                                                    // Move executed parser objects into Vector
-                                                    // attach only i32 and f32 elements to
-                                                    // processed queue
-                                                    Some(mut obj) => {
-                                                        obj.parse(actual_string);
-                                                        // attach to sequence the same string parser if pattern is not met
-                                                        if obj.getstring().is_some() {
-                                                            if obj.is_pattern() == false {
-                                                                sequence.push_front(obj);
-                                                            }
-                                                        } else {
-                                                            processed_sequence.push(obj);
-                                                        }
-                                                        // If sequence of expected entries is
-                                                        // empty then extract data from
-                                                        // processeed elements
-                                                        if sequence.is_empty() {
-                                                            state =
-                                                            ParserState::SearchingTransactionEntry;
-                                                            let mut transaction =
-                                                                processed_sequence.iter();
-                                                            match transaction_type {
-                                                                TransactionType::Tax => {
-                                                                    return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());
-                                                                }
-                                                                TransactionType::Interests => {
-                                                                    return Err("TransactionType::Interest rate should not appear during brokerage statement processing!".to_string());
-                                                                }
-                                                                TransactionType::Dividends => {
-                                                                    let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
-                                                                    let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
-                                                                    div_transactions.push((
-                                                                        transaction_dates.pop().expect("Error: missing transaction dates when parsing"),
-                                                                        gross_us,
-                                                                        tax_us,
-                                                                        None,
-                                                                    ));
-                                                                }
-                                                                TransactionType::Sold => {
-                                                                    if let Some(trans_details) =
-                                                                        yield_sold_transaction(
-                                                                            &mut transaction,
-                                                                            &mut transaction_dates,
-                                                                        )
-                                                                    {
-                                                                        sold_transactions
-                                                                            .push(trans_details);
-                                                                    }
-                                                                }
-                                                                TransactionType::Trade => {
-                                                                    let transaction_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    let settlement_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    transaction.next().unwrap(); // MKT??
-                                                                    transaction.next().unwrap(); // CPT??
-                                                                    let quantity =  transaction.next().unwrap().geti32().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    let price = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // price
-                                                                    let principal = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // principal
-                                                                    let commission = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // commission
-                                                                    let fee = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // fee
-                                                                    let net = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // net
-                                                                    trades.push((
-                                                                        transaction_date,
-                                                                        settlement_date,
-                                                                        quantity,
-                                                                        price,
-                                                                        principal,
-                                                                        commission,
-                                                                        fee,
-                                                                        net,
-                                                                    ));
-                                                                }
-                                                            }
-                                                            processed_sequence.clear();
-                                                        } else {
-                                                            state =
-                                                                ParserState::ProcessingTransaction(
-                                                                    transaction_type,
-                                                                );
-                                                        }
-                                                    }
-
-                                                    // In nothing more to be done then just extract
-                                                    // parsed data from paser objects
-                                                    None => {
-                                                        state = ParserState::ProcessingTransaction(
-                                                            transaction_type,
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    Ok((vec![], div_transactions, sold_transactions, trades))
 }
 
 fn check_if_transaction(
@@ -986,7 +817,7 @@ pub fn parse_statement(
         }
         StatementType::BrokerageStatement => {
             log::info!("Processing brokerage statement PDF");
-            parse_brokerage_statement(pdffile_iter)?
+            return Err(format!("Processing brokerage statement PDF is unsupported: document type: {pdftoparse}.To have it supported please use release 0.7.4 "));
         }
         StatementType::AccountStatement => {
             log::info!("Processing Account statement PDF");
@@ -1073,10 +904,11 @@ mod tests {
     fn test_transaction_validation() -> Result<(), String> {
         let mut transaction_dates: Vec<String> =
             vec!["11/29/22".to_string(), "12/01/22".to_string()];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1093,10 +925,11 @@ mod tests {
             "11/29/22".to_string(),
             "12/01/22".to_string(),
         ];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1109,10 +942,11 @@ mod tests {
     #[test]
     fn test_unsettled_transaction_validation() -> Result<(), String> {
         let mut transaction_dates: Vec<String> = vec!["11/29/22".to_string()];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1536,37 +1370,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_parse_brokerage_statement() -> Result<(), String> {
-        assert_eq!(
-            parse_statement("data/example-divs.pdf"),
-            (Ok((
-                vec![],
-                vec![(
-                    "03/01/22".to_owned(),
-                    698.25,
-                    104.74,
-                    Some("INTC".to_owned())
-                )],
-                vec![],
-                vec![]
-            )))
-        );
-        assert_eq!(
-            parse_statement("data/example-sold-wire.pdf"),
-            Ok((
-                vec![],
-                vec![],
-                vec![(
-                    "05/02/22".to_owned(),
-                    "05/04/22".to_owned(),
-                    -1.0,
-                    43.69,
-                    43.67
-                )],
-                vec![]
-            ))
-        );
-
+    fn test_parse_amd_statement() -> Result<(), String> {
         assert_eq!(
             parse_statement("data/example-sold-amd.pdf"),
             Ok((

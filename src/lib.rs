@@ -65,7 +65,7 @@ pub struct Transaction {
     pub tax_paid: Currency,
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
-    pub company : Option<String>,
+    pub company: Option<String>,
 }
 
 impl Transaction {
@@ -379,7 +379,12 @@ pub fn run_taxation(
     let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
     let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency, Option<String>)> = vec![];
+    let mut parsed_revolut_dividends_transactions: Vec<(
+        String,
+        Currency,
+        Currency,
+        Option<String>,
+    )> = vec![];
     let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
@@ -581,7 +586,7 @@ mod tests {
             tax_paid: crate::Currency::USD(25.0),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
-            company : Some("INTEL CORP".to_owned())
+            company: Some("INTEL CORP".to_owned()),
         }];
         assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
         Ok(())
@@ -597,7 +602,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(25.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
-                company : Some("INTEL CORP".to_owned())
+                company: Some("INTEL CORP".to_owned()),
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
@@ -605,7 +610,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(10.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
-                company : Some("INTEL CORP".to_owned())
+                company: Some("INTEL CORP".to_owned()),
             },
         ];
         assert_eq!(
@@ -623,7 +628,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
-                company : None,
+                company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -631,7 +636,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
-                company : None,
+                company: None,
             },
         ];
         assert_eq!(
@@ -650,7 +655,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
-                company : None,
+                company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -658,7 +663,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
-                company : None,
+                company: None,
             },
         ];
         assert_eq!(

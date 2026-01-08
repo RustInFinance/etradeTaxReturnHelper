@@ -168,7 +168,7 @@ pub fn create_detailed_revolut_transactions(
                 tax_paid: *tax,
                 exchange_rate_date,
                 exchange_rate,
-                company : company.clone() 
+                company: company.clone(),
             };
 
             let msg = transaction.format_to_print("REVOLUT")?;
@@ -200,7 +200,7 @@ pub fn create_detailed_interests_transactions(
                 tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
-                company : None,   // No company info when interests are paid on money
+                company: None, // No company info when interests are paid on money
             };
 
             let msg = transaction.format_to_print("INTERESTS")?;
@@ -232,7 +232,7 @@ pub fn create_detailed_div_transactions(
                 tax_paid: crate::Currency::USD(*tax_us as f64),
                 exchange_rate_date,
                 exchange_rate,
-                company: company.clone()
+                company: company.clone(),
             };
 
             let msg = transaction.format_to_print("DIV")?;
@@ -373,8 +373,18 @@ mod tests {
     #[test]
     fn test_dividends_verification_ok() -> Result<(), String> {
         let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
-            ("06/01/21".to_string(), 100.0, 25.0,Some("INTEL CORP".to_owned())),
-            ("03/01/21".to_string(), 126.0, 10.0,Some("INTEL CORP".to_owned())),
+            (
+                "06/01/21".to_string(),
+                100.0,
+                25.0,
+                Some("INTEL CORP".to_owned()),
+            ),
+            (
+                "03/01/21".to_string(),
+                126.0,
+                10.0,
+                Some("INTEL CORP".to_owned()),
+            ),
         ];
         verify_dividends_transactions(&transactions)
     }
@@ -386,13 +396,13 @@ mod tests {
                 "06/01/21".to_string(),
                 Currency::PLN(10.0),
                 Currency::PLN(2.0),
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
             (
                 "03/01/22".to_string(),
                 Currency::PLN(126.0),
                 Currency::PLN(10.0),
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
         ];
         assert_eq!(
@@ -442,7 +452,7 @@ mod tests {
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
-                    company : None,
+                    company: None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -450,7 +460,7 @@ mod tests {
                     tax_paid: crate::Currency::EUR(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
-                    company : None,
+                    company: None,
                 },
             ])
         );
@@ -497,7 +507,7 @@ mod tests {
                     tax_paid: crate::Currency::PLN(0.0),
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
-                    company : None,
+                    company: None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -505,7 +515,7 @@ mod tests {
                     tax_paid: crate::Currency::PLN(0.0),
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
-                    company : None,
+                    company: None,
                 },
             ])
         );
@@ -542,7 +552,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
-                    company : None,
+                    company: None,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -550,7 +560,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(0.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
-                    company : None,
+                    company: None,
                 },
             ])
         );
@@ -560,8 +570,18 @@ mod tests {
     #[test]
     fn test_create_detailed_div_transactions() -> Result<(), String> {
         let parsed_transactions: Vec<(String, f32, f32, Option<String>)> = vec![
-            ("04/11/21".to_string(), 100.0, 25.0, Some("INTEL CORP".to_owned())),
-            ("03/01/21".to_string(), 126.0, 10.0, Some("INTEL CORP".to_owned())),
+            (
+                "04/11/21".to_string(),
+                100.0,
+                25.0,
+                Some("INTEL CORP".to_owned()),
+            ),
+            (
+                "03/01/21".to_string(),
+                126.0,
+                10.0,
+                Some("INTEL CORP".to_owned()),
+            ),
         ];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
@@ -587,7 +607,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(25.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
-                    company : Some("INTEL CORP".to_owned())
+                    company: Some("INTEL CORP".to_owned())
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -595,7 +615,7 @@ mod tests {
                     tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
-                    company : Some("INTEL CORP".to_owned())
+                    company: Some("INTEL CORP".to_owned())
                 },
             ])
         );
@@ -738,8 +758,18 @@ mod tests {
     #[test]
     fn test_dividends_verification_fail() -> Result<(), String> {
         let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
-            ("04/11/22".to_string(), 100.0, 25.0,Some("INTEL CORP".to_owned())),
-            ("03/01/21".to_string(), 126.0, 10.0,Some("INTEL CORP".to_owned())),
+            (
+                "04/11/22".to_string(),
+                100.0,
+                25.0,
+                Some("INTEL CORP".to_owned()),
+            ),
+            (
+                "03/01/21".to_string(),
+                126.0,
+                10.0,
+                Some("INTEL CORP".to_owned()),
+            ),
         ];
         assert!(verify_dividends_transactions(&transactions).is_err());
         Ok(())

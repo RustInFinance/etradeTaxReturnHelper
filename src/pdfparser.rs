@@ -497,10 +497,11 @@ fn process_transaction(
                         // Here we just go through registered transactions and pick the one where
                         // income is higher than tax and apply tax value and where tax was not yet
                         // applied
-                        let mut interests_as_div: Vec<(String, f32, f32, Option<String>)> = interests_transactions
-                            .iter_mut()
-                            .map(|x| (x.0.clone(), x.1, x.2, None))
-                            .collect();
+                        let mut interests_as_div: Vec<(String, f32, f32, Option<String>)> =
+                            interests_transactions
+                                .iter_mut()
+                                .map(|x| (x.0.clone(), x.1, x.2, None))
+                                .collect();
 
                         let subject_to_tax = div_transactions
                             .iter_mut()
@@ -948,7 +949,7 @@ where
 ///  Sold stock transactions (sold_transactions)
 ///  information on transactions in case of parsing trade document (trades)
 ///  Dividends paid transaction is:
-///        transaction date, gross_us, tax_us, company 
+///        transaction date, gross_us, tax_us, company
 ///  Sold stock transaction is :
 ///     (trade_date, settlement_date, quantity, price, amount_sold, company)
 pub fn parse_statement(
@@ -1256,7 +1257,12 @@ mod tests {
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![("12/1/23".to_owned(), 1.22, 0.00)],
-                vec![("12/1/23".to_owned(), 386.50, 57.98, Some("INTEL CORP".to_string())),],
+                vec![(
+                    "12/1/23".to_owned(),
+                    386.50,
+                    57.98,
+                    Some("INTEL CORP".to_string())
+                ),],
                 vec![(
                     "12/21/23".to_owned(),
                     "12/26/23".to_owned(),
@@ -1304,8 +1310,18 @@ mod tests {
                     ("1/2/24".to_owned(), 0.49, 0.00)
                 ],
                 vec![
-                    ("6/3/24".to_owned(), 57.25, 8.59, Some("INTEL CORP".to_owned())), // Dividends date, gross, tax_us
-                    ("3/1/24".to_owned(), 380.25, 57.04, Some("INTEL CORP".to_owned()))
+                    (
+                        "6/3/24".to_owned(),
+                        57.25,
+                        8.59,
+                        Some("INTEL CORP".to_owned())
+                    ), // Dividends date, gross, tax_us
+                    (
+                        "3/1/24".to_owned(),
+                        380.25,
+                        57.04,
+                        Some("INTEL CORP".to_owned())
+                    )
                 ],
                 vec![
                     (
@@ -1525,7 +1541,12 @@ mod tests {
             parse_statement("data/example-divs.pdf"),
             (Ok((
                 vec![],
-                vec![("03/01/22".to_owned(), 698.25, 104.74, Some("INTC".to_owned()))],
+                vec![(
+                    "03/01/22".to_owned(),
+                    698.25,
+                    104.74,
+                    Some("INTC".to_owned())
+                )],
                 vec![],
                 vec![]
             )))

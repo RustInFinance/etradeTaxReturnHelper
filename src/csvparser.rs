@@ -381,11 +381,10 @@ fn process_tax_consolidated_data(
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
+            ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
             ta.incomes.extend(lincomes);
-            ta.symbols
-                .extend(std::iter::repeat(None).take(ta.incomes.len()));
         }
         ParsingState::SellEUR(s) | ParsingState::SellUSD(s) => {
             log::trace!("String to parse of Sells: {s}");

@@ -483,6 +483,7 @@ fn process_transaction(
                         "TREASURY LIQUIDITY FUND".to_owned(),
                         "INTEL CORP".to_owned(),
                         "ADVANCED MICRO DEVICES".to_owned(),
+                        "INTEREST ADJUSTMENT".to_owned(),
                     ];
                     if obj.is_pattern() == true {
                         if support_companies.contains(&token) == true {

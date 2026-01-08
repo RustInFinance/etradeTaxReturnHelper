@@ -479,8 +479,11 @@ fn process_transaction(
             // attach to sequence the same string parser if pattern is not met
             match obj.getstring() {
                 Some(token) => {
-                    let support_companies =
-                        vec!["INTEL CORP".to_owned(), "ADVANCED MICRO DEVICES".to_owned()];
+                    let support_companies = vec![
+                        "TREASURY LIQUIDITY FUND".to_owned(),
+                        "INTEL CORP".to_owned(),
+                        "ADVANCED MICRO DEVICES".to_owned(),
+                    ];
                     if obj.is_pattern() == true {
                         if support_companies.contains(&token) == true {
                             processed_sequence.push(obj);
@@ -503,6 +506,11 @@ fn process_transaction(
                 let mut transaction = processed_sequence.iter();
                 match transaction_type {
                     TransactionType::Tax => {
+                        let symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Tax transaction went wrong");
                         // Ok we assume here that taxation of transaction appears later in document
                         // than actual transaction that is a subject to taxation
                         let tax_us = transaction
@@ -514,22 +522,36 @@ fn process_transaction(
                         // Here we just go through registered transactions and pick the one where
                         // income is higher than tax and apply tax value and where tax was not yet
                         // applied
-                        let mut interests_as_div: Vec<(String, f32, f32, Option<String>)> =
-                            interests_transactions
+                        let mut interests_as_div: Vec<(
+                            &mut String,
+                            &mut f32,
+                            &mut f32,
+                            Option<String>,
+                        )> = interests_transactions
+                            .iter_mut()
+                            .map(|x| (&mut x.0, &mut x.1, &mut x.2, None))
+                            .collect();
+                        let mut div_as_ref: Vec<(&mut String, &mut f32, &mut f32, Option<String>)> =
+                            div_transactions
                                 .iter_mut()
-                                .map(|x| (x.0.clone(), x.1, x.2, None))
+                                .map(|x| (&mut x.0, &mut x.1, &mut x.2, x.3.clone()))
                                 .collect();
 
-                        let subject_to_tax = div_transactions
+                        let subject_to_tax = div_as_ref
                             .iter_mut()
                             .chain(interests_as_div.iter_mut())
-                            .find(|x| x.1 > tax_us && x.2 == 0.0f32)
+                            .find(|x| *x.1 > tax_us && *x.2 == 0.0f32)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
-                        subject_to_tax.2 = tax_us;
+                        *subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
                     }
                     TransactionType::Interests => {
+                        let _symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Interests transaction went wrong");
                         let gross_us = transaction
                             .next()
                             .unwrap()

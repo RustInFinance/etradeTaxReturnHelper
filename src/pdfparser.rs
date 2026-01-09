@@ -227,6 +227,10 @@ fn create_qualified_dividend_parsing_sequence(
 }
 
 fn create_sold_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<dyn Entry>>) {
+    sequence.push_back(Box::new(StringEntry {
+        val: String::new(),
+        patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+    })); // INTC, DLB
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Quantity
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Price
     sequence.push_back(Box::new(F32Entry { val: 0.0 })); // Amount Sold
@@ -330,7 +334,12 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
 fn yield_sold_transaction(
     transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
     transaction_dates: &mut Vec<String>,
-) -> Option<(String, String, f32, f32, f32)> {
+) -> Option<(String, String, f32, f32, f32, Option<String>)> {
+    let symbol = transaction
+        .next()
+        .unwrap()
+        .getstring()
+        .expect_and_log("Processing of Sold transaction went wrong");
     let quantity = transaction
         .next()
         .unwrap()
@@ -371,7 +380,14 @@ fn yield_sold_transaction(
         }
     };
 
-    Some((trade_date, settlement_date, quantity, price, amount_sold))
+    Some((
+        trade_date,
+        settlement_date,
+        quantity,
+        price,
+        amount_sold,
+        Some(symbol),
+    ))
 }
 
 /// Recognize whether PDF document is of Brokerage Statement type (old e-trade type of PDF
@@ -451,8 +467,8 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 
 fn process_transaction(
     interests_transactions: &mut Vec<(String, f32, f32)>,
-    div_transactions: &mut Vec<(String, f32, f32)>,
-    sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
+    div_transactions: &mut Vec<(String, f32, f32, Option<String>)>,
+    sold_transactions: &mut Vec<(String, String, f32, f32, f32, Option<String>)>,
     actual_string: &pdf::primitive::PdfString,
     transaction_dates: &mut Vec<String>,
     processed_sequence: &mut Vec<Box<dyn Entry>>,
@@ -470,8 +486,20 @@ fn process_transaction(
             // attach to sequence the same string parser if pattern is not met
             match obj.getstring() {
                 Some(token) => {
-                    if obj.is_pattern() == false && token != "$" {
-                        sequence.push_front(obj);
+                    let support_companies = vec![
+                        "TREASURY LIQUIDITY FUND".to_owned(),
+                        "INTEL CORP".to_owned(),
+                        "ADVANCED MICRO DEVICES".to_owned(),
+                        "INTEREST ADJUSTMENT".to_owned(),
+                    ];
+                    if obj.is_pattern() == true {
+                        if support_companies.contains(&token) == true {
+                            processed_sequence.push(obj);
+                        }
+                    } else {
+                        if token != "$" {
+                            sequence.push_front(obj);
+                        }
                     }
                 }
 
@@ -486,6 +514,11 @@ fn process_transaction(
                 let mut transaction = processed_sequence.iter();
                 match transaction_type {
                     TransactionType::Tax => {
+                        let symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Tax transaction went wrong");
                         // Ok we assume here that taxation of transaction appears later in document
                         // than actual transaction that is a subject to taxation
                         let tax_us = transaction
@@ -497,16 +530,36 @@ fn process_transaction(
                         // Here we just go through registered transactions and pick the one where
                         // income is higher than tax and apply tax value and where tax was not yet
                         // applied
-                        let subject_to_tax = div_transactions
+                        let mut interests_as_div: Vec<(
+                            &mut String,
+                            &mut f32,
+                            &mut f32,
+                            Option<String>,
+                        )> = interests_transactions
                             .iter_mut()
-                            .chain(interests_transactions.iter_mut())
-                            .find(|x| x.1 > tax_us && x.2 == 0.0f32)
+                            .map(|x| (&mut x.0, &mut x.1, &mut x.2, None))
+                            .collect();
+                        let mut div_as_ref: Vec<(&mut String, &mut f32, &mut f32, Option<String>)> =
+                            div_transactions
+                                .iter_mut()
+                                .map(|x| (&mut x.0, &mut x.1, &mut x.2, x.3.clone()))
+                                .collect();
+
+                        let subject_to_tax = div_as_ref
+                            .iter_mut()
+                            .chain(interests_as_div.iter_mut())
+                            .find(|x| *x.1 > tax_us && *x.2 == 0.0f32)
                             .ok_or("Error: Unable to find transaction that was taxed")?;
                         log::info!("Tax: {tax_us} was applied to {subject_to_tax:?}");
-                        subject_to_tax.2 = tax_us;
+                        *subject_to_tax.2 = tax_us;
                         log::info!("Completed parsing Tax transaction");
                     }
                     TransactionType::Interests => {
+                        let _symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Interests transaction went wrong");
                         let gross_us = transaction
                             .next()
                             .unwrap()
@@ -523,6 +576,11 @@ fn process_transaction(
                         log::info!("Completed parsing Interests transaction");
                     }
                     TransactionType::Dividends => {
+                        let symbol = transaction
+                            .next()
+                            .unwrap()
+                            .getstring()
+                            .expect_and_log("Processing of Dividend transaction went wrong");
                         let gross_us = transaction
                             .next()
                             .unwrap()
@@ -535,6 +593,7 @@ fn process_transaction(
                                 .ok_or("Error: missing transaction dates when parsing")?,
                             gross_us,
                             0.0, // No tax info yet. It will be added later in Tax section
+                            Some(symbol),
                         ));
                         log::info!("Completed parsing Dividend transaction");
                     }
@@ -563,196 +622,6 @@ fn process_transaction(
         }
     }
     Ok(state)
-}
-
-/// Parse borkerage statement document type
-fn parse_brokerage_statement<'a, I>(
-    pages_iter: I,
-) -> Result<
-    (
-        Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
-        Vec<(String, String, f32, f32, f32)>,
-        Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
-    ),
-    String,
->
-where
-    I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
-{
-    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
-    let mut state = ParserState::SearchingTransactionEntry;
-    let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-        std::collections::VecDeque::new();
-    let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
-    // Queue for transaction dates. Pop last one or last two as trade and settlement dates
-    let mut transaction_dates: Vec<String> = vec![];
-
-    for page in pages_iter {
-        let page = page.unwrap();
-        let contents = page.contents.as_ref().unwrap();
-        for op in contents.operations.iter() {
-            match op.operator.as_ref() {
-                "TJ" => {
-                    // Text show
-                    if op.operands.len() > 0 {
-                        //transaction_date = op.operands[0];
-                        let a = &op.operands[0];
-                        log::trace!("Detected PDF object: {a}");
-                        match a {
-                            Primitive::Array(c) => {
-                                for e in c {
-                                    if let Primitive::String(actual_string) = e {
-                                        match state {
-                                            ParserState::SearchingYear
-                                            | ParserState::ProcessingYear => {
-                                                log::error!("Brokerage documents do not have \"For the Period\" block!")
-                                            }
-                                            ParserState::SearchingCashFlowBlock => {
-                                                log::error!("Brokerage documents do not have cashflow  block!")
-                                            }
-                                            ParserState::SearchingTransactionEntry => {
-                                                let rust_string =
-                                                    actual_string.clone().into_string().unwrap();
-                                                //println!("rust_string: {}", rust_string);
-                                                if rust_string == "Dividend" {
-                                                    create_dividend_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Dividends,
-                                                    );
-                                                } else if rust_string == "Sold" {
-                                                    create_sold_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Sold,
-                                                    );
-                                                } else if rust_string == "TYPE" {
-                                                    create_trade_parsing_sequence(&mut sequence);
-                                                    state = ParserState::ProcessingTransaction(
-                                                        TransactionType::Trade,
-                                                    );
-                                                } else {
-                                                    //if this is date then store it
-                                                    if chrono::NaiveDate::parse_from_str(
-                                                        &rust_string,
-                                                        "%m/%d/%y",
-                                                    )
-                                                    .is_ok()
-                                                    {
-                                                        transaction_dates.push(rust_string.clone());
-                                                    }
-                                                }
-                                            }
-                                            ParserState::ProcessingTransaction(
-                                                transaction_type,
-                                            ) => {
-                                                // So process transaction element and store it in SOLD
-                                                // or DIV
-                                                let possible_obj = sequence.pop_front();
-                                                match possible_obj {
-                                                    // Move executed parser objects into Vector
-                                                    // attach only i32 and f32 elements to
-                                                    // processed queue
-                                                    Some(mut obj) => {
-                                                        obj.parse(actual_string);
-                                                        // attach to sequence the same string parser if pattern is not met
-                                                        if obj.getstring().is_some() {
-                                                            if obj.is_pattern() == false {
-                                                                sequence.push_front(obj);
-                                                            }
-                                                        } else {
-                                                            processed_sequence.push(obj);
-                                                        }
-                                                        // If sequence of expected entries is
-                                                        // empty then extract data from
-                                                        // processeed elements
-                                                        if sequence.is_empty() {
-                                                            state =
-                                                            ParserState::SearchingTransactionEntry;
-                                                            let mut transaction =
-                                                                processed_sequence.iter();
-                                                            match transaction_type {
-                                                                TransactionType::Tax => {
-                                                                    return Err("TransactionType::Tax should not appear during brokerage statement processing!".to_string());
-                                                                }
-                                                                TransactionType::Interests => {
-                                                                    return Err("TransactionType::Interest rate should not appear during brokerage statement processing!".to_string());
-                                                                }
-                                                                TransactionType::Dividends => {
-                                                                    let tax_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
-                                                                    let gross_us = transaction.next().unwrap().getf32().expect_and_log("Processing of Dividend transaction went wrong");
-                                                                    div_transactions.push((
-                                                                        transaction_dates.pop().expect("Error: missing transaction dates when parsing"),
-                                                                        gross_us,
-                                                                        tax_us,
-                                                                    ));
-                                                                }
-                                                                TransactionType::Sold => {
-                                                                    if let Some(trans_details) =
-                                                                        yield_sold_transaction(
-                                                                            &mut transaction,
-                                                                            &mut transaction_dates,
-                                                                        )
-                                                                    {
-                                                                        sold_transactions
-                                                                            .push(trans_details);
-                                                                    }
-                                                                }
-                                                                TransactionType::Trade => {
-                                                                    let transaction_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    let settlement_date = transaction.next().unwrap().getdate().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    transaction.next().unwrap(); // MKT??
-                                                                    transaction.next().unwrap(); // CPT??
-                                                                    let quantity =  transaction.next().unwrap().geti32().expect("Prasing of Trade confirmation went wrong"); // quantity
-                                                                    let price = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // price
-                                                                    let principal = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // principal
-                                                                    let commission = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // commission
-                                                                    let fee = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // fee
-                                                                    let net = transaction.next().unwrap().getf32().expect("Prasing of Trade confirmation went wrong"); // net
-                                                                    trades.push((
-                                                                        transaction_date,
-                                                                        settlement_date,
-                                                                        quantity,
-                                                                        price,
-                                                                        principal,
-                                                                        commission,
-                                                                        fee,
-                                                                        net,
-                                                                    ));
-                                                                }
-                                                            }
-                                                            processed_sequence.clear();
-                                                        } else {
-                                                            state =
-                                                                ParserState::ProcessingTransaction(
-                                                                    transaction_type,
-                                                                );
-                                                        }
-                                                    }
-
-                                                    // In nothing more to be done then just extract
-                                                    // parsed data from paser objects
-                                                    None => {
-                                                        state = ParserState::ProcessingTransaction(
-                                                            transaction_type,
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    Ok((vec![], div_transactions, sold_transactions, trades))
 }
 
 fn check_if_transaction(
@@ -824,8 +693,8 @@ fn parse_account_statement<'a, I>(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
-        Vec<(String, String, f32, f32, f32)>,
+        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, String, f32, f32, f32, Option<String>)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -834,8 +703,8 @@ where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
     let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingYear;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -941,16 +810,16 @@ where
 ///  Sold stock transactions (sold_transactions)
 ///  information on transactions in case of parsing trade document (trades)
 ///  Dividends paid transaction is:
-///        transaction date, gross_us, tax_us,
+///        transaction date, gross_us, tax_us, company
 ///  Sold stock transaction is :
-///     (trade_date, settlement_date, quantity, price, amount_sold)
+///     (trade_date, settlement_date, quantity, price, amount_sold, company)
 pub fn parse_statement(
     pdftoparse: &str,
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32)>,
-        Vec<(String, String, f32, f32, f32)>,
+        Vec<(String, f32, f32, Option<String>)>,
+        Vec<(String, String, f32, f32, f32, Option<String>)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -978,7 +847,7 @@ pub fn parse_statement(
         }
         StatementType::BrokerageStatement => {
             log::info!("Processing brokerage statement PDF");
-            parse_brokerage_statement(pdffile_iter)?
+            return Err(format!("Processing brokerage statement PDF is unsupported: document type: {pdftoparse}.To have it supported please use release 0.7.4 "));
         }
         StatementType::AccountStatement => {
             log::info!("Processing Account statement PDF");
@@ -1065,10 +934,11 @@ mod tests {
     fn test_transaction_validation() -> Result<(), String> {
         let mut transaction_dates: Vec<String> =
             vec!["11/29/22".to_string(), "12/01/22".to_string()];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1085,10 +955,11 @@ mod tests {
             "11/29/22".to_string(),
             "12/01/22".to_string(),
         ];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1101,10 +972,11 @@ mod tests {
     #[test]
     fn test_unsettled_transaction_validation() -> Result<(), String> {
         let mut transaction_dates: Vec<String> = vec!["11/29/22".to_string()];
-        let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
-            std::collections::VecDeque::new();
-        create_sold_parsing_sequence(&mut sequence);
         let mut processed_sequence: Vec<Box<dyn Entry>> = vec![];
+        processed_sequence.push(Box::new(StringEntry {
+            val: String::new(),
+            patterns: vec!["INTC".to_owned(), "DLB".to_owned()],
+        })); // INTC, DLB
         processed_sequence.push(Box::new(F32Entry { val: 42.0 })); //quantity
         processed_sequence.push(Box::new(F32Entry { val: 28.8400 })); // Price
         processed_sequence.push(Box::new(F32Entry { val: 1210.83 })); // Amount Sold
@@ -1249,13 +1121,19 @@ mod tests {
             parse_statement("data/MS_ClientStatements_6557_202312.pdf"),
             (Ok((
                 vec![("12/1/23".to_owned(), 1.22, 0.00)],
-                vec![("12/1/23".to_owned(), 386.50, 57.98),],
+                vec![(
+                    "12/1/23".to_owned(),
+                    386.50,
+                    57.98,
+                    Some("INTEL CORP".to_string())
+                ),],
                 vec![(
                     "12/21/23".to_owned(),
                     "12/26/23".to_owned(),
                     82.0,
                     46.45,
-                    3808.86
+                    3808.86,
+                    Some("INTEL CORP".to_string())
                 )],
                 vec![]
             )))
@@ -1297,8 +1175,18 @@ mod tests {
                     ("1/2/24".to_owned(), 0.49, 0.00)
                 ],
                 vec![
-                    ("6/3/24".to_owned(), 57.25, 8.59), // Dividends date, gross, tax_us
-                    ("3/1/24".to_owned(), 380.25, 57.04)
+                    (
+                        "6/3/24".to_owned(),
+                        57.25,
+                        8.59,
+                        Some("INTEL CORP".to_owned())
+                    ), // Dividends date, gross, tax_us
+                    (
+                        "3/1/24".to_owned(),
+                        380.25,
+                        57.04,
+                        Some("INTEL CORP".to_owned())
+                    )
                 ],
                 vec![
                     (
@@ -1306,203 +1194,232 @@ mod tests {
                         "12/5/24".to_owned(),
                         30.0,
                         22.5,
-                        674.98
+                        674.98,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "12/5/24".to_owned(),
                         "12/6/24".to_owned(),
                         55.0,
                         21.96,
-                        1207.76
+                        1207.76,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "11/1/24".to_owned(),
                         "11/4/24".to_owned(),
                         15.0,
                         23.32,
-                        349.79
+                        349.79,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "9/3/24".to_owned(),
                         "9/4/24".to_owned(),
                         17.0,
                         21.53,
-                        365.99
+                        365.99,
+                        Some("INTEL CORP".to_string())
                     ), // Sold
                     (
                         "9/9/24".to_owned(),
                         "9/10/24".to_owned(),
                         14.0,
                         18.98,
-                        265.71
+                        265.71,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "8/5/24".to_owned(),
                         "8/6/24".to_owned(),
                         14.0,
                         20.21,
-                        282.93
+                        282.93,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "8/20/24".to_owned(),
                         "8/21/24".to_owned(),
                         328.0,
                         21.0247,
-                        6895.89
+                        6895.89,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "7/31/24".to_owned(),
                         "8/1/24".to_owned(),
                         151.0,
                         30.44,
-                        4596.31
+                        4596.31,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "6/3/24".to_owned(),
                         "6/4/24".to_owned(),
                         14.0,
                         31.04,
-                        434.54
+                        434.54,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         126.0,
                         30.14,
-                        3797.6
+                        3797.6,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         124.0,
                         30.14,
-                        3737.33
+                        3737.33,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         89.0,
                         30.6116,
-                        2724.4
+                        2724.4,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/2/24".to_owned(),
                         "5/6/24".to_owned(),
                         182.0,
                         30.56,
-                        5561.87
+                        5561.87,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         440.0,
                         30.835,
-                        13567.29
+                        13567.29,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         198.0,
                         30.835,
-                        6105.28
+                        6105.28,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         146.0,
                         30.8603,
-                        4505.56
+                        4505.56,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         145.0,
                         30.8626,
-                        4475.04
+                        4475.04,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         75.0,
                         30.815,
-                        2311.11
+                        2311.11,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/6/24".to_owned(),
                         "5/8/24".to_owned(),
                         458.0,
                         31.11,
-                        14248.26
+                        14248.26,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/31/24".to_owned(),
                         "6/3/24".to_owned(),
                         18.0,
                         30.22,
-                        543.94
+                        543.94,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/3/24".to_owned(),
                         "4/5/24".to_owned(),
                         31.0,
                         40.625,
-                        1259.36
+                        1259.36,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
                         "4/15/24".to_owned(),
                         209.0,
                         37.44,
-                        7824.89
+                        7824.89,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
                         "4/15/24".to_owned(),
                         190.0,
                         37.44,
-                        7113.54
+                        7113.54,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/16/24".to_owned(),
                         "4/18/24".to_owned(),
                         310.0,
                         36.27,
-                        11243.61
+                        11243.61,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         153.0,
                         31.87,
-                        4876.07
+                        4876.07,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         131.0,
                         31.87,
-                        4174.93
+                        4174.93,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         87.0,
                         31.87,
-                        2772.66
+                        2772.66,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "3/11/24".to_owned(),
                         "3/13/24".to_owned(),
                         38.0,
                         43.85,
-                        1666.28
+                        1666.28,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "2/20/24".to_owned(),
                         "2/22/24".to_owned(),
                         150.0,
                         43.9822,
-                        6597.27
+                        6597.27,
+                        Some("INTEL CORP".to_string())
                     )
                 ],
                 vec![]
@@ -1513,32 +1430,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_parse_brokerage_statement() -> Result<(), String> {
-        assert_eq!(
-            parse_statement("data/example-divs.pdf"),
-            (Ok((
-                vec![],
-                vec![("03/01/22".to_owned(), 698.25, 104.74)],
-                vec![],
-                vec![]
-            )))
-        );
-        assert_eq!(
-            parse_statement("data/example-sold-wire.pdf"),
-            Ok((
-                vec![],
-                vec![],
-                vec![(
-                    "05/02/22".to_owned(),
-                    "05/04/22".to_owned(),
-                    -1.0,
-                    43.69,
-                    43.67
-                )],
-                vec![]
-            ))
-        );
-
+    fn test_parse_amd_statement() -> Result<(), String> {
         assert_eq!(
             parse_statement("data/example-sold-amd.pdf"),
             Ok((
@@ -1550,14 +1442,16 @@ mod tests {
                         "11/14/23".to_owned(),
                         72.0,
                         118.13,
-                        8505.29
+                        8505.29,
+                        Some("ADVANCED MICRO DEVICES".to_string())
                     ),
                     (
                         "11/22/23".to_owned(),
                         "11/27/23".to_owned(),
                         162.0,
                         122.4511,
-                        19836.92
+                        19836.92,
+                        Some("ADVANCED MICRO DEVICES".to_string())
                     ),
                 ],
                 vec![]

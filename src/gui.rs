@@ -129,7 +129,7 @@ fn create_execute_documents(
             revolut_dividends_transactions: revolut_transactions,
             sold_transactions,
             revolut_sold_transactions,
-        } = match run_taxation(&rd, file_names) {
+        } = match run_taxation(&rd, file_names,false) {
             Ok(res) => {
                 nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
                 res

@@ -14,7 +14,7 @@ pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
-    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    create_detailed_sold_transactions, create_per_company_report, reconstruct_sold_transactions,
     verify_dividends_transactions, verify_interests_transactions, verify_transactions,
 };
 
@@ -65,6 +65,7 @@ pub struct Transaction {
     pub tax_paid: Currency,
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
+    pub company: Option<String>,
 }
 
 impl Transaction {
@@ -114,6 +115,9 @@ pub struct SoldTransaction {
     pub exchange_rate_settlement: f32,
     pub exchange_rate_acquisition_date: String,
     pub exchange_rate_acquisition: f32,
+    pub company: Option<String>,
+    // TODO
+    //pub country : Option<String>,
 }
 
 impl SoldTransaction {
@@ -368,15 +372,27 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
+    per_company: bool,
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
     let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_div_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
-    let mut parsed_revolut_dividends_transactions: Vec<(String, Currency, Currency)> = vec![];
-    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_dividends_transactions: Vec<(
+        String,
+        Currency,
+        Currency,
+        Option<String>,
+    )> = vec![];
+    let mut parsed_revolut_sold_transactions: Vec<(
+        String,
+        String,
+        Currency,
+        Currency,
+        Option<String>,
+    )> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -432,14 +448,14 @@ pub fn run_taxation(
         });
     parsed_div_transactions
         .iter()
-        .for_each(|(trade_date, _, _)| {
+        .for_each(|(trade_date, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
         });
     detailed_sold_transactions.iter().for_each(
-        |(trade_date, settlement_date, acquisition_date, _, _)| {
+        |(trade_date, settlement_date, acquisition_date, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -456,15 +472,14 @@ pub fn run_taxation(
     );
     parsed_revolut_dividends_transactions
         .iter()
-        .for_each(|(trade_date, gross, _)| {
+        .for_each(|(trade_date, gross, _, _)| {
             let ex = gross.derive_exchange(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
         });
-    parsed_revolut_sold_transactions
-        .iter()
-        .for_each(|(acquired_date, sold_date, cost, gross)| {
+    parsed_revolut_sold_transactions.iter().for_each(
+        |(acquired_date, sold_date, cost, gross, _)| {
             let ex = cost.derive_exchange(acquired_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -473,7 +488,8 @@ pub fn run_taxation(
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
-        });
+        },
+    );
 
     rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
@@ -485,6 +501,18 @@ pub fn run_taxation(
         create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
     let revolut_sold_transactions =
         create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
+
+    if per_company {
+        let per_company_report = create_per_company_report(
+            &interests,
+            &transactions,
+            &sold_transactions,
+            &revolut_dividends_transactions,
+            &revolut_sold_transactions,
+        )?;
+
+        println!("{}", per_company_report);
+    }
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);
@@ -577,6 +605,7 @@ mod tests {
             tax_paid: crate::Currency::USD(25.0),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
+            company: Some("INTEL CORP".to_owned()),
         }];
         assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
         Ok(())
@@ -592,6 +621,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(25.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
+                company: Some("INTEL CORP".to_owned()),
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
@@ -599,6 +629,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(10.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
+                company: Some("INTEL CORP".to_owned()),
             },
         ];
         assert_eq!(
@@ -616,6 +647,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
+                company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -623,6 +655,7 @@ mod tests {
                 tax_paid: crate::Currency::PLN(0.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
+                company: None,
             },
         ];
         assert_eq!(
@@ -641,6 +674,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
+                company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -648,6 +682,7 @@ mod tests {
                 tax_paid: crate::Currency::EUR(0.0),
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
+                company: None,
             },
         ];
         assert_eq!(
@@ -670,6 +705,7 @@ mod tests {
             exchange_rate_settlement: 5.0,
             exchange_rate_acquisition_date: "N/A".to_string(),
             exchange_rate_acquisition: 6.0,
+            company: Some("TFC".to_owned()),
         }];
         assert_eq!(
             compute_sold_taxation(&transactions),
@@ -692,6 +728,7 @@ mod tests {
                 exchange_rate_settlement: 5.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 6.0,
+                company: Some("PXD".to_owned()),
             },
             SoldTransaction {
                 trade_date: "N/A".to_string(),
@@ -703,6 +740,7 @@ mod tests {
                 exchange_rate_settlement: 2.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 3.0,
+                company: Some("TFC".to_owned()),
             },
         ];
         assert_eq!(

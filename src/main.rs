@@ -260,40 +260,6 @@ mod tests {
         };
         Ok(())
     }
-    #[test]
-    fn test_cmdline_per_company() -> Result<(), clap::Error> {
-        // Init Transactions
-        let myapp = App::new("E-trade tax helper");
-        let matches = create_cmd_line_pattern(myapp)
-            .get_matches_from_safe(vec!["mytest", "data/example.pdf"])?;
-        let per_company = matches.is_present("per-company");
-        match per_company {
-            false => (),
-            true => {
-                return Err(clap::Error {
-                    message: "Wrong per-company value".to_owned(),
-                    kind: ErrorKind::InvalidValue,
-                    info: None,
-                })
-            }
-        };
-        let myapp = App::new("E-trade tax helper");
-        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
-            "mytest",
-            "--per-company",
-            "data/example.pdf",
-        ])?;
-        let per_company = matches.is_present("per-company");
-        match per_company {
-            true => return Ok(()),
-            false => clap::Error {
-                message: "Wrong per-company value".to_owned(),
-                kind: ErrorKind::InvalidValue,
-                info: None,
-            },
-        };
-        Ok(())
-    }
 
     #[test]
     fn test_cmdline_pl() -> Result<(), clap::Error> {

@@ -377,12 +377,10 @@ pub(crate) fn create_per_company_report(
     per_company_data
         .iter()
         .try_for_each(|(company, (gross_pl, tax_paid_in_us_pl, cost_pl))| {
-            log::info!(
+            //log::info!(
+            println!(
                 "Company: {:?}, Gross PLN: {:.2}, Tax Paid in USD PLN: {:.2}, Cost PLN: {:.2}",
-                company,
-                gross_pl,
-                tax_paid_in_us_pl,
-                cost_pl
+                company, gross_pl, tax_paid_in_us_pl, cost_pl
             );
             companies.push(company.clone());
             gross.push(*gross_pl);
@@ -448,6 +446,73 @@ mod tests {
         assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_per_company_report_dividends() -> Result<(), String> {
+        let input = vec![
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(25.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+                company: Some("INTEL CORP".to_owned()),
+            },
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::USD(126.0),
+                tax_paid: crate::Currency::USD(10.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+                company: Some("INTEL CORP".to_owned()),
+            },
+            Transaction {
+                transaction_date: "03/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 10.0,
+                company: Some("ABEV".to_owned()),
+            },
+        ];
+        let df = create_per_company_report(&[], &input, &[], &[], &[])
+            .map_err(|e| format!("Error creating per company report: {}", e))?;
+
+        // Interests are having company == None, and data should be folded to one row
+        assert_eq!(df.height(), 2);
+        assert_eq!(df.width(), 4);
+
+        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        let (abev_index, intc_index) = match company_col.get(0) {
+            Some("INTEL CORP") => (1, 0),
+            Some("ABEV") => (0, 1),
+            _ => return Err("Unexpected company name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(intc_index).unwrap().extract::<f64>().unwrap()),
+            round4(100.0 * 3.0 + 126.0 * 2.0)
+        );
+        assert_eq!(
+            round4(gross_col.get(abev_index).unwrap().extract::<f64>().unwrap()),
+            round4(100.0 * 10.0)
+        );
+        assert_eq!(
+            tax_col.get(intc_index).unwrap().extract::<f64>().unwrap(),
+            round4(25.0 * 3.0 + 10.0 * 2.0)
+        );
+        assert_eq!(
+            tax_col.get(abev_index).unwrap().extract::<f64>().unwrap(),
+            round4(0.0)
+        );
+
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        assert_eq!(cost_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
 
         Ok(())
     }

@@ -412,7 +412,10 @@ pub(crate) fn create_per_company_report(
         Series::new("Cost[PLN]", cost),
         Series::new("Tax Paid in USD[PLN]", tax),
     ];
-    DataFrame::new(series).map_err(|_| "Unable to create per company report dataframe")
+    DataFrame::new(series)
+        .map_err(|_| "Unable to create per company report dataframe")?
+        .sort(["Company"], false, true)
+        .map_err(|_| "Unable to sort per company report dataframe")
 }
 
 #[cfg(test)]

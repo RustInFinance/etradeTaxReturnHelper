@@ -372,6 +372,7 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
+    per_company: bool,
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
@@ -494,6 +495,10 @@ pub fn run_taxation(
         create_detailed_revolut_transactions(parsed_revolut_dividends_transactions, &dates)?;
     let revolut_sold_transactions =
         create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
+
+    if per_company {
+        todo!();
+    }
 
     let (gross_interests, _) = compute_div_taxation(&interests);
     let (gross_div, tax_div) = compute_div_taxation(&transactions);

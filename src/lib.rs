@@ -116,9 +116,9 @@ pub struct SoldTransaction {
     pub exchange_rate_settlement: f32,
     pub exchange_rate_acquisition_date: String,
     pub exchange_rate_acquisition: f32,
+    pub company : Option<String>,
     // TODO
     //pub country : Option<String>,
-    //pub company : Option<String>,
 }
 
 impl SoldTransaction {
@@ -379,7 +379,7 @@ pub fn run_taxation(
 
     let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_revolut_dividends_transactions: Vec<(
         String,
@@ -387,7 +387,7 @@ pub fn run_taxation(
         Currency,
         Option<String>,
     )> = vec![];
-    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency)> = vec![];
+    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency, Option<String>)> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -450,7 +450,7 @@ pub fn run_taxation(
             }
         });
     detailed_sold_transactions.iter().for_each(
-        |(trade_date, settlement_date, acquisition_date, _, _)| {
+        |(trade_date, settlement_date, acquisition_date, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -475,7 +475,7 @@ pub fn run_taxation(
         });
     parsed_revolut_sold_transactions
         .iter()
-        .for_each(|(acquired_date, sold_date, cost, gross)| {
+        .for_each(|(acquired_date, sold_date, cost, gross, _)| {
             let ex = cost.derive_exchange(acquired_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -694,6 +694,7 @@ mod tests {
             exchange_rate_settlement: 5.0,
             exchange_rate_acquisition_date: "N/A".to_string(),
             exchange_rate_acquisition: 6.0,
+            company : Some("TFC".to_owned())
         }];
         assert_eq!(
             compute_sold_taxation(&transactions),
@@ -716,6 +717,7 @@ mod tests {
                 exchange_rate_settlement: 5.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 6.0,
+                company : Some("PXD".to_owned())
             },
             SoldTransaction {
                 trade_date: "N/A".to_string(),
@@ -727,6 +729,7 @@ mod tests {
                 exchange_rate_settlement: 2.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 3.0,
+                company : Some("TFC".to_owned())
             },
         ];
         assert_eq!(

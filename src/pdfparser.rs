@@ -334,12 +334,12 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
 fn yield_sold_transaction(
     transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
     transaction_dates: &mut Vec<String>,
-) -> Option<(String, String, f32, f32, f32)> {
-    let _symbol = transaction
+) -> Option<(String, String, f32, f32, f32, Option<String>)> {
+    let symbol = transaction
         .next()
         .unwrap()
         .getstring()
-        .expect_and_log("Processing of Sold transaction went wrong"); // TODO: make sold to report symbol
+        .expect_and_log("Processing of Sold transaction went wrong");
     let quantity = transaction
         .next()
         .unwrap()
@@ -380,7 +380,7 @@ fn yield_sold_transaction(
         }
     };
 
-    Some((trade_date, settlement_date, quantity, price, amount_sold))
+    Some((trade_date, settlement_date, quantity, price, amount_sold, Some(symbol)))
 }
 
 /// Recognize whether PDF document is of Brokerage Statement type (old e-trade type of PDF
@@ -461,7 +461,7 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 fn process_transaction(
     interests_transactions: &mut Vec<(String, f32, f32)>,
     div_transactions: &mut Vec<(String, f32, f32, Option<String>)>,
-    sold_transactions: &mut Vec<(String, String, f32, f32, f32)>,
+    sold_transactions: &mut Vec<(String, String, f32, f32, f32, Option<String>)>,
     actual_string: &pdf::primitive::PdfString,
     transaction_dates: &mut Vec<String>,
     processed_sequence: &mut Vec<Box<dyn Entry>>,
@@ -687,7 +687,7 @@ fn parse_account_statement<'a, I>(
     (
         Vec<(String, f32, f32)>,
         Vec<(String, f32, f32, Option<String>)>,
-        Vec<(String, String, f32, f32, f32)>,
+        Vec<(String, String, f32, f32, f32, Option<String>)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -697,7 +697,7 @@ where
 {
     let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
     let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut sold_transactions: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingYear;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -812,7 +812,7 @@ pub fn parse_statement(
     (
         Vec<(String, f32, f32)>,
         Vec<(String, f32, f32, Option<String>)>,
-        Vec<(String, String, f32, f32, f32)>,
+        Vec<(String, String, f32, f32, f32, Option<String>)>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -1125,7 +1125,8 @@ mod tests {
                     "12/26/23".to_owned(),
                     82.0,
                     46.45,
-                    3808.86
+                    3808.86,
+                    Some("INTEL CORP".to_string())
                 )],
                 vec![]
             )))
@@ -1186,203 +1187,232 @@ mod tests {
                         "12/5/24".to_owned(),
                         30.0,
                         22.5,
-                        674.98
+                        674.98,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "12/5/24".to_owned(),
                         "12/6/24".to_owned(),
                         55.0,
                         21.96,
-                        1207.76
+                        1207.76,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "11/1/24".to_owned(),
                         "11/4/24".to_owned(),
                         15.0,
                         23.32,
-                        349.79
+                        349.79,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "9/3/24".to_owned(),
                         "9/4/24".to_owned(),
                         17.0,
                         21.53,
-                        365.99
+                        365.99,
+                        Some("INTEL CORP".to_string())
                     ), // Sold
                     (
                         "9/9/24".to_owned(),
                         "9/10/24".to_owned(),
                         14.0,
                         18.98,
-                        265.71
+                        265.71,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "8/5/24".to_owned(),
                         "8/6/24".to_owned(),
                         14.0,
                         20.21,
-                        282.93
+                        282.93,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "8/20/24".to_owned(),
                         "8/21/24".to_owned(),
                         328.0,
                         21.0247,
-                        6895.89
+                        6895.89,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "7/31/24".to_owned(),
                         "8/1/24".to_owned(),
                         151.0,
                         30.44,
-                        4596.31
+                        4596.31,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "6/3/24".to_owned(),
                         "6/4/24".to_owned(),
                         14.0,
                         31.04,
-                        434.54
+                        434.54,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         126.0,
                         30.14,
-                        3797.6
+                        3797.6,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         124.0,
                         30.14,
-                        3737.33
+                        3737.33,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
                         "5/3/24".to_owned(),
                         89.0,
                         30.6116,
-                        2724.4
+                        2724.4,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/2/24".to_owned(),
                         "5/6/24".to_owned(),
                         182.0,
                         30.56,
-                        5561.87
+                        5561.87,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         440.0,
                         30.835,
-                        13567.29
+                        13567.29,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         198.0,
                         30.835,
-                        6105.28
+                        6105.28,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         146.0,
                         30.8603,
-                        4505.56
+                        4505.56,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         145.0,
                         30.8626,
-                        4475.04
+                        4475.04,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
                         "5/7/24".to_owned(),
                         75.0,
                         30.815,
-                        2311.11
+                        2311.11,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/6/24".to_owned(),
                         "5/8/24".to_owned(),
                         458.0,
                         31.11,
-                        14248.26
+                        14248.26,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "5/31/24".to_owned(),
                         "6/3/24".to_owned(),
                         18.0,
                         30.22,
-                        543.94
+                        543.94,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/3/24".to_owned(),
                         "4/5/24".to_owned(),
                         31.0,
                         40.625,
-                        1259.36
+                        1259.36,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
                         "4/15/24".to_owned(),
                         209.0,
                         37.44,
-                        7824.89
+                        7824.89,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
                         "4/15/24".to_owned(),
                         190.0,
                         37.44,
-                        7113.54
+                        7113.54,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/16/24".to_owned(),
                         "4/18/24".to_owned(),
                         310.0,
                         36.27,
-                        11243.61
+                        11243.61,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         153.0,
                         31.87,
-                        4876.07
+                        4876.07,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         131.0,
                         31.87,
-                        4174.93
+                        4174.93,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
                         "5/1/24".to_owned(),
                         87.0,
                         31.87,
-                        2772.66
+                        2772.66,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "3/11/24".to_owned(),
                         "3/13/24".to_owned(),
                         38.0,
                         43.85,
-                        1666.28
+                        1666.28,
+                        Some("INTEL CORP".to_string())
                     ),
                     (
                         "2/20/24".to_owned(),
                         "2/22/24".to_owned(),
                         150.0,
                         43.9822,
-                        6597.27
+                        6597.27,
+                        Some("INTEL CORP".to_string())
                     )
                 ],
                 vec![]
@@ -1405,14 +1435,16 @@ mod tests {
                         "11/14/23".to_owned(),
                         72.0,
                         118.13,
-                        8505.29
+                        8505.29,
+                        Some("ADVANCED MICRO DEVICES".to_string())
                     ),
                     (
                         "11/22/23".to_owned(),
                         "11/27/23".to_owned(),
                         162.0,
                         122.4511,
-                        19836.92
+                        19836.92,
+                        Some("ADVANCED MICRO DEVICES".to_string())
                     ),
                 ],
                 vec![]

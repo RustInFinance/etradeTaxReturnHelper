@@ -24,6 +24,7 @@ struct InvestmentTransactions {
     pub sold_dates: Vec<String>,
     pub costs: Vec<crate::Currency>,
     pub gross: Vec<crate::Currency>,
+    pub symbols: Vec<Option<String>>,
 }
 #[derive(Default)]
 struct TransactionAccumulator {
@@ -38,7 +39,13 @@ struct TransactionAccumulator {
 #[derive(Debug, PartialEq)]
 pub struct RevolutTransactions {
     pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)>,
-    pub sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
+    pub sold_transactions: Vec<(
+        String,
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+    )>,
     pub crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
 }
 
@@ -141,6 +148,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         df.select([
             "Date acquired",
             "Date sold",
+            "Symbol",
             "Cost basis",
             "Gross proceeds",
             "Currency",
@@ -149,6 +157,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         df.select([
             "Date acquired",
             "Date sold",
+            "Symbol",
             "Cost basis base currency",
             "Gross proceeds base currency",
             "Fees  base currency",
@@ -406,6 +415,9 @@ fn process_tax_consolidated_data(
             }
             ta.stock.sold_dates.extend(lsold_dates);
             ta.stock.acquired_dates.extend(lacquired_dates);
+            ta.stock
+                .symbols
+                .extend(parse_symbols(&filtred_df, "Symbol")?);
             let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
             ta.stock
                 .gross
@@ -486,7 +498,13 @@ fn process_tax_consolidated_data(
 pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransactions, String> {
     let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)> =
         vec![];
-    let mut sold_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
+    let mut sold_transactions: Vec<(
+        String,
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+    )> = vec![];
     let mut crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
 
     let mut ta = TransactionAccumulator::default();
@@ -583,6 +601,18 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
+        // Get rid of rows with empty data
+        let mask = sales
+            .get_columns()
+            .iter()
+            .map(|s| s.is_not_null())
+            .fold(BooleanChunked::full("", false, sales.height()), |acc, b| {
+                acc | b
+            });
+
+        let sales = sales
+            .filter(&mask)
+            .map_err(|e| format!("Error reading CSV: {e}"))?;
         log::info!("Content of first to be DataFrame: {sales}");
 
         let filtred_df = extract_sold_transactions(&sales)?;
@@ -595,6 +625,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         }
         ta.stock.costs = parse_income_with_currency(&filtred_df, "Cost basis", "Currency")?;
         ta.stock.gross = parse_income_with_currency(&filtred_df, "Gross proceeds", "Currency")?;
+        ta.stock.symbols = parse_symbols(&filtred_df, "Symbol")?;
 
         log::info!("Content of second to be DataFrame: {others}");
 
@@ -678,15 +709,33 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     log::info!("Sold Sold Dates: {:?}", ta.stock.sold_dates);
     log::info!("Sold Incomes: {:?}", ta.stock.gross);
     log::info!("Sold Cost Basis: {:?}", ta.stock.costs);
+
+    if ta.stock.acquired_dates.len() != ta.stock.gross.len()
+        || ta.stock.acquired_dates.len() != ta.stock.sold_dates.len()
+        || ta.stock.acquired_dates.len() != ta.stock.symbols.len()
+    {
+        return Err(format!(
+            "ERROR: Different number of sold acquired_dates({}), sold_dates({}), gross({}), cost({}) or symbols({})",
+            ta.stock.acquired_dates.len(),
+            ta.stock.sold_dates.len(),
+            ta.stock.gross.len(),
+            ta.stock.costs.len(),
+            ta.stock.symbols.len()
+        ));
+    }
+
     let iter = std::iter::zip(
         ta.stock.acquired_dates,
         std::iter::zip(
-            ta.stock.sold_dates,
-            std::iter::zip(ta.stock.costs, ta.stock.gross),
+            ta.stock.symbols,
+            std::iter::zip(
+                ta.stock.sold_dates,
+                std::iter::zip(ta.stock.costs, ta.stock.gross),
+            ),
         ),
     );
-    iter.for_each(|(acq_d, (sol_d, (c, g)))| {
-        sold_transactions.push((acq_d, sol_d, c, g));
+    iter.for_each(|(acq_d, (s, (sol_d, (c, g))))| {
+        sold_transactions.push((acq_d, sol_d, c, g, s));
     });
     // Crypto transactions
     log::info!("Crypto Acquire Dates: {:?}", ta.crypto.acquired_dates);
@@ -1173,45 +1222,48 @@ mod tests {
                     Some("EPR".to_string()),
                 ),
             ],
-            // TODO: symbols
             sold_transactions: vec![
                 (
                     "07/29/24".to_owned(),
                     "10/28/24".to_owned(),
                     crate::Currency::PLN(13037.94 + 65.94),
                     crate::Currency::PLN(13348.22),
-                    //                    Some("EU000A3K4DJ5".to_string())
+                    Some("EU000A3K4DJ5".to_string()),
                 ),
                 (
                     "09/09/24".to_owned(),
                     "11/21/24".to_owned(),
                     crate::Currency::PLN(16097.86 + 81.41),
                     crate::Currency::PLN(16477.91),
-                    //                 Some("XS1218821756".to_string())
+                    Some("XS1218821756".to_string()),
                 ),
                 (
                     "11/20/23".to_owned(),
                     "08/12/24".to_owned(),
                     crate::Currency::PLN(19863.25 + 0.66),
                     crate::Currency::PLN(22865.17),
+                    Some("XOM".to_string()),
                 ),
                 (
                     "06/11/24".to_owned(),
                     "10/14/24".to_owned(),
                     crate::Currency::PLN(525.08 + 0.0),
                     crate::Currency::PLN(624.00),
+                    Some("TFC".to_string()),
                 ),
                 (
                     "10/23/23".to_owned(),
                     "10/14/24".to_owned(),
                     crate::Currency::PLN(835.88 + 0.03),
                     crate::Currency::PLN(1046.20),
+                    Some("AMCR".to_string()),
                 ),
                 (
                     "08/22/24".to_owned(),
                     "10/17/24".to_owned(),
                     crate::Currency::PLN(25135.50 + 128.17),
                     crate::Currency::PLN(26130.41),
+                    Some("US13607LNF66".to_string()),
                 ),
             ],
             crypto_transactions: vec![],
@@ -1441,6 +1493,7 @@ mod tests {
                 "08/12/24".to_owned(),
                 crate::Currency::USD(5000.0),
                 crate::Currency::USD(5804.62),
+                Some("XOM".to_string()),
             )],
             crypto_transactions: vec![],
         });

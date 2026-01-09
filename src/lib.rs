@@ -16,6 +16,7 @@ use transactions::{
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
     create_detailed_sold_transactions, reconstruct_sold_transactions,
     verify_dividends_transactions, verify_interests_transactions, verify_transactions,
+    create_per_company_report,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -497,7 +498,8 @@ pub fn run_taxation(
         create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
     if per_company {
-        todo!();
+       let per_company_report = create_per_company_report(&interests,&transactions, &sold_transactions, &revolut_dividends_transactions, &revolut_sold_transactions)?; 
+       println!("{}",per_company_report);
     }
 
     let (gross_interests, _) = compute_div_taxation(&interests);

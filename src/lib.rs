@@ -499,6 +499,7 @@ pub fn run_taxation(
 
     if per_company {
        let per_company_report = create_per_company_report(&interests,&transactions, &sold_transactions, &revolut_dividends_transactions, &revolut_sold_transactions)?; 
+
        println!("{}",per_company_report);
     }
 

@@ -376,7 +376,9 @@ pub(crate) fn create_per_company_report(
         .iter()
         .chain(revolut_sold_transactions.iter());
     sells.for_each(|x| {
-        let entry = per_company_data.entry(None).or_insert((0.0, 0.0, 0.0));
+        let entry = per_company_data
+            .entry(x.company.clone())
+            .or_insert((0.0, 0.0, 0.0));
         entry.0 += x.income_us * x.exchange_rate_settlement;
         // No tax from sold transactions
         entry.2 += x.cost_basis * x.exchange_rate_acquisition;
@@ -390,10 +392,12 @@ pub(crate) fn create_per_company_report(
     per_company_data
         .iter()
         .try_for_each(|(company, (gross_pl, tax_paid_in_us_pl, cost_pl))| {
-            //log::info!(
-            println!(
+            log::info!(
                 "Company: {:?}, Gross PLN: {:.2}, Tax Paid in USD PLN: {:.2}, Cost PLN: {:.2}",
-                company, gross_pl, tax_paid_in_us_pl, cost_pl
+                company,
+                gross_pl,
+                tax_paid_in_us_pl,
+                cost_pl
             );
             companies.push(company.clone());
             gross.push(*gross_pl);
@@ -526,6 +530,85 @@ mod tests {
         let cost_col = df.column("Cost[PLN]").unwrap();
         assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
         assert_eq!(cost_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_per_company_report_sells() -> Result<(), String> {
+        let input = vec![
+            SoldTransaction {
+                trade_date: "03/01/21".to_string(),
+                settlement_date: "03/03/21".to_string(),
+                acquisition_date: "01/01/21".to_string(),
+                income_us: 20.0,
+                cost_basis: 20.0,
+                exchange_rate_settlement_date: "03/02/21".to_string(),
+                exchange_rate_settlement: 2.5,
+                exchange_rate_acquisition_date: "02/28/21".to_string(),
+                exchange_rate_acquisition: 5.0,
+                company: Some("INTEL CORP".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 25.0,
+                cost_basis: 10.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("INTEL CORP".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 20.0,
+                cost_basis: 0.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("PXD".to_owned()),
+            },
+        ];
+        let df = create_per_company_report(&[], &[], &input, &[], &[])
+            .map_err(|e| format!("Error creating per company report: {}", e))?;
+
+        // Solds are having company
+        assert_eq!(df.height(), 2);
+        assert_eq!(df.width(), 4);
+
+        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        let (abev_index, intc_index) = match company_col.get(0) {
+            Some("INTEL CORP") => (1, 0),
+            Some("PXD") => (0, 1),
+            _ => return Err("Unexpected company name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(intc_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 2.5 + 25.0 * 4.0)
+        );
+        assert_eq!(
+            round4(gross_col.get(abev_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 4.0)
+        );
+        assert_eq!(
+            cost_col.get(intc_index).unwrap().extract::<f64>().unwrap(),
+            round4(20.0 * 5.0 + 10.0 * 6.0)
+        );
+        assert_eq!(
+            cost_col.get(abev_index).unwrap().extract::<f64>().unwrap(),
+            round4(0.0)
+        );
+
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        assert_eq!(tax_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
 
         Ok(())
     }

@@ -380,7 +380,14 @@ fn yield_sold_transaction(
         }
     };
 
-    Some((trade_date, settlement_date, quantity, price, amount_sold, Some(symbol)))
+    Some((
+        trade_date,
+        settlement_date,
+        quantity,
+        price,
+        amount_sold,
+        Some(symbol),
+    ))
 }
 
 /// Recognize whether PDF document is of Brokerage Statement type (old e-trade type of PDF

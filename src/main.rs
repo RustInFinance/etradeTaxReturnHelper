@@ -16,7 +16,6 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
-// TODO: add option --per-company
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Extend structure of TaxCalculationResult with country
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem
@@ -265,18 +264,18 @@ mod tests {
     fn test_cmdline_per_company() -> Result<(), clap::Error> {
         // Init Transactions
         let myapp = App::new("E-trade tax helper");
-        let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![
-            "mytest",
-            "data/example.pdf",
-        ])?;
+        let matches = create_cmd_line_pattern(myapp)
+            .get_matches_from_safe(vec!["mytest", "data/example.pdf"])?;
         let per_company = matches.is_present("per-company");
         match per_company {
             false => (),
-            true => return Err(clap::Error {
-                message: "Wrong per-company value".to_owned(),
-                kind: ErrorKind::InvalidValue,
-                info: None,
-            }),
+            true => {
+                return Err(clap::Error {
+                    message: "Wrong per-company value".to_owned(),
+                    kind: ErrorKind::InvalidValue,
+                    info: None,
+                })
+            }
         };
         let myapp = App::new("E-trade tax helper");
         let matches = create_cmd_line_pattern(myapp).get_matches_from_safe(vec![

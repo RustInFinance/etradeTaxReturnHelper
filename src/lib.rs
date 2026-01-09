@@ -14,9 +14,8 @@ pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
-    create_detailed_sold_transactions, reconstruct_sold_transactions,
+    create_detailed_sold_transactions, create_per_company_report, reconstruct_sold_transactions,
     verify_dividends_transactions, verify_interests_transactions, verify_transactions,
-    create_per_company_report,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -116,7 +115,7 @@ pub struct SoldTransaction {
     pub exchange_rate_settlement: f32,
     pub exchange_rate_acquisition_date: String,
     pub exchange_rate_acquisition: f32,
-    pub company : Option<String>,
+    pub company: Option<String>,
     // TODO
     //pub country : Option<String>,
 }
@@ -387,7 +386,13 @@ pub fn run_taxation(
         Currency,
         Option<String>,
     )> = vec![];
-    let mut parsed_revolut_sold_transactions: Vec<(String, String, Currency, Currency, Option<String>)> = vec![];
+    let mut parsed_revolut_sold_transactions: Vec<(
+        String,
+        String,
+        Currency,
+        Currency,
+        Option<String>,
+    )> = vec![];
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
@@ -473,9 +478,8 @@ pub fn run_taxation(
                 dates.insert(ex, None);
             }
         });
-    parsed_revolut_sold_transactions
-        .iter()
-        .for_each(|(acquired_date, sold_date, cost, gross, _)| {
+    parsed_revolut_sold_transactions.iter().for_each(
+        |(acquired_date, sold_date, cost, gross, _)| {
             let ex = cost.derive_exchange(acquired_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -484,7 +488,8 @@ pub fn run_taxation(
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
-        });
+        },
+    );
 
     rd.get_exchange_rates(&mut dates).map_err(|x| "Error: unable to get exchange rates.  Please check your internet connection or proxy settings\n\nDetails:".to_string()+x.as_str())?;
 
@@ -498,9 +503,15 @@ pub fn run_taxation(
         create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
     if per_company {
-       let per_company_report = create_per_company_report(&interests,&transactions, &sold_transactions, &revolut_dividends_transactions, &revolut_sold_transactions)?; 
+        let per_company_report = create_per_company_report(
+            &interests,
+            &transactions,
+            &sold_transactions,
+            &revolut_dividends_transactions,
+            &revolut_sold_transactions,
+        )?;
 
-       println!("{}",per_company_report);
+        println!("{}", per_company_report);
     }
 
     let (gross_interests, _) = compute_div_taxation(&interests);
@@ -694,7 +705,7 @@ mod tests {
             exchange_rate_settlement: 5.0,
             exchange_rate_acquisition_date: "N/A".to_string(),
             exchange_rate_acquisition: 6.0,
-            company : Some("TFC".to_owned())
+            company: Some("TFC".to_owned()),
         }];
         assert_eq!(
             compute_sold_taxation(&transactions),
@@ -717,7 +728,7 @@ mod tests {
                 exchange_rate_settlement: 5.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 6.0,
-                company : Some("PXD".to_owned())
+                company: Some("PXD".to_owned()),
             },
             SoldTransaction {
                 trade_date: "N/A".to_string(),
@@ -729,7 +740,7 @@ mod tests {
                 exchange_rate_settlement: 2.0,
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 3.0,
-                company : Some("TFC".to_owned())
+                company: Some("TFC".to_owned()),
             },
         ];
         assert_eq!(

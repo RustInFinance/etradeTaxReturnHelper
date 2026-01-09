@@ -67,7 +67,9 @@ pub fn verify_dividends_transactions<T>(
     verification
 }
 
-pub fn verify_transactions<T>(transactions: &Vec<(String, String, T, T, Option<String>)>) -> Result<(), String> {
+pub fn verify_transactions<T>(
+    transactions: &Vec<(String, String, T, T, Option<String>)>,
+) -> Result<(), String> {
     let mut trans = transactions.iter();
     let transaction_date = match trans.next() {
         Some((_, x, _, _, _)) => x,
@@ -109,7 +111,8 @@ pub fn reconstruct_sold_transactions(
     // 4. gross income
     // 5. cost cost basis
     // 6. company symbol (ticker)
-    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32, Option<String>)> = vec![];
+    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32, Option<String>)> =
+        vec![];
 
     if sold_transactions.len() > 0 && gains_and_losses.is_empty() {
         return Err("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
@@ -284,7 +287,7 @@ pub fn create_detailed_sold_transactions(
                 exchange_rate_settlement,
                 exchange_rate_acquisition_date,
                 exchange_rate_acquisition,
-                company : symbol.clone(),
+                company: symbol.clone(),
             };
 
             let msg = transaction.format_to_print("");
@@ -299,13 +302,18 @@ pub fn create_detailed_sold_transactions(
 }
 
 pub fn create_detailed_revolut_sold_transactions(
-    transactions: Vec<(String, String, crate::Currency, crate::Currency, Option<String>)>,
+    transactions: Vec<(
+        String,
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+    )>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
-    transactions
-        .iter()
-        .for_each(|(acquired_date, sold_date, cost_basis, gross_income, symbol)| {
+    transactions.iter().for_each(
+        |(acquired_date, sold_date, cost_basis, gross_income, symbol)| {
             let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
                 [&gross_income.derive_exchange(sold_date.clone())] // TODO: settlement date???
                 .clone()
@@ -325,7 +333,7 @@ pub fn create_detailed_revolut_sold_transactions(
                 exchange_rate_settlement,
                 exchange_rate_acquisition_date,
                 exchange_rate_acquisition,
-                company : symbol.clone(),
+                company: symbol.clone(),
             };
 
             let msg = transaction.format_to_print("REVOLUT ");
@@ -334,7 +342,8 @@ pub fn create_detailed_revolut_sold_transactions(
             log::info!("{}", msg);
 
             detailed_transactions.push(transaction);
-        });
+        },
+    );
     Ok(detailed_transactions)
 }
 
@@ -809,14 +818,14 @@ mod tests {
 
     #[test]
     fn test_create_detailed_revolut_sold_transactions() -> Result<(), String> {
-                
-        let parsed_transactions: Vec<(String, String, Currency, Currency,Option<String> )> = vec![(
-            "11/20/23".to_string(),
-            "12/08/24".to_string(),
-            Currency::USD(5000.0),
-            Currency::USD(5804.62),
-            Some("INTEL CORP".to_owned()),
-        )];
+        let parsed_transactions: Vec<(String, String, Currency, Currency, Option<String>)> =
+            vec![(
+                "11/20/23".to_string(),
+                "12/08/24".to_string(),
+                Currency::USD(5000.0),
+                Currency::USD(5804.62),
+                Some("INTEL CORP".to_owned()),
+            )];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
@@ -844,7 +853,7 @@ mod tests {
                 exchange_rate_settlement: 3.0,
                 exchange_rate_acquisition_date: "11/19/23".to_string(),
                 exchange_rate_acquisition: 2.0,
-                company : Some("INTEL CORP".to_owned()),
+                company: Some("INTEL CORP".to_owned()),
             },])
         );
         Ok(())
@@ -922,7 +931,7 @@ mod tests {
                     exchange_rate_settlement: 2.5,
                     exchange_rate_acquisition_date: "02/28/21".to_string(),
                     exchange_rate_acquisition: 5.0,
-                    company : Some("INTEL CORP".to_owned()),
+                    company: Some("INTEL CORP".to_owned()),
                 },
                 SoldTransaction {
                     trade_date: "06/01/21".to_string(),
@@ -934,7 +943,7 @@ mod tests {
                     exchange_rate_settlement: 4.0,
                     exchange_rate_acquisition_date: "12/30/18".to_string(),
                     exchange_rate_acquisition: 6.0,
-                    company : Some("INTEL CORP".to_owned()),
+                    company: Some("INTEL CORP".to_owned()),
                 },
             ])
         );
@@ -993,7 +1002,7 @@ mod tests {
                 1.0,
                 25.0,
                 24.8,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
             (
                 "03/01/21".to_string(),
@@ -1001,7 +1010,7 @@ mod tests {
                 2.0,
                 10.0,
                 19.8,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
         ];
 
@@ -1057,8 +1066,22 @@ mod tests {
     #[test]
     fn test_sold_transaction_reconstruction_single_digits_ok() -> Result<(), String> {
         let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![
-            ("6/1/21".to_string(), "6/3/21".to_string(), 1.0, 25.0, 24.8, Some("INTEL CORP".to_owned())),
-            ("3/1/21".to_string(), "3/3/21".to_string(), 2.0, 10.0, 19.8, Some("INTEL CORP".to_owned())),
+            (
+                "6/1/21".to_string(),
+                "6/3/21".to_string(),
+                1.0,
+                25.0,
+                24.8,
+                Some("INTEL CORP".to_owned()),
+            ),
+            (
+                "3/1/21".to_string(),
+                "3/3/21".to_string(),
+                2.0,
+                10.0,
+                19.8,
+                Some("INTEL CORP".to_owned()),
+            ),
         ];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
@@ -1112,14 +1135,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_second_fail() {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![(
-            "11/07/22".to_string(), // trade date
-            "11/09/22".to_string(), // settlement date
-            173.0,                  // quantity
-            28.2035,                // price
-            4877.36,                // amount sold
-            Some("INTEL CORP".to_owned()) // company symbol (ticker)
-        )];
+        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> =
+            vec![(
+                "11/07/22".to_string(),        // trade date
+                "11/09/22".to_string(),        // settlement date
+                173.0,                         // quantity
+                28.2035,                       // price
+                4877.36,                       // amount sold
+                Some("INTEL CORP".to_owned()), // company symbol (ticker)
+            )];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
             (
@@ -1161,7 +1185,7 @@ mod tests {
                 163.0,
                 26.5900,
                 4332.44,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
             (
                 "12/19/22".to_string(),
@@ -1169,7 +1193,7 @@ mod tests {
                 252.0,
                 26.5900,
                 6698.00,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
         ];
 
@@ -1256,7 +1280,7 @@ mod tests {
                 1.0,
                 25.0,
                 24.8,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
             (
                 "03/01/21".to_string(),
@@ -1264,7 +1288,7 @@ mod tests {
                 2.0,
                 10.0,
                 19.8,
-                Some("INTEL CORP".to_owned())
+                Some("INTEL CORP".to_owned()),
             ),
         ];
 

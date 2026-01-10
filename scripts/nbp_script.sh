@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2025 RustInFinance
+# SPDX-License-Identifier: BSD-3-Clause
+
 #!/bin/bash
 curl https://api.nbp.pl/api/exchangerates/rates/a/usd/2025-01-01/2025-12-31/ > rates-2025.json
 curl https://api.nbp.pl/api/exchangerates/rates/a/usd/2024-01-01/2024-12-31/ > rates-2024.json

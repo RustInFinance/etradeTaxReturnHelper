@@ -44,7 +44,11 @@ fn main() {
         )
         .get_matches();
 
-    let file_paths = matches.get_many::<String>("input").unwrap().cloned().collect::<Vec<_>>();
+    let file_paths = matches
+        .get_many::<String>("input")
+        .unwrap()
+        .cloned()
+        .collect::<Vec<_>>();
     let mut kursy_map: HashMap<Exchange, f64> = HashMap::new();
 
     for file in file_paths {

@@ -85,3 +85,21 @@ jobs:
             LIBRARY_PATH: ./
           run: |
             cargo test --no-default-features
+
+  build_and_test_with_gen_exchange_rates:
+      name: etradeTaxReturnHelper gen_exchange_rates building
+      runs-on: ubuntu-latest
+      steps:
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev
+        - uses: actions/checkout@v2
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+        - name: Cargo build
+          env:
+            LIBRARY_PATH: ./
+          run: |
+            cargo build --release --features gen_exchange_rates

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2024-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -29,23 +29,22 @@ pub enum Exchange {
 }
 
 fn main() {
-    let matches = App::new("gen_exchange_rates")
-        .version("1.0")
-        .author("Your Name <jacek.czaja@gmail.com>")
+    let matches = Command::new("etradeTaxHelper")
+        .version("1.1")
+        .arg_required_else_help(true)
         .about("Consumes NBP exchange rates and produces rust source code with it")
         .arg(
-            Arg::with_name("input")
-                .short("i")
+            Arg::new("input")
                 .long("input")
                 .value_name("FILE")
                 .help("Sets the input files")
-                .takes_value(true)
-                .multiple(true)
+                .num_args(1..)
+                .action(clap::ArgAction::Append)
                 .required(true),
         )
         .get_matches();
 
-    let file_paths = matches.values_of("input").unwrap().collect::<Vec<_>>();
+    let file_paths = matches.get_many::<String>("input").unwrap().cloned().collect::<Vec<_>>();
     let mut kursy_map: HashMap<Exchange, f64> = HashMap::new();
 
     for file in file_paths {

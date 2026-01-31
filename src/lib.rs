@@ -373,6 +373,7 @@ pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
     per_company: bool,
+    multiyear: bool,
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
@@ -418,15 +419,19 @@ pub fn run_taxation(
         }
         Ok::<(), String>(())
     })?;
-    // 2. Verify Transactions
-    verify_interests_transactions(&parsed_interests_transactions)?;
-    log::info!("Interests transactions are consistent");
-    verify_dividends_transactions(&parsed_div_transactions)?;
-    log::info!("Dividends transactions are consistent");
-    verify_dividends_transactions(&parsed_revolut_dividends_transactions)?;
-    log::info!("Revolut Dividends transactions are consistent");
-    verify_transactions(&parsed_revolut_sold_transactions)?;
-    log::info!("Revolut Sold transactions are consistent");
+    // 2. Verify Transactions (if they all come from same year unless multiyear is enabled)
+    if multiyear == false {
+        verify_interests_transactions(&parsed_interests_transactions)?;
+        log::info!("Interests transactions are consistent");
+        verify_dividends_transactions(&parsed_div_transactions)?;
+        log::info!("Dividends transactions are consistent");
+        verify_dividends_transactions(&parsed_revolut_dividends_transactions)?;
+        log::info!("Revolut Dividends transactions are consistent");
+        verify_transactions(&parsed_revolut_sold_transactions)?;
+        log::info!("Revolut Sold transactions are consistent");
+    } else {
+        log::info!("Multi-year mode enabled, skipping verification of transaction years");
+    }
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
     let detailed_sold_transactions =

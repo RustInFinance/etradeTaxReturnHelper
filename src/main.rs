@@ -52,6 +52,12 @@ fn create_cmd_line_pattern(myapp: Command) -> Command {
                 .help("Enable per-company mode")
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("multiyear")
+                .long("multiyear")
+                .help("Allow processing documents across more than year")
+                .action(clap::ArgAction::SetTrue)
+        )
 }
 
 fn configure_dataframes_format() {
@@ -107,7 +113,12 @@ fn main() {
         gross_sold,
         cost_sold,
         ..
-    } = match run_taxation(&rd, pdfnames, matches.get_flag("per-company")) {
+    } = match run_taxation(
+        &rd,
+        pdfnames,
+        matches.get_flag("per-company"),
+        matches.get_flag("multiyear"),
+    ) {
         Ok(res) => res,
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
@@ -262,6 +273,39 @@ mod tests {
     }
 
     #[test]
+    fn test_cmdline_multiyear() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = Command::new("E-trade tax helper");
+        let matches =
+            create_cmd_line_pattern(myapp).get_matches_from(vec!["mytest", "data/example.pdf"]);
+        let multiyear = matches.get_flag("multiyear");
+        match multiyear {
+            false => (),
+            true => {
+                return Err(clap::error::Error::<clap::error::DefaultFormatter>::new(
+                    clap::error::ErrorKind::InvalidValue,
+                ))
+            }
+        };
+        let myapp = Command::new("E-trade tax helper");
+        let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
+            "mytest",
+            "--multiyear",
+            "data/example.pdf",
+        ]);
+        let multiyear = matches.get_flag("multiyear");
+        match multiyear {
+            true => (),
+            false => {
+                return Err(clap::error::Error::<clap::error::DefaultFormatter>::new(
+                    clap::error::ErrorKind::InvalidValue,
+                ))
+            }
+        };
+        Ok(())
+    }
+
+    #[test]
     fn test_cmdline_pl() -> Result<(), clap::Error> {
         // Init Transactions
         let myapp = Command::new("E-trade tax helper");
@@ -330,7 +374,7 @@ mod tests {
             .expect_and_log("error getting financial documents names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(_) => panic!("Expected an error from run_taxation, but got Ok"),
             Err(_) => Ok(()), // Expected error, test passes
         }
@@ -351,7 +395,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -384,7 +428,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -417,7 +461,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -451,7 +495,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -482,7 +526,7 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,

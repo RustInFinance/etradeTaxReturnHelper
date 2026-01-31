@@ -1,1 +1,5 @@
 assets/etradetaxreturnhelper-640x480.gif
+[package]
+exclude = [
+    "assets/**"
+]

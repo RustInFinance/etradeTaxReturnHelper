@@ -43,11 +43,12 @@ Project that parse e-trade and revolut account statements and Gain and Losses do
 
 
 2. How does it work?
-    Here is a [demo(PL)](https://www.youtube.com/watch?v=Juw3KJ1JdcA)
-3. How can I report problem?
+    Here is a 
+    [Demo](https://www.youtube.com/watch?v=ts3xCbHU02Y)
+4. How can I report problem?
    If this project does not work for you e.g. there is crash or data produced does not seem correct then please run it with diagnostic:
     RUST_LOG=info RUST_BACKTRACE=full etradeTaxReturnHelper <your args e.g. PDF and XLSX files> and share it via issues or via my email (see github profile)
-4. How can I help?
+5. How can I help?
     1. Issues and Pull Requests are welcomed!
     2. Please donate charity organization [Wielka orkiestra swiatecznej pomocy](https://www.wosp.org.pl/fundacja/jak-wspierac-wosp/wesprzyj-online)
     3. If you happen to be an employee of Intel Corporation then you could support this project by

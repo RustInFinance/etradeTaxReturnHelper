@@ -134,6 +134,18 @@ fn get_exchange_rates_from_cache(
     Ok(all_filled)
 }
 
+/// Art. 63 §1a OP: ceil to 0.01 PLN (pełnych groszy w górę).
+/// Applies to the base (podstawa) and tax for art. 30a pkt 1–3 PIT (odsetki).
+fn ceil_to_grosz(val: f32) -> f32 {
+    (val * 100.0).ceil() / 100.0
+}
+
+/// Art. 63 §1 OP: round half-up to 1 PLN (pełnych złotych).
+/// Applies to the base and tax for art. 30a pkt 4 PIT (dywidendy) and art. 30b PIT (sprzedaż).
+fn round_half_up_to_zloty(val: f32) -> f32 {
+    (val + 0.5).floor()
+}
+
 impl etradeTaxReturnHelper::Residency for PL {
     fn get_exchange_rates(
         &self,
@@ -232,20 +244,33 @@ impl etradeTaxReturnHelper::Residency for PL {
 
     fn present_result(
         &self,
+        gross_interests: f32,
         gross_div: f32,
         tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
     ) -> (Vec<String>, Option<String>) {
         let mut presentation: Vec<String> = vec![];
-        let tax_pl = 0.19 * gross_div;
+
+        // Art. 30a ust. 1 pkt 1–3 PIT (odsetki):
+        // Art. 63 §1a OP — podstawa ceiled to grosz; 19% tax also ceiled to grosz.
+        let gross_interests_pln = ceil_to_grosz(gross_interests);
+        let tax_interests_pl = ceil_to_grosz(0.19 * gross_interests_pln);
+
+        // Art. 30a ust. 1 pkt 4 PIT (dywidendy):
+        // Art. 63 §1 OP — podstawa rounded half-up to full złoty; 19% tax also rounded half-up.
+        let gross_div_pln = round_half_up_to_zloty(gross_div);
+        let tax_div_pl = round_half_up_to_zloty(0.19 * gross_div_pln);
+
+        let tax_pl = tax_interests_pl + tax_div_pl;
+
         presentation.push(format!(
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
-            gross_div
+            "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: {:.2} PLN (w tym: {:.2}zł od odsetek i {:.2}zł od dywidend)",
+            gross_div_pln + gross_interests_pln, gross_interests_pln, gross_div_pln
         ));
         presentation.push(format!(
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: {:.2} PLN",
-            tax_pl
+            "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: {:.2} PLN (w tym: {:.2}zł od odsetek i {:.2}zł od dywidend)",
+            tax_pl, tax_interests_pl, tax_div_pl
         ));
         presentation.push(format!(
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: {:.2} PLN",
@@ -271,23 +296,48 @@ impl etradeTaxReturnHelper::Residency for PL {
 mod tests {
     use super::*;
     #[test]
+    fn test_ceil_to_grosz() {
+        // Art. 63 §1a OP: always ceil to 0.01 PLN
+        assert_eq!(ceil_to_grosz(1.231), 1.24);
+        assert_eq!(ceil_to_grosz(1.230), 1.23);
+        assert_eq!(ceil_to_grosz(1.001), 1.01);
+        assert_eq!(ceil_to_grosz(0.0), 0.0);
+        // Never rounds down, even for tiny fractions
+        assert_eq!(ceil_to_grosz(0.441), 0.45);
+    }
+
+    #[test]
+    fn test_round_half_up_to_zloty() {
+        // Art. 63 §1 OP: round half-up to full PLN
+        assert_eq!(round_half_up_to_zloty(100.0), 100.0);
+        assert_eq!(round_half_up_to_zloty(100.4), 100.0);
+        assert_eq!(round_half_up_to_zloty(100.5), 101.0);
+        assert_eq!(round_half_up_to_zloty(100.9), 101.0);
+        assert_eq!(round_half_up_to_zloty(0.0), 0.0);
+        assert_eq!(round_half_up_to_zloty(0.49), 0.0);
+        assert_eq!(round_half_up_to_zloty(0.5), 1.0);
+    }
+
+    #[test]
     fn test_present_result_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
 
+        let gross_interests = 0.0f32;
         let gross_div = 100.0f32;
         let tax_div = 15.0f32;
         let gross_sold = 1000.0f32;
         let cost_sold = 10.0f32;
 
         let ref_results: Vec<String> = vec![
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
+            "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 100.00 PLN (w tym: 0.00zł od odsetek i 100.00zł od dywidend)".to_string(),
+            "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: 19.00 PLN (w tym: 0.00zł od odsetek i 19.00zł od dywidend)".to_string(),
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 15.00 PLN".to_string(),
             "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
             "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];
 
-        let (results, _) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, _) =
+            rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
 
         results
             .iter()
@@ -345,20 +395,22 @@ mod tests {
     fn test_present_result_double_taxation_warning_pl() -> Result<(), String> {
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
 
+        let gross_interests = 0.0f32;
         let gross_div = 100.0f32;
         let tax_div = 30.0f32;
         let gross_sold = 1000.0f32;
         let cost_sold = 10.0f32;
 
         let ref_results: Vec<String> = vec![
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
+            "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 100.00 PLN (w tym: 0.00zł od odsetek i 100.00zł od dywidend)".to_string(),
+            "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: 19.00 PLN (w tym: 0.00zł od odsetek i 19.00zł od dywidend)".to_string(),
             "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 30.00 PLN".to_string(),
             "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
             "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];
 
-        let (results, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, warning) =
+            rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
 
         results
             .iter()
@@ -373,6 +425,41 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    // Art. 63 §1a OP: interests base and tax are ceiled to grosz (never rounded down).
+    // gross_interests=0.441 → ceil to 0.45; tax = ceil(0.19 * 0.45) = ceil(0.0855) = 0.09
+    #[test]
+    fn test_present_result_interests_ceil_to_grosz() {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+        let (results, _) = rd.present_result(0.441, 0.0, 0.0, 0.0, 0.0);
+        assert_eq!(results[0], "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 0.45 PLN (w tym: 0.45zł od odsetek i 0.00zł od dywidend)");
+        assert_eq!(results[1], "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: 0.09 PLN (w tym: 0.09zł od odsetek i 0.00zł od dywidend)");
+    }
+
+    // Art. 63 §1 OP: dividends base and tax are rounded half-up to full złoty (not grosz).
+    // gross_div=100.5 → rounds up to 101; tax = round_half_up(0.19 * 101) = round_half_up(19.19) = 19
+    // gross_div=100.4 → rounds down to 100; tax = round_half_up(0.19 * 100) = 19
+    #[test]
+    fn test_present_result_dividends_round_to_zloty() {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+        let (results_up, _) = rd.present_result(0.0, 100.5, 0.0, 0.0, 0.0);
+        assert_eq!(results_up[0], "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 101.00 PLN (w tym: 0.00zł od odsetek i 101.00zł od dywidend)");
+        assert_eq!(results_up[1], "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: 19.00 PLN (w tym: 0.00zł od odsetek i 19.00zł od dywidend)");
+
+        let (results_down, _) = rd.present_result(0.0, 100.4, 0.0, 0.0, 0.0);
+        assert_eq!(results_down[0], "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 100.00 PLN (w tym: 0.00zł od odsetek i 100.00zł od dywidend)");
+    }
+
+    // Both income types combined: interests use §1a (ceil to grosz), dividends use §1 (half-up to złoty).
+    // gross_interests=0.441 → 0.45, tax_interests=0.09
+    // gross_div=100.5 → 101, tax_div=19  →  combined: 101.45, tax 19.09
+    #[test]
+    fn test_present_result_combined_rounding() {
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
+        let (results, _) = rd.present_result(0.441, 100.5, 0.0, 0.0, 0.0);
+        assert_eq!(results[0], "(DYWIDENDY+ODSETKI) PRZYCHOD Z ZAGRANICY: 101.45 PLN (w tym: 0.45zł od odsetek i 101.00zł od dywidend)");
+        assert_eq!(results[1], "===> (DYWIDENDY+ODSETKI) ZRYCZALTOWANY PODATEK: 19.09 PLN (w tym: 0.09zł od odsetek i 19.00zł od dywidend)");
     }
 
     #[test]

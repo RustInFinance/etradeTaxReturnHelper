@@ -120,7 +120,8 @@ fn create_execute_documents(
         nbuffer.set_text("Running...");
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
         let etradeTaxReturnHelper::TaxCalculationResult {
-            gross_income: gross_div,
+            gross_interests,
+            gross_div,
             tax: tax_div,
             gross_sold,
             cost_sold,
@@ -139,7 +140,7 @@ fn create_execute_documents(
                 panic!("Error: unable to perform taxation");
             }
         };
-        let (presentation,warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (presentation,warning) = rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
         buffer.set_text(&presentation.join("\n"));
         if let Some(warn_msg) = warning {
             nbuffer.set_text(&warn_msg);

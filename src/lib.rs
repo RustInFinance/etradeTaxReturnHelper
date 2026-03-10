@@ -58,7 +58,7 @@ pub enum Exchange {
     USD(String),
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Transaction {
     pub transaction_date: String,
     pub gross: Currency,
@@ -136,6 +136,7 @@ impl SoldTransaction {
 pub trait Residency {
     fn present_result(
         &self,
+        gross_interests: f32,
         gross_div: f32,
         tax_div: f32,
         gross_sold: f32,
@@ -254,7 +255,12 @@ pub trait Residency {
 }
 
 pub struct TaxCalculationResult {
-    pub gross_income: f32,
+    /// Sum of all interest income (eTrade + Revolut savings) converted to PLN per-transaction.
+    /// Art. 30a ust. 1 pkt 1–3 PIT — rounding: Art. 63 §1a OP (ceil to grosz).
+    pub gross_interests: f32,
+    /// Sum of all dividend income (eTrade + Revolut stock divs) converted to PLN per-transaction.
+    /// Art. 30a ust. 1 pkt 4 PIT — rounding: Art. 63 §1 OP (half-up to full złoty).
+    pub gross_div: f32,
     pub tax: f32,
     pub gross_sold: f32,
     pub cost_sold: f32,
@@ -287,30 +293,37 @@ fn create_client() -> reqwest::blocking::Client {
     client
 }
 
+/// Rounds to 0.01 PLN (grosz).
+fn round_to_grosz(val: f32) -> f32 {
+    (val * 100.0).round() / 100.0
+}
+
 fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
+    // Each transaction's FX-converted amount is rounded to 0.01 before summing.
     let gross_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.gross.value() as f32)
+        .map(|x| round_to_grosz(x.exchange_rate * x.gross.value() as f32))
         .sum();
     // Tax paid in US in PLN
     let tax_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.tax_paid.value() as f32)
+        .map(|x| round_to_grosz(x.exchange_rate * x.tax_paid.value() as f32))
         .sum();
     (gross_us_pl, tax_us_pl)
 }
 
 fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
     // Net income from sold stock in target currency (PLN, EUR etc.)
+    // Each transaction's FX-converted amount is rounded to 0.01 before summing.
     let gross_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate_settlement * x.income_us)
+        .map(|x| round_to_grosz(x.exchange_rate_settlement * x.income_us))
         .sum();
     // Cost of income e.g. cost_basis[target currency]
     let cost_us_pl: f32 = transactions
         .iter()
-        .map(|x| x.exchange_rate_acquisition * x.cost_basis)
+        .map(|x| round_to_grosz(x.exchange_rate_acquisition * x.cost_basis))
         .sum();
     (gross_us_pl, cost_us_pl)
 }
@@ -519,14 +532,29 @@ pub fn run_taxation(
         println!("{}", per_company_report);
     }
 
-    let (gross_interests, _) = compute_div_taxation(&interests);
-    let (gross_div, tax_div) = compute_div_taxation(&transactions);
+    let (gross_etrade_interests, _) = compute_div_taxation(&interests);
+    let (gross_etrade_div, tax_etrade_div) = compute_div_taxation(&transactions);
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
+
+    // Split Revolut transactions: savings interests (company=None, art. 30a pkt 1-3)
+    // vs stock dividends (company=Some, art. 30a pkt 4).
+    let revolut_interests_txns: Vec<Transaction> = revolut_dividends_transactions
+        .iter()
+        .filter(|x| x.company.is_none())
+        .cloned()
+        .collect();
+    let revolut_div_txns: Vec<Transaction> = revolut_dividends_transactions
+        .iter()
+        .filter(|x| x.company.is_some())
+        .cloned()
+        .collect();
+    let (gross_revolut_interests, _) = compute_div_taxation(&revolut_interests_txns);
+    let (gross_revolut_div, tax_revolut) = compute_div_taxation(&revolut_div_txns);
     let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
     Ok(TaxCalculationResult {
-        gross_income: gross_interests + gross_div + gross_revolut,
-        tax: tax_div + tax_revolut,
+        gross_interests: gross_etrade_interests + gross_revolut_interests,
+        gross_div: gross_etrade_div + gross_revolut_div,
+        tax: tax_etrade_div + tax_revolut,
         gross_sold: gross_sold + gross_revolut_sold,
         cost_sold: cost_sold + cost_revolut_sold,
         interests,
@@ -540,6 +568,88 @@ pub fn run_taxation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_round_to_grosz() {
+        // Normal rounding
+        assert_eq!(round_to_grosz(1.234), 1.23);
+        assert_eq!(round_to_grosz(1.235), 1.24);
+        assert_eq!(round_to_grosz(1.005), 1.01);
+        assert_eq!(round_to_grosz(0.0), 0.0);
+        // Rounds down when fraction < 0.5
+        assert_eq!(round_to_grosz(4.1523 * 12.34), round_to_grosz(51.239482));
+    }
+
+    // Each transaction is rounded to grosz individually before summing.
+    // Two transactions of 1.005 PLN each: per-transaction gives 1.01 + 1.01 = 2.02,
+    // whereas rounding the raw sum (2.010) would give 2.01 — a different result.
+    #[test]
+    fn test_div_taxation_stepwise_rounding() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross: crate::Currency::PLN(1.005),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+                company: None,
+            },
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross: crate::Currency::PLN(1.005),
+                tax_paid: crate::Currency::PLN(0.0),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: 1.0,
+                company: None,
+            },
+        ];
+        let (gross, _) = compute_div_taxation(&transactions);
+        // Per-transaction: round(1.005) + round(1.005) = 1.01 + 1.01 = 2.02
+        assert_eq!(gross, 2.02);
+        // Sanity check: rounding the raw sum would give a different answer
+        assert_ne!(gross, round_to_grosz(1.005 + 1.005)); // round(2.01) = 2.01
+        Ok(())
+    }
+
+    // Each sold transaction's FX-converted income and cost are rounded to grosz individually
+    // before summing. Two transactions where rate * amount = 1.005 each: per-transaction gives
+    // 1.01 + 1.01 = 2.02, whereas rounding the raw sum (2.01) would give 2.01.
+    #[test]
+    fn test_sold_taxation_stepwise_rounding() -> Result<(), String> {
+        let transactions: Vec<SoldTransaction> = vec![
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: 1.0,
+                cost_basis: 1.0,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: 1.005,
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: 1.005,
+                company: Some("TFC".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: 1.0,
+                cost_basis: 1.0,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: 1.005,
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: 1.005,
+                company: Some("TFC".to_owned()),
+            },
+        ];
+        let (gross, cost) = compute_sold_taxation(&transactions);
+        // Per-transaction: round(1.005) + round(1.005) = 1.01 + 1.01 = 2.02
+        assert_eq!(gross, 2.02);
+        assert_eq!(cost, 2.02);
+        // Sanity check: rounding the raw sum would give a different answer
+        assert_ne!(gross, round_to_grosz(1.005 + 1.005)); // round(2.01) = 2.01
+        Ok(())
+    }
 
     #[test]
     fn test_validate_file_names_invalid_path() {

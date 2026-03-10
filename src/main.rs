@@ -108,7 +108,8 @@ fn main() {
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let TaxCalculationResult {
-        gross_income: gross_div,
+        gross_interests,
+        gross_div,
         tax: tax_div,
         gross_sold,
         cost_sold,
@@ -123,7 +124,8 @@ fn main() {
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
 
-    let (presentation, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    let (presentation, warning) =
+        rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
 
     if let Some(warn_msg) = warning {
@@ -397,15 +399,16 @@ mod tests {
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (6331.29, 871.17993, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (0.0, 6331.29, 871.17993, 0.0, 0.0),
                 );
                 Ok(())
             }
@@ -430,15 +433,16 @@ mod tests {
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (9142.319, 1207.08, 22988.617, 20163.5),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (0.0, 9142.319, 1207.08, 22988.62, 20163.5),
                 );
                 Ok(())
             }
@@ -463,15 +467,16 @@ mod tests {
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (86.93008, 0.0, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (86.93008, 0.0, 0.0, 0.0, 0.0),
                 );
                 Ok(())
             }
@@ -497,15 +502,16 @@ mod tests {
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (219.34755, 0.0, 89845.65, 44369.938),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (219.34755, 0.0, 0.0, 89845.65, 44369.938),
                 );
                 Ok(())
             }
@@ -528,15 +534,16 @@ mod tests {
 
         match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (0.66164804, 0.0, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (0.66164804, 0.0, 0.0, 0.0, 0.0),
                 );
                 Ok(())
             }

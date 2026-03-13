@@ -3,13 +3,13 @@
   xmlns:common="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:generic="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/data/generic"
-  xsi:schemaLocation="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message http://data-api.ecb.europa.eu:80/vocabulary/sdmx/2_1/SDMXMessage.xsd
-                      http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common http://data-api.ecb.europa.eu:80/vocabulary/sdmx/2_1/SDMXCommon.xsd
-                      http://www.sdmx.org/resources/sdmxml/schemas/v2_1/data/generic http://data-api.ecb.europa.eu:80/vocabulary/sdmx/2_1/SDMXDataGeneric.xsd">
+  xsi:schemaLocation="http://www.sdmx.org/resources/sdmxml/schemas/v2_1/message https://data-api.ecb.europa.eu:443/vocabulary/sdmx/2_1/SDMXMessage.xsd
+                      http://www.sdmx.org/resources/sdmxml/schemas/v2_1/common https://data-api.ecb.europa.eu:443/vocabulary/sdmx/2_1/SDMXCommon.xsd
+                      http://www.sdmx.org/resources/sdmxml/schemas/v2_1/data/generic https://data-api.ecb.europa.eu:443/vocabulary/sdmx/2_1/SDMXDataGeneric.xsd">
   <message:Header>
-    <message:ID>e150371e-2e4d-4f1c-8463-517dca6e3fbc</message:ID>
+    <message:ID>070c0a74-16dc-49c3-9657-354adef2925f</message:ID>
     <message:Test>false</message:Test>
-    <message:Prepared>2024-08-28T20:59:54.602+02:00</message:Prepared>
+    <message:Prepared>2026-03-09T16:06:40.498+01:00</message:Prepared>
     <message:Sender id="ECB" />
     <message:Structure structureID="ECB_EXR1" dimensionAtObservation="TIME_PERIOD">
       <common:Structure>
@@ -17,7 +17,7 @@
       </common:Structure>
     </message:Structure>
   </message:Header>
-  <message:DataSet action="Replace" validFromDate="2024-08-28T20:59:54.602+02:00"
+  <message:DataSet action="Replace" validFromDate="2026-03-09T16:06:40.498+01:00"
     structureRef="ECB_EXR1">
     <generic:Series>
       <generic:SeriesKey>
@@ -28,15 +28,15 @@
         <generic:Value id="EXR_SUFFIX" value="A" />
       </generic:SeriesKey>
       <generic:Attributes>
-        <generic:Value id="SOURCE_AGENCY" value="4F0" />
+        <generic:Value id="TITLE" value="US dollar/Euro ECB reference exchange rate" />
         <generic:Value id="UNIT_MULT" value="0" />
-        <generic:Value id="TITLE_COMPL"
-          value="ECB reference exchange rate, US dollar/Euro, 2:15 pm (C.E.T.)" />
-        <generic:Value id="UNIT" value="USD" />
         <generic:Value id="TIME_FORMAT" value="P1D" />
+        <generic:Value id="TITLE_COMPL" value="ECB reference exchange rate, US dollar/Euro, 2.15 pm (C.E.T.)" />
+        <generic:Value id="SOURCE_AGENCY" value="4F0" />
+        <generic:Value id="UNIT" value="USD" />
         <generic:Value id="DECIMALS" value="4" />
         <generic:Value id="COLLECTION" value="A" />
-        <generic:Value id="TITLE" value="US dollar/Euro" />
+        <generic:Value id="UNIT_INDEX_BASE" value="99Q1=100" />
       </generic:Attributes>
       <generic:Obs>
         <generic:ObsDimension value="2023-07-13" />

@@ -56,6 +56,10 @@ fn is_non_working_day(date: &chrono::NaiveDate) -> Result<bool, String> {
         .map_err(|_| format!("Error checking if given date: {date} is holiday"))
 }
 
+// We search a exchange rate from a working day preceeding given date (settlement date for
+// etrade)
+//Art. 11a ust. 1 (Dz.U. 2024 poz. 226):
+// Przychody w walutach obcych przelicza się na złote według kursu średniego walut obcych ogłaszanego przez Narodowy Bank Polski z ostatniego dnia roboczego poprzedzającego dzień uzyskania przychodu.
 // Iterate through dates and find where value is None
 // and then try to get for that specific date from cache
 fn get_exchange_rates_from_cache(
@@ -81,6 +85,7 @@ fn get_exchange_rates_from_cache(
         let mut converted_date = chrono::NaiveDate::parse_from_str(&date, "%m/%d/%y")
             .map_err(|_| format!("Error parsing date: {date}"))?;
         let mut is_working_day = false;
+
         while is_working_day == false {
             converted_date = converted_date
                 .checked_sub_signed(chrono::Duration::days(1))
@@ -135,6 +140,10 @@ fn get_exchange_rates_from_cache(
 }
 
 impl etradeTaxReturnHelper::Residency for PL {
+    // We search a exchange rate from a working day preceeding given date (settlement date for
+    // etrade)
+    //Art. 11a ust. 1 (Dz.U. 2024 poz. 226):
+    // Przychody w walutach obcych przelicza się na złote według kursu średniego walut obcych ogłaszanego przez Narodowy Bank Polski z ostatniego dnia roboczego poprzedzającego dzień uzyskania przychodu.
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<

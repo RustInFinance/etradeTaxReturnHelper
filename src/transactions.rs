@@ -99,7 +99,13 @@ pub fn verify_transactions<T>(
 /// Trade date is when transaction was trigerred.
 /// fees and commission are applied at the moment of settlement date so
 /// we ignore those and use net income rather than principal
-/// Actual Tax is to be paid from settlement_date
+/// Actual Tax duty is to be paid using settlement_date
+/// Basis: Art. 17 ust. 1ab pkt 1 PIT
+/// 1ab.  Przychód określony w ust. 1 pkt 6:
+/// 1) z odpłatnego zbycia udziałów (akcji), udziałów w spółdzielni oraz papierów wartościowych powstaje w momencie przeniesienia na nabywcę własności udziałów (akcji), udziałów w spółdzielni oraz papierów wartościowych;
+/// (jczaja): I have spoken with etrade support and they told me that ownership of stocks is
+/// transfered on settlement date      
+
 pub fn reconstruct_sold_transactions(
     sold_transactions: &Vec<(String, String, f32, f32, f32, Option<String>)>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,

@@ -39,16 +39,45 @@ Project that parse e-trade and revolut account statements and Gain and Losses do
     3. For Linux where there is no X server or no priviligies to install system dependencies then you could try to install non-GUI version:
            `cargo install  etradeTaxReturnHelper --no-default-features`
 2. Does it work for other financial institutions apart from etrade ?
-   There is support for saving accounts statements of Revolut bank (CSV files) , as Revolut does not pay tax on customer behalf and tax from capital gain of saving account should be paid by customer. 
+   - There is support for saving accounts statements of Revolut bank (CSV files) , as Revolut does not pay tax on customer behalf and tax from capital gain of saving account should be paid by customer. 
 
 
-2. How does it work?
-    Here is a 
+3. How does it work?
+    - Here is a 
     [Demo](https://www.youtube.com/watch?v=ts3xCbHU02Y)
 4. How can I report problem?
-   If this project does not work for you e.g. there is crash or data produced does not seem correct then please run it with diagnostic:
+   - If this project does not work for you e.g. there is crash or data produced does not seem correct then please run it with diagnostic:
     RUST_LOG=info RUST_BACKTRACE=full etradeTaxReturnHelper <your args e.g. PDF and XLSX files> and share it via issues or via my email (see github profile)
-5. How can I help?
+5. When building etradeTaxReturnHelper on Linux I have an errors:
+   ```bash
+   error: linking with `cc` failed: exit status: 1
+    
+          rust-lld: error: unable to find library -lX11
+          rust-lld: error: unable to find library -lXext
+          rust-lld: error: unable to find library -lXinerama
+          rust-lld: error: unable to find library -lXcursor
+          rust-lld: error: unable to find library -lXrender
+          rust-lld: error: unable to find library -lXfixes
+          rust-lld: error: unable to find library -lXft
+          rust-lld: error: unable to find library -lfontconfig
+          rust-lld: error: unable to find library -lpango-1.0
+          rust-lld: error: unable to find library -lpangoxft-1.0
+          rust-lld: error: unable to find library -lgobject-2.0
+          rust-lld: error: unable to find library -lcairo
+          rust-lld: error: unable to find library -lpangocairo-1.0
+          collect2: error: ld returned 1 exit status
+          
+   error: could not compile `etradeTaxReturnHelper` (bin "etradeTaxReturnHelper") due to 1 previous error; 6 warnings emitted
+   ```
+   
+   - If you are to build etradeTaxReturnHelper from source with GUI (default option) then for Linux you need to have X server (graphical infrastructure in Linux) with some of development packages:
+     
+      a) Ubuntu
+      ```bash
+      sudo apt-get install libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev libxrender-dev libxfixes-dev libpango1.0-dev libgl1-mesa-dev libglu1-mesa-dev
+      ```
+            
+7. How can I help?
     1. Issues and Pull Requests are welcomed!
     2. Please donate charity organization [Wielka orkiestra swiatecznej pomocy](https://www.wosp.org.pl/fundacja/jak-wspierac-wosp/wesprzyj-online)
     3. If you happen to be an employee of Intel Corporation then you could support this project by

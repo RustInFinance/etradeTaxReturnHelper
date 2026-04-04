@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 use calamine::{open_workbook, Reader, Xlsx};
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
 pub use crate::logging::ResultExt;
 
@@ -14,7 +16,7 @@ pub use crate::logging::ResultExt;
 /// income from sold stock (total_proceeds)
 pub fn parse_gains_and_losses(
     xlsxtoparse: &str,
-) -> Result<Vec<(String, String, f32, f32, f32)>, &str> {
+) -> Result<Vec<(String, String, Decimal, Decimal, Decimal)>, &str> {
     let mut excel: Xlsx<_> =
         open_workbook(xlsxtoparse).map_err(|_| "Error opening XLSX file: {}")?;
     let name = excel
@@ -23,7 +25,7 @@ pub fn parse_gains_and_losses(
         .expect_and_log("No worksheet found")
         .clone();
     log::info!("name: {}", name);
-    let mut transactions: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut transactions: Vec<(String, String, Decimal, Decimal, Decimal)> = vec![];
     if let Some(Ok(r)) = excel.worksheet_range(&name) {
         let mut rows = r.rows();
         let categories = rows
@@ -80,15 +82,30 @@ pub fn parse_gains_and_losses(
             }
 
             //println!("transakcja: {:?}", transakcja);
+            // XLSX natively stores numbers as IEEE 754 f64, so get_float() -> f64 -> Decimal
+            // is unavoidable here — there is no higher-precision source in the file.
             transactions.push((
                 transakcja[date_acquired_idx]
                     .get_string()
                     .unwrap()
                     .to_owned(),
                 transakcja[date_sold_idx].get_string().unwrap().to_owned(),
-                transakcja[acquistion_cost_idx].get_float().unwrap() as f32,
-                transakcja[cost_basis_idx].get_float().unwrap() as f32,
-                transakcja[total_proceeds_idx].get_float().unwrap() as f32,
+                Decimal::from_str(
+                    &transakcja[acquistion_cost_idx]
+                        .get_float()
+                        .unwrap()
+                        .to_string(),
+                )
+                .unwrap(),
+                Decimal::from_str(&transakcja[cost_basis_idx].get_float().unwrap().to_string())
+                    .unwrap(),
+                Decimal::from_str(
+                    &transakcja[total_proceeds_idx]
+                        .get_float()
+                        .unwrap()
+                        .to_string(),
+                )
+                .unwrap(),
             ));
         }
     }
@@ -99,6 +116,7 @@ pub fn parse_gains_and_losses(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal::dec;
 
     #[test]
     fn test_parse_gain_and_losses() -> Result<(), String> {
@@ -108,16 +126,16 @@ mod tests {
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
-                    0.0,
-                    23.5175,
-                    46.9
+                    dec!(0.0),
+                    dec!(23.5175),
+                    dec!(46.9)
                 ),
                 (
                     "08/19/2015".to_owned(),
                     "05/02/2022".to_owned(),
-                    24.258,
-                    29.28195,
-                    43.67
+                    dec!(24.258),
+                    dec!(29.28195),
+                    dec!(43.67)
                 )
             ])
         );
@@ -127,16 +145,16 @@ mod tests {
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
-                    0.0,
-                    23.5175,
-                    46.9
+                    dec!(0.0),
+                    dec!(23.5175),
+                    dec!(46.9)
                 ),
                 (
                     "08/19/2015".to_owned(),
                     "05/02/2022".to_owned(),
-                    24.258,
-                    29.28195,
-                    43.67
+                    dec!(24.258),
+                    dec!(29.28195),
+                    dec!(43.67)
                 )
             ])
         );
@@ -152,72 +170,72 @@ mod tests {
                 (
                     "02/17/2023".to_owned(),
                     "02/21/2023".to_owned(),
-                    1791.0388,
-                    2107.1,
-                    2018.3545
+                    dec!(1791.0388),
+                    dec!(2107.1),
+                    dec!(2018.354496)
                 ),
                 (
                     "08/01/2022".to_owned(),
                     "06/05/2023".to_owned(),
-                    0.0,
-                    258.09,
-                    219.0275
+                    dec!(0),
+                    dec!(258.09),
+                    dec!(219.027501)
                 ),
                 (
                     "01/31/2023".to_owned(),
                     "06/05/2023".to_owned(),
-                    0.0,
-                    195.37,
-                    219.0275
+                    dec!(0),
+                    dec!(195.37),
+                    dec!(219.027501)
                 ),
                 (
                     "10/31/2022".to_owned(),
                     "06/05/2023".to_owned(),
-                    0.0,
-                    200.305,
-                    219.0275
+                    dec!(0),
+                    dec!(200.305),
+                    dec!(219.027501)
                 ),
                 (
                     "05/01/2023".to_owned(),
                     "06/05/2023".to_owned(),
-                    0.0,
-                    215.32,
-                    219.0275
+                    dec!(0),
+                    dec!(215.32),
+                    dec!(219.027501)
                 ),
                 (
                     "07/31/2023".to_owned(),
                     "08/07/2023".to_owned(),
-                    0.0,
-                    255.0275,
-                    247.16
+                    dec!(0),
+                    dec!(255.0275),
+                    dec!(247.159997)
                 ),
                 (
                     "08/18/2023".to_owned(),
                     "08/21/2023".to_owned(),
-                    1969.0505,
-                    2701.235,
-                    2689.0754
+                    dec!(1969.0505),
+                    dec!(2701.235),
+                    dec!(2689.0755)
                 ),
                 (
                     "08/30/2023".to_owned(),
                     "12/13/2023".to_owned(),
-                    0.0,
-                    923.8725,
-                    1187.31
+                    dec!(0),
+                    dec!(923.8725),
+                    dec!(1187.310015)
                 ),
                 (
                     "11/30/2023".to_owned(),
                     "12/13/2023".to_owned(),
-                    0.0,
-                    1163.5,
-                    1143.34
+                    dec!(0),
+                    dec!(1163.5),
+                    dec!(1143.33999)
                 ),
                 (
                     "10/31/2023".to_owned(),
                     "12/13/2023".to_owned(),
-                    0.0,
-                    252.665,
-                    307.82
+                    dec!(0),
+                    dec!(252.665),
+                    dec!(307.819995)
                 )
             ])
         );

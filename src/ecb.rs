@@ -3,11 +3,13 @@
 
 use chrono;
 use roxmltree;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 
 pub fn get_eur_to_usd_exchange_rate(
     start_date: chrono::NaiveDate,
     end_date: chrono::NaiveDate,
-) -> Result<f32, String> {
+) -> Result<Decimal, String> {
     let query = [
         ("startPeriod", start_date.format("%Y-%m-%d").to_string()),
         ("endPeriod", end_date.format("%Y-%m-%d").to_string()),
@@ -17,18 +19,16 @@ pub fn get_eur_to_usd_exchange_rate(
     let ecb_response = EcbResponse::from_xml_string(&response).unwrap();
     assert_eq!(ecb_response.currency, "USD");
     assert_eq!(ecb_response.currency_denom, "EUR");
-    let usd_to_eur = ecb_response
-        .rate
-        .parse::<f32>()
+    let usd_to_eur = Decimal::from_str(&ecb_response.rate)
         .map_err(|e| format!("Failed to parse exchange rate: {}", e))?;
     invert_exchange_rate(usd_to_eur)
 }
 
-fn invert_exchange_rate(rate: f32) -> Result<f32, String> {
-    if rate == 0.0 {
+fn invert_exchange_rate(rate: Decimal) -> Result<Decimal, String> {
+    if rate == Decimal::ZERO {
         return Err("Rate is zero".to_string());
     }
-    Ok(1.0 / rate)
+    Ok(Decimal::ONE / rate)
 }
 
 const ECB_URL: &str = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A";
@@ -162,6 +162,7 @@ impl EcbResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal::dec;
 
     #[test]
     fn test_ecb_parse_xml_from_file() {
@@ -257,9 +258,9 @@ mod tests {
         let xml_data: &str = include_str!("../data/ecb_example_response.xml");
 
         let ecb_response = EcbResponse::from_xml_string(xml_data).unwrap();
-        let rate: f32 = ecb_response.rate.parse().unwrap();
-        let inverse_rate: f32 = invert_exchange_rate(rate).unwrap();
-        assert_eq!(inverse_rate, 1.0 / 1.1182);
+        let rate = Decimal::from_str(&ecb_response.rate).unwrap();
+        let inverse_rate = invert_exchange_rate(rate).unwrap();
+        assert_eq!(inverse_rate, Decimal::ONE / dec!(1.1182));
     }
 
     #[test]

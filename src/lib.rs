@@ -1,12 +1,16 @@
 // SPDX-FileCopyrightText: 2022-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
+#![debugger_visualizer(natvis_file = "../rust_decimal.natvis")]
+
 mod csvparser;
 mod ecb;
 mod logging;
 mod pdfparser;
 mod transactions;
 mod xlsxparser;
+
+use rust_decimal::Decimal;
 
 type ReqwestClient = reqwest::blocking::Client;
 
@@ -20,20 +24,20 @@ use transactions::{
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub enum Currency {
-    PLN(f64),
-    EUR(f64),
-    USD(f64),
+    PLN(Decimal),
+    EUR(Decimal),
+    USD(Decimal),
 }
 
 impl Currency {
-    fn value(&self) -> f64 {
+    pub fn value(&self) -> Decimal {
         match self {
             Currency::EUR(val) => *val,
             Currency::PLN(val) => *val,
             Currency::USD(val) => *val,
         }
     }
-    fn derive(&self, val: f64) -> Currency {
+    pub fn derive(&self, val: Decimal) -> Currency {
         match self {
             Currency::EUR(_) => Currency::EUR(val),
             Currency::PLN(_) => Currency::PLN(val),
@@ -58,13 +62,13 @@ pub enum Exchange {
     USD(String),
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Transaction {
     pub transaction_date: String,
     pub gross: Currency,
     pub tax_paid: Currency,
     pub exchange_rate_date: String,
-    pub exchange_rate: f32,
+    pub exchange_rate: Decimal,
     pub company: Option<String>,
 }
 
@@ -109,12 +113,12 @@ pub struct SoldTransaction {
     pub settlement_date: String,
     pub trade_date: String,
     pub acquisition_date: String,
-    pub income_us: f32,
-    pub cost_basis: f32,
+    pub income_us: Decimal,
+    pub cost_basis: Decimal,
     pub exchange_rate_settlement_date: String,
-    pub exchange_rate_settlement: f32,
+    pub exchange_rate_settlement: Decimal,
     pub exchange_rate_acquisition_date: String,
-    pub exchange_rate_acquisition: f32,
+    pub exchange_rate_acquisition: Decimal,
     pub company: Option<String>,
     // TODO
     //pub country : Option<String>,
@@ -136,24 +140,25 @@ impl SoldTransaction {
 pub trait Residency {
     fn present_result(
         &self,
-        gross_div: f32,
-        tax_div: f32,
-        gross_sold: f32,
-        cost_sold: f32,
+        gross_interests: Decimal,
+        gross_div: Decimal,
+        tax_div: Decimal,
+        gross_sold: Decimal,
+        cost_sold: Decimal,
     ) -> (Vec<String>, Option<String>);
     fn get_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, Decimal)>>,
     ) -> Result<(), String>;
 
     // Default parser (not to be used)
-    fn parse_exchange_rates(&self, _body: &str) -> Result<(f32, String), String> {
+    fn parse_exchange_rates(&self, _body: &str) -> Result<(Decimal, String), String> {
         panic!("This method should not be used. Implement your own if needed!");
     }
 
     fn get_currency_exchange_rates(
         &self,
-        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, Decimal)>>,
         to: &str,
     ) -> Result<(), String> {
         if to == "EUR" {
@@ -165,7 +170,7 @@ pub trait Residency {
 
     fn get_currency_exchange_rates_ecb(
         &self,
-        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, Decimal)>>,
         _to: &str,
     ) -> Result<(), String> {
         dates.iter_mut().try_for_each(|(exchange, val)| {
@@ -196,7 +201,7 @@ pub trait Residency {
 
     fn get_currency_exchange_rates_legacy(
         &self,
-        dates: &mut std::collections::HashMap<Exchange, Option<(String, f32)>>,
+        dates: &mut std::collections::HashMap<Exchange, Option<(String, Decimal)>>,
         to: &str,
     ) -> Result<(), String> {
         let client = create_client();
@@ -254,10 +259,15 @@ pub trait Residency {
 }
 
 pub struct TaxCalculationResult {
-    pub gross_income: f32,
-    pub tax: f32,
-    pub gross_sold: f32,
-    pub cost_sold: f32,
+    /// Sum of all interest income (eTrade + Revolut savings) converted to PLN per-transaction.
+    /// Art. 30a ust. 1 pkt 1–3 PIT — rounding: Art. 63 §1a OP (ceil to grosz).
+    pub gross_interests: Decimal,
+    /// Sum of all dividend income (eTrade + Revolut stock divs) converted to PLN per-transaction.
+    /// Art. 30a ust. 1 pkt 4 PIT — rounding: Art. 63 §1 OP (half-up to full złoty).
+    pub gross_div: Decimal,
+    pub tax: Decimal,
+    pub gross_sold: Decimal,
+    pub cost_sold: Decimal,
     pub interests: Vec<Transaction>,
     pub transactions: Vec<Transaction>,
     pub revolut_dividends_transactions: Vec<Transaction>,
@@ -287,30 +297,69 @@ fn create_client() -> reqwest::blocking::Client {
     client
 }
 
-fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
+/// Rounds to 0.01 PLN (grosz).
+fn round_to_grosz(val: Decimal) -> Decimal {
+    val.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero)
+}
+
+fn compute_div_taxation(
+    transactions: &Vec<Transaction>,
+    round_per_transaction: bool,
+) -> (Decimal, Decimal) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
-    let gross_us_pl: f32 = transactions
+    let gross_us_pl: Decimal = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.gross.value() as f32)
+        .map(|x| {
+            let v = x.exchange_rate * x.gross.value();
+            if round_per_transaction {
+                round_to_grosz(v)
+            } else {
+                v
+            }
+        })
         .sum();
     // Tax paid in US in PLN
-    let tax_us_pl: f32 = transactions
+    let tax_us_pl: Decimal = transactions
         .iter()
-        .map(|x| x.exchange_rate * x.tax_paid.value() as f32)
+        .map(|x| {
+            let v = x.exchange_rate * x.tax_paid.value();
+            if round_per_transaction {
+                round_to_grosz(v)
+            } else {
+                v
+            }
+        })
         .sum();
     (gross_us_pl, tax_us_pl)
 }
 
-fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
+fn compute_sold_taxation(
+    transactions: &Vec<SoldTransaction>,
+    round_per_transaction: bool,
+) -> (Decimal, Decimal) {
     // Net income from sold stock in target currency (PLN, EUR etc.)
-    let gross_us_pl: f32 = transactions
+    let gross_us_pl: Decimal = transactions
         .iter()
-        .map(|x| x.exchange_rate_settlement * x.income_us)
+        .map(|x| {
+            let v = x.exchange_rate_settlement * x.income_us;
+            if round_per_transaction {
+                round_to_grosz(v)
+            } else {
+                v
+            }
+        })
         .sum();
     // Cost of income e.g. cost_basis[target currency]
-    let cost_us_pl: f32 = transactions
+    let cost_us_pl: Decimal = transactions
         .iter()
-        .map(|x| x.exchange_rate_acquisition * x.cost_basis)
+        .map(|x| {
+            let v = x.exchange_rate_acquisition * x.cost_basis;
+            if round_per_transaction {
+                round_to_grosz(v)
+            } else {
+                v
+            }
+        })
         .sum();
     (gross_us_pl, cost_us_pl)
 }
@@ -374,13 +423,21 @@ pub fn run_taxation(
     names: Vec<String>,
     per_company: bool,
     multiyear: bool,
+    round_per_transaction: bool,
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
 
-    let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
-    let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
+    let mut parsed_interests_transactions: Vec<(String, Decimal, Decimal)> = vec![];
+    let mut parsed_div_transactions: Vec<(String, Decimal, Decimal, Option<String>)> = vec![];
+    let mut parsed_sold_transactions: Vec<(
+        String,
+        String,
+        Decimal,
+        Decimal,
+        Decimal,
+        Option<String>,
+    )> = vec![];
+    let mut parsed_gain_and_losses: Vec<(String, String, Decimal, Decimal, Decimal)> = vec![];
     let mut parsed_revolut_dividends_transactions: Vec<(
         String,
         Currency,
@@ -441,7 +498,7 @@ pub fn run_taxation(
     // Gather all trade , settlement and transaction dates into hash map to be passed to
     // get_exchange_rate
     // Hash map : Key(event date) -> (preceeding date, exchange_rate)
-    let mut dates: std::collections::HashMap<Exchange, Option<(String, f32)>> =
+    let mut dates: std::collections::HashMap<Exchange, Option<(String, Decimal)>> =
         std::collections::HashMap::new();
     parsed_interests_transactions
         .iter()
@@ -519,16 +576,35 @@ pub fn run_taxation(
         println!("{}", per_company_report);
     }
 
-    let (gross_interests, _) = compute_div_taxation(&interests);
-    let (gross_div, tax_div) = compute_div_taxation(&transactions);
-    let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
-    let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
+    let (gross_etrade_interests, _) = compute_div_taxation(&interests, round_per_transaction);
+    let (gross_etrade_div, tax_etrade_div) =
+        compute_div_taxation(&transactions, round_per_transaction);
+    let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions, round_per_transaction);
+
+    // Split Revolut transactions: savings interests (company=None, art. 30a pkt 1-3)
+    // vs stock dividends (company=Some, art. 30a pkt 4).
+    let revolut_interests_txns: Vec<Transaction> = revolut_dividends_transactions
+        .iter()
+        .filter(|x| x.company.is_none())
+        .cloned()
+        .collect();
+    let revolut_div_txns: Vec<Transaction> = revolut_dividends_transactions
+        .iter()
+        .filter(|x| x.company.is_some())
+        .cloned()
+        .collect();
+    let (gross_revolut_interests, _) =
+        compute_div_taxation(&revolut_interests_txns, round_per_transaction);
+    let (gross_revolut_div, tax_revolut) =
+        compute_div_taxation(&revolut_div_txns, round_per_transaction);
+    let (gross_revolut_sold, cost_revolut_sold) =
+        compute_sold_taxation(&revolut_sold_transactions, round_per_transaction);
     Ok(TaxCalculationResult {
-        gross_income: gross_interests + gross_div + gross_revolut,
-        tax: tax_div + tax_revolut,
-        gross_sold: gross_sold + gross_revolut_sold,
-        cost_sold: cost_sold + cost_revolut_sold,
+        gross_interests: gross_etrade_interests + gross_revolut_interests,
+        gross_div: gross_etrade_div + gross_revolut_div,
+        tax: tax_etrade_div + tax_revolut,
+        gross_sold: round_to_grosz(gross_sold + gross_revolut_sold),
+        cost_sold: round_to_grosz(cost_sold + cost_revolut_sold),
         interests,
         transactions: transactions,
         revolut_dividends_transactions: revolut_dividends_transactions,
@@ -540,6 +616,166 @@ pub fn run_taxation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal::dec;
+
+    #[test]
+    fn test_round_to_grosz() {
+        // Normal rounding
+        assert_eq!(round_to_grosz(dec!(1.234)), dec!(1.23));
+        assert_eq!(round_to_grosz(dec!(1.235)), dec!(1.24));
+        assert_eq!(round_to_grosz(dec!(1.005)), dec!(1.01));
+        assert_eq!(round_to_grosz(dec!(0.0)), dec!(0.0));
+        // Rounds down when fraction < 0.5
+        assert_eq!(
+            round_to_grosz(dec!(4.1523) * dec!(12.34)),
+            round_to_grosz(dec!(51.239482))
+        );
+    }
+
+    // Each transaction is rounded to grosz individually before summing.
+    // Two transactions of 1.005 PLN each: per-transaction gives 1.01 + 1.01 = 2.02,
+    // whereas rounding the raw sum (2.010) would give 2.01 — a different result.
+    #[test]
+    fn test_div_taxation_stepwise_rounding() -> Result<(), String> {
+        let transactions: Vec<Transaction> = vec![
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross: crate::Currency::PLN(dec!(1.005)),
+                tax_paid: crate::Currency::PLN(dec!(0.0)),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: dec!(1.0),
+                company: None,
+            },
+            Transaction {
+                transaction_date: "N/A".to_string(),
+                gross: crate::Currency::PLN(dec!(1.005)),
+                tax_paid: crate::Currency::PLN(dec!(0.0)),
+                exchange_rate_date: "N/A".to_string(),
+                exchange_rate: dec!(1.0),
+                company: None,
+            },
+        ];
+        let (gross, _) = compute_div_taxation(&transactions, true);
+        // Per-transaction: round(1.005) + round(1.005) = 1.01 + 1.01 = 2.02
+        assert_eq!(gross, dec!(2.02));
+        // Sanity check: rounding the raw sum would give a different answer
+        assert_ne!(gross, round_to_grosz(dec!(1.005) + dec!(1.005))); // round(2.01) = 2.01
+        Ok(())
+    }
+
+    // Each sold transaction's FX-converted income and cost are rounded to grosz individually
+    // before summing. Two transactions where rate * amount = 1.005 each: per-transaction gives
+    // 1.01 + 1.01 = 2.02, whereas rounding the raw sum (2.01) would give 2.01.
+    #[test]
+    fn test_sold_taxation_stepwise_rounding() -> Result<(), String> {
+        let transactions: Vec<SoldTransaction> = vec![
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: dec!(1.0),
+                cost_basis: dec!(1.0),
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: dec!(1.005),
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: dec!(1.005),
+                company: Some("TFC".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: dec!(1.0),
+                cost_basis: dec!(1.0),
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: dec!(1.005),
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: dec!(1.005),
+                company: Some("TFC".to_owned()),
+            },
+        ];
+        let (gross, cost) = compute_sold_taxation(&transactions, true);
+        // Per-transaction: round(1.005) + round(1.005) = 1.01 + 1.01 = 2.02
+        assert_eq!(gross, dec!(2.02));
+        assert_eq!(cost, dec!(2.02));
+        // Sanity check: rounding the raw sum would give a different answer
+        assert_ne!(gross, round_to_grosz(dec!(1.005) + dec!(1.005))); // round(2.01) = 2.01
+        Ok(())
+    }
+
+    /// Proves that f32 arithmetic gives a different (wrong) grosz result than
+    /// exact Decimal arithmetic for a realistic sold-stock scenario.
+    ///
+    /// Three stock sales with realistic NBP exchange rates, summing to ~200k PLN
+    /// where f32's ULP ≈ 0.016 — larger than 0.01 (one grosz). At this magnitude
+    /// f32 literally cannot distinguish adjacent grosz values.
+    ///
+    /// Exact gross sum (Decimal): 199985.462815 PLN → rounds to 199985.46
+    /// f32 gross sum:             199985.45      PLN → formats as 199985.45
+    ///
+    /// This is the kind of 1-grosz error that would appear on a PIT-38 tax return.
+    #[test]
+    fn test_decimal_precision_vs_f32_sold_taxation() {
+        // Three sold transactions with realistic NBP exchange rates.
+        // income amounts chosen so the PLN sum lands where f32 can't represent the grosz.
+        let transactions: Vec<SoldTransaction> = vec![
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: dec!(24000.00),
+                cost_basis: Decimal::ZERO,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: dec!(4.1537), // realistic NBP USD/PLN
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: Decimal::ONE,
+                company: Some("AAPL".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: dec!(24000.00),
+                cost_basis: Decimal::ZERO,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: dec!(3.9150),
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: Decimal::ONE,
+                company: Some("MSFT".to_owned()),
+            },
+            SoldTransaction {
+                trade_date: "N/A".to_string(),
+                settlement_date: "N/A".to_string(),
+                acquisition_date: "N/A".to_string(),
+                income_us: dec!(1480.01),
+                cost_basis: Decimal::ZERO,
+                exchange_rate_settlement_date: "N/A".to_string(),
+                exchange_rate_settlement: dec!(4.2815),
+                exchange_rate_acquisition_date: "N/A".to_string(),
+                exchange_rate_acquisition: Decimal::ONE,
+                company: Some("GOOG".to_owned()),
+            },
+        ];
+
+        let (gross, _cost) = compute_sold_taxation(&transactions, false);
+
+        // Decimal arithmetic is exact:
+        //   4.1537 * 24000    = 99688.8
+        //   3.9150 * 24000    = 93960.0
+        //   4.2815 *  1480.01 =  6336.662815
+        //                 sum = 199985.462815
+        assert_eq!(gross, dec!(199985.462815));
+        assert_eq!(round_to_grosz(gross), dec!(199985.46));
+
+        // Prove f32 gives a DIFFERENT answer (the bug this migration fixes):
+        let f32_gross: f32 =
+            4.1537_f32 * 24000.0_f32 + 3.9150_f32 * 24000.0_f32 + 4.2815_f32 * 1480.01_f32;
+        assert_eq!(
+            format!("{:.2}", f32_gross),
+            "199985.45",
+            "f32 produces 199985.45 — a 1-grosz error vs the correct 199985.46"
+        );
+    }
 
     #[test]
     fn test_validate_file_names_invalid_path() {
@@ -606,13 +842,16 @@ mod tests {
         // Init Transactions
         let transactions: Vec<Transaction> = vec![Transaction {
             transaction_date: "N/A".to_string(),
-            gross: crate::Currency::USD(100.0),
-            tax_paid: crate::Currency::USD(25.0),
+            gross: crate::Currency::USD(dec!(100.0)),
+            tax_paid: crate::Currency::USD(dec!(25.0)),
             exchange_rate_date: "N/A".to_string(),
-            exchange_rate: 4.0,
+            exchange_rate: dec!(4.0),
             company: Some("INTEL CORP".to_owned()),
         }];
-        assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
+        assert_eq!(
+            compute_div_taxation(&transactions, false),
+            (dec!(400.0), dec!(100.0))
+        );
         Ok(())
     }
 
@@ -622,24 +861,27 @@ mod tests {
         let transactions: Vec<Transaction> = vec![
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross: crate::Currency::USD(100.0),
-                tax_paid: crate::Currency::USD(25.0),
+                gross: crate::Currency::USD(dec!(100.0)),
+                tax_paid: crate::Currency::USD(dec!(25.0)),
                 exchange_rate_date: "N/A".to_string(),
-                exchange_rate: 4.0,
+                exchange_rate: dec!(4.0),
                 company: Some("INTEL CORP".to_owned()),
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross: crate::Currency::USD(126.0),
-                tax_paid: crate::Currency::USD(10.0),
+                gross: crate::Currency::USD(dec!(126.0)),
+                tax_paid: crate::Currency::USD(dec!(10.0)),
                 exchange_rate_date: "N/A".to_string(),
-                exchange_rate: 3.5,
+                exchange_rate: dec!(3.5),
                 company: Some("INTEL CORP".to_owned()),
             },
         ];
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+            compute_div_taxation(&transactions, false),
+            (
+                dec!(400.0) + dec!(126.0) * dec!(3.5),
+                dec!(100.0) + dec!(10.0) * dec!(3.5)
+            )
         );
         Ok(())
     }
@@ -648,24 +890,24 @@ mod tests {
         let transactions: Vec<Transaction> = vec![
             Transaction {
                 transaction_date: "03/01/21".to_string(),
-                gross: crate::Currency::PLN(0.44),
-                tax_paid: crate::Currency::PLN(0.0),
+                gross: crate::Currency::PLN(dec!(0.44)),
+                tax_paid: crate::Currency::PLN(dec!(0.0)),
                 exchange_rate_date: "N/A".to_string(),
-                exchange_rate: 1.0,
+                exchange_rate: dec!(1.0),
                 company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
-                gross: crate::Currency::PLN(0.45),
-                tax_paid: crate::Currency::PLN(0.0),
+                gross: crate::Currency::PLN(dec!(0.45)),
+                tax_paid: crate::Currency::PLN(dec!(0.0)),
                 exchange_rate_date: "N/A".to_string(),
-                exchange_rate: 1.0,
+                exchange_rate: dec!(1.0),
                 company: None,
             },
         ];
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (0.44 * 1.0 + 0.45 * 1.0, 0.0)
+            compute_div_taxation(&transactions, false),
+            (dec!(0.44) * dec!(1.0) + dec!(0.45) * dec!(1.0), dec!(0.0))
         );
         Ok(())
     }
@@ -675,24 +917,24 @@ mod tests {
         let transactions: Vec<Transaction> = vec![
             Transaction {
                 transaction_date: "03/01/21".to_string(),
-                gross: crate::Currency::EUR(0.44),
-                tax_paid: crate::Currency::EUR(0.0),
+                gross: crate::Currency::EUR(dec!(0.44)),
+                tax_paid: crate::Currency::EUR(dec!(0.0)),
                 exchange_rate_date: "02/28/21".to_string(),
-                exchange_rate: 2.0,
+                exchange_rate: dec!(2.0),
                 company: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
-                gross: crate::Currency::EUR(0.45),
-                tax_paid: crate::Currency::EUR(0.0),
+                gross: crate::Currency::EUR(dec!(0.45)),
+                tax_paid: crate::Currency::EUR(dec!(0.0)),
                 exchange_rate_date: "04/10/21".to_string(),
-                exchange_rate: 3.0,
+                exchange_rate: dec!(3.0),
                 company: None,
             },
         ];
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (0.44 * 2.0 + 0.45 * 3.0, 0.0)
+            compute_div_taxation(&transactions, false),
+            (dec!(0.44) * dec!(2.0) + dec!(0.45) * dec!(3.0), dec!(0.0))
         );
         Ok(())
     }
@@ -704,17 +946,17 @@ mod tests {
             trade_date: "N/A".to_string(),
             settlement_date: "N/A".to_string(),
             acquisition_date: "N/A".to_string(),
-            income_us: 100.0,
-            cost_basis: 70.0,
+            income_us: dec!(100.0),
+            cost_basis: dec!(70.0),
             exchange_rate_settlement_date: "N/A".to_string(),
-            exchange_rate_settlement: 5.0,
+            exchange_rate_settlement: dec!(5.0),
             exchange_rate_acquisition_date: "N/A".to_string(),
-            exchange_rate_acquisition: 6.0,
+            exchange_rate_acquisition: dec!(6.0),
             company: Some("TFC".to_owned()),
         }];
         assert_eq!(
-            compute_sold_taxation(&transactions),
-            (100.0 * 5.0, 70.0 * 6.0)
+            compute_sold_taxation(&transactions, false),
+            (dec!(100.0) * dec!(5.0), dec!(70.0) * dec!(6.0))
         );
         Ok(())
     }
@@ -727,30 +969,33 @@ mod tests {
                 trade_date: "N/A".to_string(),
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
-                income_us: 100.0,
-                cost_basis: 70.0,
+                income_us: dec!(100.0),
+                cost_basis: dec!(70.0),
                 exchange_rate_settlement_date: "N/A".to_string(),
-                exchange_rate_settlement: 5.0,
+                exchange_rate_settlement: dec!(5.0),
                 exchange_rate_acquisition_date: "N/A".to_string(),
-                exchange_rate_acquisition: 6.0,
+                exchange_rate_acquisition: dec!(6.0),
                 company: Some("PXD".to_owned()),
             },
             SoldTransaction {
                 trade_date: "N/A".to_string(),
                 settlement_date: "N/A".to_string(),
                 acquisition_date: "N/A".to_string(),
-                income_us: 10.0,
-                cost_basis: 4.0,
+                income_us: dec!(10.0),
+                cost_basis: dec!(4.0),
                 exchange_rate_settlement_date: "N/A".to_string(),
-                exchange_rate_settlement: 2.0,
+                exchange_rate_settlement: dec!(2.0),
                 exchange_rate_acquisition_date: "N/A".to_string(),
-                exchange_rate_acquisition: 3.0,
+                exchange_rate_acquisition: dec!(3.0),
                 company: Some("TFC".to_owned()),
             },
         ];
         assert_eq!(
-            compute_sold_taxation(&transactions),
-            (100.0 * 5.0 + 10.0 * 2.0, 70.0 * 6.0 + 4.0 * 3.0)
+            compute_sold_taxation(&transactions, false),
+            (
+                dec!(100.0) * dec!(5.0) + dec!(10.0) * dec!(2.0),
+                dec!(70.0) * dec!(6.0) + dec!(4.0) * dec!(3.0)
+            )
         );
         Ok(())
     }

@@ -87,28 +87,29 @@ fn main() {
     let mut output_content = String::new();
     output_content.push_str("use std::collections::HashMap;\n\n");
     output_content.push_str("use etradeTaxReturnHelper::Exchange;\n\n");
+    output_content.push_str("use rust_decimal::Decimal;\nuse rust_decimal::dec;\n\n");
     output_content.push_str("#[allow(clippy::approx_constant)]\n");
 
-    output_content.push_str("pub fn get_exchange_rates() -> HashMap<Exchange, f64> {\n");
+    output_content.push_str("pub fn get_exchange_rates() -> HashMap<Exchange, Decimal> {\n");
     output_content.push_str("   let mut exchange_rates = HashMap::new();\n");
 
     for (exchange, kurs) in &kursy_map {
         match exchange {
             Exchange::USD(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), {}f64);\n",
+                    "  exchange_rates.insert(Exchange::USD(\"{}\".to_string()), dec!({}));\n",
                     data, kurs
                 ));
             }
             Exchange::EUR(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), {}f64);\n",
+                    "  exchange_rates.insert(Exchange::EUR(\"{}\".to_string()), dec!({}));\n",
                     data, kurs
                 ));
             }
             Exchange::PLN(data) => {
                 output_content.push_str(&format!(
-                    "  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), {}f64);\n",
+                    "  exchange_rates.insert(Exchange::PLN(\"{}\".to_string()), dec!({}));\n",
                     data, kurs
                 ));
             }

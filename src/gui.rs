@@ -9,9 +9,10 @@ use fltk::{
     browser::MultiBrowser,
     button::Button,
     dialog,
-    enums::{Event, Font, FrameType, Key},
+    enums::{Event, Font, FrameType, Key, Shortcut},
     frame::Frame,
     group::Pack,
+    menu::{MenuBar, MenuFlag},
     prelude::*,
     text::{TextBuffer, TextDisplay},
     window,
@@ -77,6 +78,7 @@ fn create_clear_documents(
 
 fn create_execute_documents(
     browser: Rc<RefCell<MultiBrowser>>,
+    menubar: Rc<RefCell<MenuBar>>,
     tdisplay: Rc<RefCell<TextDisplay>>,
     sdisplay: Rc<RefCell<TextDisplay>>,
     ndisplay: Rc<RefCell<TextDisplay>>,
@@ -118,6 +120,12 @@ fn create_execute_documents(
         buffer.set_text("");
         tbuffer.set_text("");
         nbuffer.set_text("Running...");
+        let round_per_transaction = {
+            let mb = menubar.borrow();
+            mb.find_item("Options/Round per transaction")
+                .map(|item| item.value())
+                .unwrap_or(false)
+        };
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
         let etradeTaxReturnHelper::TaxCalculationResult {
             gross_interests,
@@ -130,7 +138,7 @@ fn create_execute_documents(
             revolut_dividends_transactions: revolut_transactions,
             sold_transactions,
             revolut_sold_transactions,
-        } = match run_taxation(&rd, file_names,false, false) {
+        } = match run_taxation(&rd, file_names, false, false, round_per_transaction) {
             Ok(res) => {
                 nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
                 res
@@ -229,7 +237,16 @@ pub fn run_gui() {
 
     wind.make_resizable(true);
 
-    let mut uberpack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
+    let mut menubar = MenuBar::new(0, 0, WIND_SIZE_X, 25, "");
+    menubar.add(
+        "Options/Round per transaction",
+        Shortcut::None,
+        MenuFlag::Toggle,
+        |_| {},
+    );
+    let menubar = Rc::new(RefCell::new(menubar));
+
+    let mut uberpack = Pack::new(0, 25, WIND_SIZE_X as i32, WIND_SIZE_Y as i32 - 25, "");
 
     let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y / 2 as i32, "");
     pack.set_type(fltk::group::PackType::Horizontal);
@@ -328,6 +345,7 @@ pub fn run_gui() {
     );
     create_execute_documents(
         browser.clone(),
+        menubar.clone(),
         tdisplay.clone(),
         sdisplay.clone(),
         ndisplay.clone(),

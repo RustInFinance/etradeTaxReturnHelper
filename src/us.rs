@@ -26,7 +26,10 @@ impl etradeTaxReturnHelper::Residency for US {
     ) -> (Vec<String>, Option<String>) {
         let total_gross_div = gross_interests + gross_div;
         let mut presentation: Vec<String> = vec![];
-        presentation.push(format!("===> (DIVIDENDS) INCOME: ${:.2}", total_gross_div));
+        presentation.push(format!(
+            "===> (DIVIDENDS+INTERESTS) INCOME: ${:.2}",
+            total_gross_div
+        ));
         presentation.push(format!("===> (DIVIDENDS) TAX PAID: ${:.2}", tax_div));
         presentation.push(format!("===> (SOLD STOCK) INCOME: ${:.2}", gross_sold));
         presentation.push(format!(
@@ -50,7 +53,7 @@ mod tests {
         let cost_sold = 10.0f32;
 
         let ref_results: Vec<String> = vec![
-            "===> (DIVIDENDS) INCOME: $100.00".to_string(),
+            "===> (DIVIDENDS+INTERESTS) INCOME: $100.00".to_string(),
             "===> (DIVIDENDS) TAX PAID: $15.00".to_string(),
             "===> (SOLD STOCK) INCOME: $1000.00".to_string(),
             "===> (SOLD STOCK) TAX DEDUCTIBLE COST: $10.00".to_string(),

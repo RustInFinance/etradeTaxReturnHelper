@@ -14,9 +14,22 @@ pub use crate::logging::ResultExt;
 /// aqusition cost of sold stock (aquisition_cost)
 /// adjusted aquisition cost of sold stock (cost_basis)
 /// income from sold stock (total_proceeds)
+/// quantity sold (quantity)
+/// ticker symbol (symbol)
 pub fn parse_gains_and_losses(
     xlsxtoparse: &str,
-) -> Result<Vec<(String, String, Decimal, Decimal, Decimal)>, &str> {
+) -> Result<
+    Vec<(
+        String,
+        String,
+        Decimal,
+        Decimal,
+        Decimal,
+        i32,
+        Option<String>,
+    )>,
+    &str,
+> {
     let mut excel: Xlsx<_> =
         open_workbook(xlsxtoparse).map_err(|_| "Error opening XLSX file: {}")?;
     let name = excel
@@ -25,7 +38,15 @@ pub fn parse_gains_and_losses(
         .expect_and_log("No worksheet found")
         .clone();
     log::info!("name: {}", name);
-    let mut transactions: Vec<(String, String, Decimal, Decimal, Decimal)> = vec![];
+    let mut transactions: Vec<(
+        String,
+        String,
+        Decimal,
+        Decimal,
+        Decimal,
+        i32,
+        Option<String>,
+    )> = vec![];
     if let Some(Ok(r)) = excel.worksheet_range(&name) {
         let mut rows = r.rows();
         let categories = rows
@@ -36,6 +57,8 @@ pub fn parse_gains_and_losses(
         let mut cost_basis_idx = 0;
         let mut acquistion_cost_idx = 0;
         let mut total_proceeds_idx = 0;
+        let mut quantity_idx: Option<usize> = None;
+        let mut symbol_idx: Option<usize> = None;
 
         let mut idx = 0;
         for c in categories {
@@ -47,6 +70,8 @@ pub fn parse_gains_and_losses(
                     "Acquisition Cost" | "Koszt zakupu" => acquistion_cost_idx = idx,
                     "Adjusted Cost Basis" | "Skorygowana podstawa kosztów" => cost_basis_idx = idx,
                     "Total Proceeds" | "Łączne wpływy" => total_proceeds_idx = idx,
+                    "Quantity" | "Qty." | "Liczba" | "Ilość" => quantity_idx = Some(idx),
+                    "Symbol" => symbol_idx = Some(idx),
                     _ => (),
                 }
             }
@@ -60,12 +85,16 @@ pub fn parse_gains_and_losses(
         // Iterate through rows of actual sold transactions
         for transakcja in rows {
             log::info!(
-                "G&L ACQUIRED_DATE: {} SOLD_DATE: {} ACQUISTION_COST: {} COST_BASIS: {} TOTAL: {}",
+                "G&L ACQUIRED_DATE: {} SOLD_DATE: {} ACQUISTION_COST: {} COST_BASIS: {} TOTAL: {} QTY: {}",
                 transakcja[date_acquired_idx],
                 transakcja[date_sold_idx],
                 transakcja[acquistion_cost_idx],
                 transakcja[cost_basis_idx],
-                transakcja[total_proceeds_idx]
+                transakcja[total_proceeds_idx],
+                quantity_idx
+                    .and_then(|i| transakcja.get(i))
+                    .and_then(|c| c.get_float())
+                    .unwrap_or(0.0)
             );
             // If row is ill formed or emtpy then it means user added something and this is to be
             // dropped
@@ -90,22 +119,24 @@ pub fn parse_gains_and_losses(
                     .unwrap()
                     .to_owned(),
                 transakcja[date_sold_idx].get_string().unwrap().to_owned(),
-                Decimal::from_str(
-                    &transakcja[acquistion_cost_idx]
-                        .get_float()
-                        .unwrap()
-                        .to_string(),
-                )
-                .unwrap(),
-                Decimal::from_str(&transakcja[cost_basis_idx].get_float().unwrap().to_string())
-                    .unwrap(),
-                Decimal::from_str(
-                    &transakcja[total_proceeds_idx]
-                        .get_float()
-                        .unwrap()
-                        .to_string(),
-                )
-                .unwrap(),
+                Decimal::from_str(&transakcja[acquistion_cost_idx].get_float().unwrap().to_string()).unwrap(),
+                Decimal::from_str(&transakcja[cost_basis_idx].get_float().unwrap().to_string()).unwrap(),
+                Decimal::from_str(&transakcja[total_proceeds_idx].get_float().unwrap().to_string()).unwrap(),
+                {
+                    let qty_f64 = quantity_idx
+                        .and_then(|i| transakcja.get(i))
+                        .and_then(|c| c.get_float())
+                        .unwrap_or(0.0);
+                    let qty_rounded = qty_f64.round();
+                    if (qty_f64 - qty_rounded).abs() > f64::EPSILON {
+                        return Err("G&L quantity is not a whole number — fractional shares are not supported");
+                    }
+                    qty_rounded as i32
+                },
+                symbol_idx
+                    .and_then(|i| transakcja.get(i))
+                    .and_then(|c| c.get_string())
+                    .map(|s| s.to_owned()),
             ));
         }
     }
@@ -118,11 +149,32 @@ mod tests {
     use super::*;
     use rust_decimal::dec;
 
+    fn strip_qty(
+        rows: &[(
+            String,
+            String,
+            Decimal,
+            Decimal,
+            Decimal,
+            i32,
+            Option<String>,
+        )],
+    ) -> Vec<(String, String, Decimal, Decimal, Decimal)> {
+        rows.iter()
+            .map(|(a, b, c, d, e, _, _)| (a.clone(), b.clone(), *c, *d, *e))
+            .collect()
+    }
+
     #[test]
     fn test_parse_gain_and_losses() -> Result<(), String> {
+        let collapsed = parse_gains_and_losses("data/G&L_Collapsed.xlsx")?;
+        assert!(collapsed.iter().all(|(_, _, _, _, _, qty, _)| *qty > 0));
+        assert!(collapsed
+            .iter()
+            .all(|(_, _, _, _, _, _, sym)| sym.as_deref() == Some("INTC")));
         assert_eq!(
-            parse_gains_and_losses("data/G&L_Collapsed.xlsx"),
-            Ok(vec![
+            strip_qty(&collapsed),
+            vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -137,11 +189,17 @@ mod tests {
                     dec!(29.28195),
                     dec!(43.67)
                 )
-            ])
+            ]
         );
+
+        let expanded = parse_gains_and_losses("data/G&L_Expanded.xlsx")?;
+        assert!(expanded.iter().all(|(_, _, _, _, _, qty, _)| *qty > 0));
+        assert!(expanded
+            .iter()
+            .all(|(_, _, _, _, _, _, sym)| sym.as_deref() == Some("INTC")));
         assert_eq!(
-            parse_gains_and_losses("data/G&L_Expanded.xlsx"),
-            Ok(vec![
+            strip_qty(&expanded),
+            vec![
                 (
                     "04/24/2013".to_owned(),
                     "04/11/2022".to_owned(),
@@ -156,7 +214,7 @@ mod tests {
                     dec!(29.28195),
                     dec!(43.67)
                 )
-            ])
+            ]
         );
 
         Ok(())
@@ -164,9 +222,14 @@ mod tests {
 
     #[test]
     fn test_parse_gain_and_losses_pl() -> Result<(), String> {
+        let parsed = parse_gains_and_losses("data/G&L_Expanded_polish.xlsx")?;
+        assert!(parsed.iter().all(|(_, _, _, _, _, qty, _)| *qty > 0));
+        assert!(parsed
+            .iter()
+            .all(|(_, _, _, _, _, _, sym)| sym.as_deref() == Some("INTC")));
         assert_eq!(
-            parse_gains_and_losses("data/G&L_Expanded_polish.xlsx"),
-            Ok(vec![
+            strip_qty(&parsed),
+            vec![
                 (
                     "02/17/2023".to_owned(),
                     "02/21/2023".to_owned(),
@@ -237,7 +300,7 @@ mod tests {
                     dec!(252.665),
                     dec!(307.819995)
                 )
-            ])
+            ]
         );
         Ok(())
     }

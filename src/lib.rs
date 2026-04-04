@@ -6,7 +6,7 @@
 mod csvparser;
 mod ecb;
 mod logging;
-mod pdfparser;
+pub(crate) mod pdfparser;
 mod transactions;
 mod xlsxparser;
 
@@ -53,8 +53,6 @@ impl Currency {
         }
     }
 }
-
-///
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
     EUR(String),
@@ -104,17 +102,20 @@ impl Transaction {
     }
 }
 
-// 1. settlement date
-// 2. date of purchase
-// 3. net income
-// 4. cost cost basis
+// 1. trade date (a.k.a. transaction date, T)
+// 2. settlement date
+// 3. date of purchase (a.k.a. acquisition date, A)
+// 4. net income
+// 5. cost basis
+//
 #[derive(Debug, PartialEq, PartialOrd)]
 pub struct SoldTransaction {
-    pub settlement_date: String,
     pub trade_date: String,
+    pub settlement_date: String,
     pub acquisition_date: String,
-    pub income_us: Decimal,
+    pub income_us: Decimal, // net proceeds (what seller receives, excluding fees)
     pub cost_basis: Decimal,
+    pub fees: Decimal, // fees amount (0 if no trade confirmations)
     pub exchange_rate_settlement_date: String,
     pub exchange_rate_settlement: Decimal,
     pub exchange_rate_acquisition_date: String,
@@ -126,14 +127,87 @@ pub struct SoldTransaction {
 
 impl SoldTransaction {
     pub fn format_to_print(&self, prefix: &str) -> String {
-        format!(
-                "{prefix} SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, net_income: ${},  cost_basis: {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
+        self.format_to_print_with_fx_details(prefix, false, false)
+    }
+
+    pub fn format_to_print_with_fx_details(
+        &self,
+        prefix: &str,
+        include_fx_calculation_details: bool,
+        round_per_transaction: bool,
+    ) -> String {
+        // Source-currency values (USD amounts and FX rates) keep the same display style
+        // regardless of per-transaction PLN rounding mode.
+        let fmt_source_display = |v: Decimal| -> String { v.round_dp(8).normalize().to_string() };
+
+        // PLN outputs switch with rounding mode: rounded per transaction when enabled,
+        // high precision display when disabled.
+        let fmt_pln_display = |v: Decimal| -> String {
+            if round_per_transaction {
+                v.to_string()
+            } else {
+                v.round_dp(8).normalize().to_string()
+            }
+        };
+
+        // Always show net proceeds and full cost basis.
+        // When trade confirmations are available (fees > 0), also prepend gross proceeds and
+        // append a breakdown of cost_basis into acquisition_cost and fees.
+        let income_cost_str = if self.fees > Decimal::ZERO {
+            format!(
+                "gross_proceeds: ${}, net_proceeds: ${}, cost_basis: ${} (acquisition_cost: ${}, fees: ${})",
+                fmt_source_display(self.income_us + self.fees),
+                fmt_source_display(self.income_us),
+                fmt_source_display(self.cost_basis),
+                fmt_source_display(self.cost_basis - self.fees),
+                fmt_source_display(self.fees),
+            )
+        } else {
+            // No trade confirmations: income_us is already net from Account Statements.
+            format!(
+                "net_proceeds: ${}, cost_basis: ${}",
+                fmt_source_display(self.income_us),
+                fmt_source_display(self.cost_basis)
+            )
+        };
+        let mut msg = format!(
+                "{prefix} SOLD TRANSACTION trade_date: {}, settlement_date: {}, acquisition_date: {}, {}, exchange_rate_settlement: {} , exchange_rate_settlement_date: {}, exchange_rate_acquisition: {} , exchange_rate_acquisition_date: {}",
                 chrono::NaiveDate::parse_from_str(&self.trade_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.settlement_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
                 chrono::NaiveDate::parse_from_str(&self.acquisition_date, "%m/%d/%y").unwrap().format("%Y-%m-%d"), 
-                &self.income_us, &self.cost_basis, &self.exchange_rate_settlement, &self.exchange_rate_settlement_date, &self.exchange_rate_acquisition, &self.exchange_rate_acquisition_date,
-            )
-            .to_owned()
+                income_cost_str,
+                fmt_source_display(self.exchange_rate_settlement),
+                &self.exchange_rate_settlement_date,
+                fmt_source_display(self.exchange_rate_acquisition),
+                &self.exchange_rate_acquisition_date,
+            );
+
+        if include_fx_calculation_details {
+            // Gross proceeds are net proceeds plus fees, all settled at settlement-date FX.
+            let gross_proceeds_pln_raw =
+                self.exchange_rate_settlement * (self.income_us + self.fees);
+            let cost_pln_raw = sold_cost_pln(self);
+            let gross_proceeds_pln = if round_per_transaction {
+                round_to_grosz(gross_proceeds_pln_raw)
+            } else {
+                gross_proceeds_pln_raw
+            };
+            let cost_pln = if round_per_transaction {
+                round_to_grosz(cost_pln_raw)
+            } else {
+                cost_pln_raw
+            };
+            msg.push_str(
+                format!(
+                    ", gross_proceeds_pln: {}, cost_pln: {}",
+                    fmt_pln_display(gross_proceeds_pln),
+                    fmt_pln_display(cost_pln)
+                )
+                .as_str(),
+            );
+        }
+
+        msg.to_owned()
     }
 }
 
@@ -273,6 +347,7 @@ pub struct TaxCalculationResult {
     pub revolut_dividends_transactions: Vec<Transaction>,
     pub sold_transactions: Vec<SoldTransaction>,
     pub revolut_sold_transactions: Vec<SoldTransaction>,
+    pub missing_trade_confirmations_warning: Option<String>,
 }
 
 fn create_client() -> reqwest::blocking::Client {
@@ -300,6 +375,19 @@ fn create_client() -> reqwest::blocking::Client {
 /// Rounds to 0.01 PLN (grosz).
 fn round_to_grosz(val: Decimal) -> Decimal {
     val.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero)
+}
+
+/// Converts sold-transaction cost to PLN using split FX sources.
+///
+/// `cost_basis` includes acquisition cost plus allocated sell-side fees (when trade confirmations
+/// are present). These parts use different legal/economic dates for FX:
+/// - acquisition component -> acquisition-date FX
+/// - fee component         -> settlement-date FX
+///
+/// Applying one rate to the whole `cost_basis` misprices cost PLN for confirmed sells.
+pub fn sold_cost_pln(tx: &SoldTransaction) -> Decimal {
+    let acquisition_component = tx.cost_basis - tx.fees;
+    tx.exchange_rate_acquisition * acquisition_component + tx.exchange_rate_settlement * tx.fees
 }
 
 fn compute_div_taxation(
@@ -337,11 +425,12 @@ fn compute_sold_taxation(
     transactions: &Vec<SoldTransaction>,
     round_per_transaction: bool,
 ) -> (Decimal, Decimal) {
-    // Net income from sold stock in target currency (PLN, EUR etc.)
+    // Gross proceeds from sold stock in target currency (PLN, EUR etc.).
+    // `income_us` is net proceeds, so add fees to recover gross sale amount.
     let gross_us_pl: Decimal = transactions
         .iter()
         .map(|x| {
-            let v = x.exchange_rate_settlement * x.income_us;
+            let v = x.exchange_rate_settlement * (x.income_us + x.fees);
             if round_per_transaction {
                 round_to_grosz(v)
             } else {
@@ -353,7 +442,7 @@ fn compute_sold_taxation(
     let cost_us_pl: Decimal = transactions
         .iter()
         .map(|x| {
-            let v = x.exchange_rate_acquisition * x.cost_basis;
+            let v = sold_cost_pln(x);
             if round_per_transaction {
                 round_to_grosz(v)
             } else {
@@ -429,15 +518,28 @@ pub fn run_taxation(
 
     let mut parsed_interests_transactions: Vec<(String, Decimal, Decimal)> = vec![];
     let mut parsed_div_transactions: Vec<(String, Decimal, Decimal, Option<String>)> = vec![];
-    let mut parsed_sold_transactions: Vec<(
+    let mut parsed_sold_transactions: Vec<(String, String, i32, Decimal, Decimal, Option<String>)> =
+        vec![];
+    let mut parsed_gain_and_losses: Vec<(
         String,
         String,
+        Decimal,
+        Decimal,
+        Decimal,
+        i32,
+        Option<String>,
+    )> = vec![];
+    let mut parsed_sell_trade_confirmations: Vec<(
+        String,
+        String,
+        i32,
+        Decimal,
+        Decimal,
         Decimal,
         Decimal,
         Decimal,
         Option<String>,
     )> = vec![];
-    let mut parsed_gain_and_losses: Vec<(String, String, Decimal, Decimal, Decimal)> = vec![];
     let mut parsed_revolut_dividends_transactions: Vec<(
         String,
         Currency,
@@ -451,16 +553,22 @@ pub fn run_taxation(
         Currency,
         Option<String>,
     )> = vec![];
+    let mut seen_multi_transaction_trade_confirmation_pages: HashSet<u64> = HashSet::new();
 
     // 1. Parse PDF,XLSX and CSV documents to get list of transactions
     names.iter().try_for_each(|x| {
         // If name contains .pdf then parse as pdf
         // if name contains .xlsx then parse as spreadsheet
         if x.contains(".pdf") {
-            let (mut int_t, mut div_t, mut sold_t, _) = pdfparser::parse_statement(x)?;
+            let (mut int_t, mut div_t, mut sold_t, mut trades_t) =
+                pdfparser::parse_statement_with_seen_pages(
+                    x,
+                    &mut seen_multi_transaction_trade_confirmation_pages,
+                )?;
             parsed_interests_transactions.append(&mut int_t);
             parsed_div_transactions.append(&mut div_t);
             parsed_sold_transactions.append(&mut sold_t);
+            parsed_sell_trade_confirmations.append(&mut trades_t);
         } else if x.contains(".xlsx") {
             parsed_gain_and_losses.append(&mut xlsxparser::parse_gains_and_losses(x)?);
         } else if x.contains(".csv") {
@@ -491,8 +599,11 @@ pub fn run_taxation(
     }
 
     // 3. Verify and create full sold transactions info needed for TAX purposes
-    let detailed_sold_transactions =
-        reconstruct_sold_transactions(&parsed_sold_transactions, &parsed_gain_and_losses)?;
+    let (detailed_sold_transactions, missing_tc_warning) = reconstruct_sold_transactions(
+        &parsed_sold_transactions,
+        &parsed_gain_and_losses,
+        &parsed_sell_trade_confirmations,
+    )?;
 
     // 4. Get Exchange rates
     // Gather all trade , settlement and transaction dates into hash map to be passed to
@@ -517,7 +628,7 @@ pub fn run_taxation(
             }
         });
     detailed_sold_transactions.iter().for_each(
-        |(trade_date, settlement_date, acquisition_date, _, _, _)| {
+        |(trade_date, settlement_date, acquisition_date, _, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -610,6 +721,7 @@ pub fn run_taxation(
         revolut_dividends_transactions: revolut_dividends_transactions,
         sold_transactions: sold_transactions,
         revolut_sold_transactions: revolut_sold_transactions,
+        missing_trade_confirmations_warning: missing_tc_warning,
     })
 }
 
@@ -675,6 +787,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(1.0),
                 cost_basis: dec!(1.0),
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(1.005),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -687,6 +800,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(1.0),
                 cost_basis: dec!(1.0),
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(1.005),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -725,6 +839,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(24000.00),
                 cost_basis: Decimal::ZERO,
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(4.1537), // realistic NBP USD/PLN
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -737,6 +852,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(24000.00),
                 cost_basis: Decimal::ZERO,
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(3.9150),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -749,6 +865,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(1480.01),
                 cost_basis: Decimal::ZERO,
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(4.2815),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -846,7 +963,7 @@ mod tests {
             tax_paid: crate::Currency::USD(dec!(25.0)),
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: dec!(4.0),
-            company: Some("INTEL CORP".to_owned()),
+            company: Some("INTC".to_owned()),
         }];
         assert_eq!(
             compute_div_taxation(&transactions, false),
@@ -865,7 +982,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(dec!(25.0)),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: dec!(4.0),
-                company: Some("INTEL CORP".to_owned()),
+                company: Some("INTC".to_owned()),
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
@@ -873,7 +990,7 @@ mod tests {
                 tax_paid: crate::Currency::USD(dec!(10.0)),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: dec!(3.5),
-                company: Some("INTEL CORP".to_owned()),
+                company: Some("INTC".to_owned()),
             },
         ];
         assert_eq!(
@@ -948,6 +1065,7 @@ mod tests {
             acquisition_date: "N/A".to_string(),
             income_us: dec!(100.0),
             cost_basis: dec!(70.0),
+            fees: Decimal::ZERO,
             exchange_rate_settlement_date: "N/A".to_string(),
             exchange_rate_settlement: dec!(5.0),
             exchange_rate_acquisition_date: "N/A".to_string(),
@@ -971,6 +1089,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(100.0),
                 cost_basis: dec!(70.0),
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(5.0),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -983,6 +1102,7 @@ mod tests {
                 acquisition_date: "N/A".to_string(),
                 income_us: dec!(10.0),
                 cost_basis: dec!(4.0),
+                fees: Decimal::ZERO,
                 exchange_rate_settlement_date: "N/A".to_string(),
                 exchange_rate_settlement: dec!(2.0),
                 exchange_rate_acquisition_date: "N/A".to_string(),
@@ -998,5 +1118,118 @@ mod tests {
             )
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_sold_transaction_format_with_fx_details() {
+        let transaction = SoldTransaction {
+            trade_date: "03/01/21".to_string(),
+            settlement_date: "03/03/21".to_string(),
+            acquisition_date: "01/01/21".to_string(),
+            income_us: dec!(20.0),
+            cost_basis: dec!(10.0),
+            fees: Decimal::ZERO,
+            exchange_rate_settlement_date: "03/02/21".to_string(),
+            exchange_rate_settlement: dec!(2.5),
+            exchange_rate_acquisition_date: "12/30/20".to_string(),
+            exchange_rate_acquisition: dec!(4.125),
+            company: Some("INTC".to_owned()),
+        };
+
+        let formatted = transaction.format_to_print_with_fx_details("", true, false);
+
+        assert!(formatted.contains("gross_proceeds_pln: 50"));
+        assert!(formatted.contains("cost_pln: 41.25"));
+    }
+
+    #[test]
+    fn test_sold_transaction_format_with_fx_details_rounded() {
+        let transaction = SoldTransaction {
+            trade_date: "03/01/21".to_string(),
+            settlement_date: "03/03/21".to_string(),
+            acquisition_date: "01/01/21".to_string(),
+            income_us: dec!(20.0),
+            cost_basis: dec!(10.0),
+            fees: Decimal::ZERO,
+            exchange_rate_settlement_date: "03/02/21".to_string(),
+            exchange_rate_settlement: dec!(2.555),
+            exchange_rate_acquisition_date: "12/30/20".to_string(),
+            exchange_rate_acquisition: dec!(4.1254),
+            company: Some("INTC".to_owned()),
+        };
+
+        let formatted = transaction.format_to_print_with_fx_details("", true, true);
+
+        assert!(formatted.contains("gross_proceeds_pln: 51.10"));
+        assert!(formatted.contains("cost_pln: 41.25"));
+    }
+
+    #[test]
+    fn test_sold_cost_pln_uses_split_fx_for_fees() {
+        let transaction = SoldTransaction {
+            trade_date: "03/01/21".to_string(),
+            settlement_date: "03/03/21".to_string(),
+            acquisition_date: "01/01/21".to_string(),
+            income_us: dec!(20.0),
+            cost_basis: dec!(10.3),
+            fees: dec!(0.3),
+            exchange_rate_settlement_date: "03/02/21".to_string(),
+            exchange_rate_settlement: dec!(4.0215),
+            exchange_rate_acquisition_date: "12/30/20".to_string(),
+            exchange_rate_acquisition: dec!(4.4072),
+            company: Some("INTC".to_owned()),
+        };
+
+        // Split formula: (10.3 - 0.3)*4.4072 + 0.3*4.0215 = 45.27845
+        assert_eq!(sold_cost_pln(&transaction), dec!(45.27845));
+    }
+
+    #[test]
+    fn test_gross_proceeds_pln_includes_fees() {
+        let transaction = SoldTransaction {
+            trade_date: "03/01/21".to_string(),
+            settlement_date: "03/03/21".to_string(),
+            acquisition_date: "01/01/21".to_string(),
+            income_us: dec!(20.0),
+            cost_basis: dec!(10.0),
+            fees: dec!(1.5),
+            exchange_rate_settlement_date: "03/02/21".to_string(),
+            exchange_rate_settlement: dec!(2.5),
+            exchange_rate_acquisition_date: "12/30/20".to_string(),
+            exchange_rate_acquisition: dec!(4.125),
+            company: Some("INTC".to_owned()),
+        };
+
+        let formatted = transaction.format_to_print_with_fx_details("", true, false);
+
+        // USD display values are capped for display and normalized when rounding is off.
+        assert!(formatted.contains("gross_proceeds: $21.5, net_proceeds: $20, cost_basis: $10 (acquisition_cost: $8.5, fees: $1.5)"));
+        // PLN FX details: gross proceeds PLN = (20.0 + 1.5) * 2.5 = 53.75
+        assert!(formatted.contains("gross_proceeds_pln: 53.75"));
+    }
+
+    #[test]
+    fn test_sold_transaction_display_caps_to_8_decimals_when_rounding_off() {
+        let transaction = SoldTransaction {
+            trade_date: "02/12/25".to_string(),
+            settlement_date: "02/13/25".to_string(),
+            acquisition_date: "05/02/22".to_string(),
+            income_us: dec!(1229.1600046741779665443880451),
+            cost_basis: dec!(0.0377527401115187065163698216),
+            fees: dec!(0.0377527401115187065163698216),
+            exchange_rate_settlement_date: "02/12/25".to_string(),
+            exchange_rate_settlement: dec!(4.0215),
+            exchange_rate_acquisition_date: "04/29/22".to_string(),
+            exchange_rate_acquisition: dec!(4.4072),
+            company: Some("INTC".to_owned()),
+        };
+
+        let formatted = transaction.format_to_print_with_fx_details("", true, false);
+
+        assert!(formatted.contains("gross_proceeds: $1229.19775741"));
+        assert!(formatted.contains("net_proceeds: $1229.16000467"));
+        assert!(
+            formatted.contains("cost_basis: $0.03775274 (acquisition_cost: $0, fees: $0.03775274)")
+        );
     }
 }

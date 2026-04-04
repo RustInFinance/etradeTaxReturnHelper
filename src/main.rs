@@ -121,6 +121,7 @@ fn main() {
         tax: tax_div,
         gross_sold,
         cost_sold,
+        missing_trade_confirmations_warning,
         ..
     } = match run_taxation(
         &rd,
@@ -139,6 +140,10 @@ fn main() {
 
     if let Some(warn_msg) = warning {
         println!("\n\nWARNING: {warn_msg}");
+    }
+
+    if let Some(tc_warning) = missing_trade_confirmations_warning {
+        println!("\n\n{tc_warning}");
     }
 }
 

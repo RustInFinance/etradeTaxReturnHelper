@@ -10,6 +10,7 @@ SPDX-License-Identifier = "LicenseRef-ETrade-MorganStanley"
 path=[
 "Cargo.lock",
 "assets/etradetaxreturnhelper-640x480.gif",
+"rust_decimal.natvis",
 ]
 SPDX-FileCopyrightText = "2025 RustInFinance"
 SPDX-License-Identifier = "BSD-3-Clause"

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2022-2025 RustInFinance
 // SPDX-License-Identifier: BSD-3-Clause
 
+#![debugger_visualizer(natvis_file = "../rust_decimal.natvis")]
+
 use clap::{Arg, Command};
 use std::env;
 
@@ -58,6 +60,12 @@ fn create_cmd_line_pattern(myapp: Command) -> Command {
                 .help("Allow processing documents across more than year")
                 .action(clap::ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("round-per-transaction")
+                .long("round-per-transaction")
+                .help("Round each FX-converted amount to grosz before summing (off by default)")
+                .action(clap::ArgAction::SetTrue)
+        )
 }
 
 fn configure_dataframes_format() {
@@ -108,26 +116,34 @@ fn main() {
     let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
     let TaxCalculationResult {
-        gross_income: gross_div,
+        gross_interests,
+        gross_div,
         tax: tax_div,
         gross_sold,
         cost_sold,
+        missing_trade_confirmations_warning,
         ..
     } = match run_taxation(
         &rd,
         pdfnames,
         matches.get_flag("per-company"),
         matches.get_flag("multiyear"),
+        matches.get_flag("round-per-transaction"),
     ) {
         Ok(res) => res,
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
 
-    let (presentation, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    let (presentation, warning) =
+        rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
 
     if let Some(warn_msg) = warning {
         println!("\n\nWARNING: {warn_msg}");
+    }
+
+    if let Some(tc_warning) = missing_trade_confirmations_warning {
+        println!("\n\n{tc_warning}");
     }
 }
 
@@ -135,6 +151,8 @@ fn main() {
 mod tests {
     use super::*;
     use clap::Command;
+    use rust_decimal::dec;
+    use rust_decimal::Decimal;
 
     #[test]
     fn test_exchange_rate_de() -> Result<(), String> {
@@ -142,7 +160,7 @@ mod tests {
 
         let mut dates: std::collections::HashMap<
             etradeTaxReturnHelper::Exchange,
-            Option<(String, f32)>,
+            Option<(String, Decimal)>,
         > = std::collections::HashMap::new();
 
         dates.insert(
@@ -157,10 +175,8 @@ mod tests {
             .clone()
             .unwrap();
 
-        assert_eq!(
-            (exchange_rate_date, exchange_rate),
-            ("2023-02-20".to_owned(), 0.9368559)
-        );
+        assert_eq!(exchange_rate_date, "2023-02-20");
+        assert_eq!(exchange_rate, dec!(0.9368559115608019486602960465));
         Ok(())
     }
 
@@ -170,7 +186,7 @@ mod tests {
 
         let mut dates: std::collections::HashMap<
             etradeTaxReturnHelper::Exchange,
-            Option<(String, f32)>,
+            Option<(String, Decimal)>,
         > = std::collections::HashMap::new();
 
         dates.insert(
@@ -187,7 +203,7 @@ mod tests {
 
         assert_eq!(
             (exchange_rate_date, exchange_rate),
-            ("2021-02-26".to_owned(), 3.7247)
+            ("2021-02-26".to_owned(), dec!(3.7247))
         );
         Ok(())
     }
@@ -198,7 +214,7 @@ mod tests {
 
         let mut dates: std::collections::HashMap<
             etradeTaxReturnHelper::Exchange,
-            Option<(String, f32)>,
+            Option<(String, Decimal)>,
         > = std::collections::HashMap::new();
 
         dates.insert(
@@ -213,7 +229,10 @@ mod tests {
             .clone()
             .unwrap();
 
-        assert_eq!((exchange_rate_date, exchange_rate), ("N/A".to_owned(), 1.0));
+        assert_eq!(
+            (exchange_rate_date, exchange_rate),
+            ("N/A".to_owned(), Decimal::ONE)
+        );
         Ok(())
     }
 
@@ -374,7 +393,7 @@ mod tests {
             .expect_and_log("error getting financial documents names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(_) => panic!("Expected an error from run_taxation, but got Ok"),
             Err(_) => Ok(()), // Expected error, test passes
         }
@@ -395,17 +414,18 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (6331.29, 871.17993, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (dec!(0), dec!(6331.29), dec!(871.18), dec!(0), dec!(0)),
                 );
                 Ok(())
             }
@@ -428,17 +448,63 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (9142.319, 1207.08, 22988.617, 20163.5),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (
+                        dec!(0),
+                        dec!(9142.32),
+                        dec!(1207.08),
+                        dec!(22988.62),
+                        dec!(20163.50)
+                    ),
+                );
+                Ok(())
+            }
+            Err(x) => panic!("Error in taxation process: {x}"),
+        }
+    }
+
+    #[test]
+    fn test_revolut_sold_and_dividends_round_per_transaction() -> Result<(), clap::Error> {
+        let myapp = Command::new("etradeTaxHelper").arg_required_else_help(true);
+        let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(pl::PL {});
+
+        let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
+            "mytest",
+            "revolut_data/trading-pnl-statement_2022-11-01_2024-09-01_pl-pl_e989f4.csv",
+        ]);
+        let pdfnames = matches
+            .get_many::<String>("financial documents")
+            .expect_and_log("error getting brokarage statements pdfs names");
+        let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
+
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, true) {
+            Ok(TaxCalculationResult {
+                gross_interests,
+                gross_div,
+                tax: tax_div,
+                gross_sold,
+                cost_sold,
+                ..
+            }) => {
+                assert_eq!(
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (
+                        dec!(0),
+                        dec!(9142.32),
+                        dec!(1207.08),
+                        dec!(22988.62),
+                        dec!(20163.50)
+                    ),
                 );
                 Ok(())
             }
@@ -461,17 +527,18 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (86.93008, 0.0, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (dec!(86.93), dec!(0), dec!(0), dec!(0), dec!(0)),
                 );
                 Ok(())
             }
@@ -495,17 +562,24 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (219.34755, 0.0, 89845.65, 44369.938),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (
+                        dec!(0),
+                        dec!(219.34755),
+                        dec!(0.0),
+                        dec!(89845.65),
+                        dec!(44369.938)
+                    ),
                 );
                 Ok(())
             }
@@ -526,17 +600,18 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false) {
+        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, false, false, false) {
             Ok(TaxCalculationResult {
-                gross_income: gross_div,
+                gross_interests,
+                gross_div,
                 tax: tax_div,
                 gross_sold,
                 cost_sold,
                 ..
             }) => {
                 assert_eq!(
-                    (gross_div, tax_div, gross_sold, cost_sold),
-                    (0.66164804, 0.0, 0.0, 0.0),
+                    (gross_interests, gross_div, tax_div, gross_sold, cost_sold),
+                    (dec!(0.66164804), dec!(0), dec!(0.0), dec!(0.0), dec!(0.0)),
                 );
                 Ok(())
             }

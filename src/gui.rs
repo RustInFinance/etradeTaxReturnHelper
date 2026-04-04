@@ -9,9 +9,10 @@ use fltk::{
     browser::MultiBrowser,
     button::Button,
     dialog,
-    enums::{Event, Font, FrameType, Key},
+    enums::{Event, Font, FrameType, Key, Shortcut},
     frame::Frame,
     group::Pack,
+    menu::{MenuBar, MenuFlag},
     prelude::*,
     text::{TextBuffer, TextDisplay},
     window,
@@ -19,6 +20,8 @@ use fltk::{
 
 use crate::pl::PL;
 use crate::run_taxation;
+use rust_decimal::Decimal;
+use rust_decimal::RoundingStrategy;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -75,8 +78,156 @@ fn create_clear_documents(
     });
 }
 
+fn round_if_needed(value: Decimal, round_per_transaction: bool) -> Decimal {
+    if round_per_transaction {
+        value.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+    } else {
+        value
+    }
+}
+
+fn format_source_display_value(value: Decimal) -> String {
+    value.round_dp(8).normalize().to_string()
+}
+
+fn format_pln_display_value(value: Decimal, round_per_transaction: bool) -> String {
+    if round_per_transaction {
+        value.to_string()
+    } else {
+        value.round_dp(8).normalize().to_string()
+    }
+}
+
+fn detect_transaction_currency_code(
+    transactions: &[etradeTaxReturnHelper::Transaction],
+) -> Option<&'static str> {
+    let mut detected: Option<&'static str> = None;
+
+    for transaction in transactions {
+        let current = match transaction.gross {
+            etradeTaxReturnHelper::Currency::USD(_) => "USD",
+            etradeTaxReturnHelper::Currency::EUR(_) => "EUR",
+            etradeTaxReturnHelper::Currency::PLN(_) => "PLN",
+        };
+
+        match detected {
+            Some(existing) if existing != current => return None,
+            Some(_) => {}
+            None => detected = Some(current),
+        }
+    }
+
+    detected
+}
+
+fn format_transaction_category_totals(
+    label: &str,
+    transactions: &[etradeTaxReturnHelper::Transaction],
+    round_per_transaction: bool,
+    include_fx_calculation_details: bool,
+) -> Option<String> {
+    if transactions.is_empty() {
+        return None;
+    }
+
+    let currency_code = detect_transaction_currency_code(transactions);
+    let gross_source_total: Decimal = transactions.iter().map(|t| t.gross.value()).sum();
+    let cost_source_total = Decimal::ZERO;
+    let net_source_total = gross_source_total - cost_source_total;
+
+    let gross_pln_total: Decimal = transactions
+        .iter()
+        .map(|t| round_if_needed(t.exchange_rate * t.gross.value(), round_per_transaction))
+        .sum();
+    let cost_pln_total = Decimal::ZERO;
+    let net_pln_total = gross_pln_total - cost_pln_total;
+
+    let mut line = match currency_code {
+        Some(code) => format!(
+            "TOTAL {label}: gross_amount({code})={}, cost({code})={}, net({code})={}",
+            format_source_display_value(gross_source_total),
+            format_source_display_value(cost_source_total),
+            format_source_display_value(net_source_total)
+        ),
+        None => format!(
+            "TOTAL {label}: source totals unavailable (mixed currencies), net source total omitted"
+        ),
+    };
+
+    if include_fx_calculation_details {
+        line.push_str(
+            format!(
+                ", gross_amount(PLN)={}, cost(PLN)={}, net(PLN)={}",
+                format_pln_display_value(gross_pln_total, round_per_transaction),
+                format_pln_display_value(cost_pln_total, round_per_transaction),
+                format_pln_display_value(net_pln_total, round_per_transaction)
+            )
+            .as_str(),
+        );
+    }
+
+    Some(line)
+}
+
+fn format_sold_category_totals(
+    label: &str,
+    transactions: &[etradeTaxReturnHelper::SoldTransaction],
+    round_per_transaction: bool,
+    include_fx_calculation_details: bool,
+) -> Option<String> {
+    if transactions.is_empty() {
+        return None;
+    }
+
+    let gross_source_total: Decimal = transactions.iter().map(|t| t.income_us + t.fees).sum();
+    let cost_source_total: Decimal = transactions.iter().map(|t| t.cost_basis).sum();
+    let net_source_total = gross_source_total - cost_source_total;
+
+    let gross_pln_total: Decimal = transactions
+        .iter()
+        .map(|t| {
+            round_if_needed(
+                t.exchange_rate_settlement * (t.income_us + t.fees),
+                round_per_transaction,
+            )
+        })
+        .sum();
+    let cost_pln_total: Decimal = transactions
+        .iter()
+        .map(|t| {
+            round_if_needed(
+                etradeTaxReturnHelper::sold_cost_pln(t),
+                round_per_transaction,
+            )
+        })
+        .sum();
+    let net_pln_total = gross_pln_total - cost_pln_total;
+
+    let mut line = format!(
+        "TOTAL {label}: gross_amount(USD)={}, cost(USD)={}, net(USD)={}",
+        format_source_display_value(gross_source_total),
+        format_source_display_value(cost_source_total),
+        format_source_display_value(net_source_total)
+    );
+
+    if include_fx_calculation_details {
+        line.push_str(
+            format!(
+                ", gross_amount(PLN)={}, cost(PLN)={}, net(PLN)={}",
+                format_pln_display_value(gross_pln_total, round_per_transaction),
+                format_pln_display_value(cost_pln_total, round_per_transaction),
+                format_pln_display_value(net_pln_total, round_per_transaction)
+            )
+            .as_str(),
+        );
+    }
+
+    Some(line)
+}
+
 fn create_execute_documents(
     browser: Rc<RefCell<MultiBrowser>>,
+    menubar: Rc<RefCell<MenuBar>>,
     tdisplay: Rc<RefCell<TextDisplay>>,
     sdisplay: Rc<RefCell<TextDisplay>>,
     ndisplay: Rc<RefCell<TextDisplay>>,
@@ -118,9 +269,28 @@ fn create_execute_documents(
         buffer.set_text("");
         tbuffer.set_text("");
         nbuffer.set_text("Running...");
+        let round_per_transaction = {
+            let mb = menubar.borrow();
+            mb.find_item("Options/Round per transaction")
+                .map(|item| item.value())
+                .unwrap_or(false)
+        };
+        let include_fx_calculation_details = {
+            let mb = menubar.borrow();
+            mb.find_item("Options/Include FX calculation details")
+                .map(|item| item.value())
+                .unwrap_or(false)
+        };
+        let output_totals = {
+            let mb = menubar.borrow();
+            mb.find_item("Options/Output totals")
+                .map(|item| item.value())
+                .unwrap_or(false)
+        };
         let rd: Box<dyn etradeTaxReturnHelper::Residency> = Box::new(PL {});
         let etradeTaxReturnHelper::TaxCalculationResult {
-            gross_income: gross_div,
+            gross_interests,
+            gross_div,
             tax: tax_div,
             gross_sold,
             cost_sold,
@@ -129,9 +299,15 @@ fn create_execute_documents(
             revolut_dividends_transactions: revolut_transactions,
             sold_transactions,
             revolut_sold_transactions,
-        } = match run_taxation(&rd, file_names,false, false) {
+            missing_trade_confirmations_warning: _,
+        } = match run_taxation(&rd, file_names, false, false, round_per_transaction) {
             Ok(res) => {
-                nbuffer.set_text("Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)");
+                let mut finish_msg = "Finished.\n\n (Double check if generated tax data (Summary) makes sense and then copy it to your tax form)".to_string();
+                if let Some(ref tc_warning) = res.missing_trade_confirmations_warning {
+                    finish_msg.push_str("\n\n");
+                    finish_msg.push_str(tc_warning);
+                }
+                nbuffer.set_text(&finish_msg);
                 res
             }
             Err(err) => {
@@ -139,7 +315,7 @@ fn create_execute_documents(
                 panic!("Error: unable to perform taxation");
             }
         };
-        let (presentation,warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (presentation,warning) = rd.present_result(gross_interests, gross_div, tax_div, gross_sold, cost_sold);
         buffer.set_text(&presentation.join("\n"));
         if let Some(warn_msg) = warning {
             nbuffer.set_text(&warn_msg);
@@ -156,10 +332,75 @@ fn create_execute_documents(
             .for_each(|x| transactions_strings.push(x.format_to_print("REVOLUT ").expect_and_log("Error: Formatting DIV transaction failed")));
         sold_transactions
             .iter()
-            .for_each(|x| transactions_strings.push(x.format_to_print("")));
+            .for_each(|x| {
+                transactions_strings.push(
+                    x.format_to_print_with_fx_details(
+                        "",
+                        include_fx_calculation_details,
+                        round_per_transaction,
+                    ),
+                )
+            });
         revolut_sold_transactions
             .iter()
-            .for_each(|x| transactions_strings.push(x.format_to_print("REVOLUT ")));
+            .for_each(|x| {
+                transactions_strings.push(x.format_to_print_with_fx_details(
+                    "REVOLUT ",
+                    include_fx_calculation_details,
+                    round_per_transaction,
+                ))
+            });
+
+        if output_totals {
+            let mut total_lines: Vec<String> = vec![];
+
+            if let Some(line) = format_transaction_category_totals(
+                "INTERESTS",
+                &interests_transactions,
+                round_per_transaction,
+                include_fx_calculation_details,
+            ) {
+                total_lines.push(line);
+            }
+            if let Some(line) = format_transaction_category_totals(
+                "DIV",
+                &div_transactions,
+                round_per_transaction,
+                include_fx_calculation_details,
+            ) {
+                total_lines.push(line);
+            }
+            if let Some(line) = format_transaction_category_totals(
+                "REVOLUT",
+                &revolut_transactions,
+                round_per_transaction,
+                include_fx_calculation_details,
+            ) {
+                total_lines.push(line);
+            }
+            if let Some(line) = format_sold_category_totals(
+                "SOLD",
+                &sold_transactions,
+                round_per_transaction,
+                include_fx_calculation_details,
+            ) {
+                total_lines.push(line);
+            }
+            if let Some(line) = format_sold_category_totals(
+                "REVOLUT SOLD",
+                &revolut_sold_transactions,
+                round_per_transaction,
+                include_fx_calculation_details,
+            ) {
+                total_lines.push(line);
+            }
+
+            if !total_lines.is_empty() {
+                transactions_strings.push("----------------".to_string());
+                transactions_strings.append(&mut total_lines);
+            }
+        }
+
         tbuffer.set_text(&transactions_strings.join("\n"));
     });
 }
@@ -228,7 +469,28 @@ pub fn run_gui() {
 
     wind.make_resizable(true);
 
-    let mut uberpack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y as i32, "");
+    let mut menubar = MenuBar::new(0, 0, WIND_SIZE_X, 25, "");
+    menubar.add(
+        "Options/Round per transaction",
+        Shortcut::None,
+        MenuFlag::Toggle,
+        |_| {},
+    );
+    menubar.add(
+        "Options/Include FX calculation details",
+        Shortcut::None,
+        MenuFlag::Toggle,
+        |_| {},
+    );
+    menubar.add(
+        "Options/Output totals",
+        Shortcut::None,
+        MenuFlag::Toggle,
+        |_| {},
+    );
+    let menubar = Rc::new(RefCell::new(menubar));
+
+    let mut uberpack = Pack::new(0, 25, WIND_SIZE_X as i32, WIND_SIZE_Y as i32 - 25, "");
 
     let mut pack = Pack::new(0, 0, WIND_SIZE_X as i32, WIND_SIZE_Y / 2 as i32, "");
     pack.set_type(fltk::group::PackType::Horizontal);
@@ -327,6 +589,7 @@ pub fn run_gui() {
     );
     create_execute_documents(
         browser.clone(),
+        menubar.clone(),
         tdisplay.clone(),
         sdisplay.clone(),
         ndisplay.clone(),

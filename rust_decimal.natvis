@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Natvis debugger visualizer for rust_decimal::Decimal.
+  Lets Visual Studio (and VS Code with C++ debugger) display Decimal values
+  as human-readable numbers instead of raw {flags, hi, mid, lo} fields.
+  Referenced via #![debugger_visualizer(natvis_file = "...")] in lib.rs / main.rs.
+-->
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="rust_decimal::decimal::Decimal">
+    <!-- mantissa = hi*2^64 + mid*2^32 + lo;  value = (-1)^sign * mantissa / 10^scale -->
+    <!-- Use (double) casting to show the value. Precision limited to ~15 digits but readable. -->
+
+    <!-- Positive values (sign bit = 0) -->
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 0  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo),g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 1  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 2  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 3  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 1000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 4  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 5  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 6  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 1000000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 7  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10000000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 8  &amp;&amp; hi == 0">{(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100000000.0,g}</DisplayString>
+
+    <!-- Negative values (sign bit = 1) -->
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 0  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo),g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 1  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 2  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 3  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 1000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 4  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 5  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 6  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 1000000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 7  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 10000000.0,g}</DisplayString>
+    <DisplayString Condition="(flags &gt;&gt; 31) == 1 &amp;&amp; ((flags &gt;&gt; 16) &amp; 0xFF) == 8  &amp;&amp; hi == 0">{-(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / 100000000.0,g}</DisplayString>
+
+    <!-- Fallback for hi != 0 or scale > 8 (large values using full 96-bit mantissa) -->
+    <DisplayString Condition="(flags &gt;&gt; 31) == 0">~{(double)((double)hi * 18446744073709551616.0 + (double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo)),g} (approx, scale={(flags &gt;&gt; 16) &amp; 0xFF})</DisplayString>
+    <DisplayString>~{-(double)((double)hi * 18446744073709551616.0 + (double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo)),g} (approx, scale={(flags &gt;&gt; 16) &amp; 0xFF})</DisplayString>
+
+    <Expand>
+      <Item Name="[value]" Condition="hi == 0 &amp;&amp; (flags &gt;&gt; 31) == 0">(double)((unsigned __int64)mid * 4294967296 + (unsigned __int64)lo) / (((flags &gt;&gt; 16) &amp; 0xFF) == 0 ? 1.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 1 ? 10.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 2 ? 100.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 3 ? 1000.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 4 ? 10000.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 5 ? 100000.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 6 ? 1000000.0 : ((flags &gt;&gt; 16) &amp; 0xFF) == 7 ? 10000000.0 : 100000000.0)</Item>
+      <Item Name="[lo]">lo</Item>
+      <Item Name="[mid]">mid</Item>
+      <Item Name="[hi]">hi</Item>
+      <Item Name="[scale]">(flags &gt;&gt; 16) &amp; 0xFF</Item>
+      <Item Name="[sign]">(flags &gt;&gt; 31) &amp; 1</Item>
+    </Expand>
+  </Type>
+</AutoVisualizer>

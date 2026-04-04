@@ -50,5 +50,6 @@ polars = "0.35.4"
 csv = "1.3.0"
 serde_json = { version = "=1.0.133", optional = true }
 holidays = { version = "0.1.0", default-features = false, features = ["PL"] }
+rust_decimal = { version = "1.36.0", features = ["macros", "serde-with-float"] }
 
 

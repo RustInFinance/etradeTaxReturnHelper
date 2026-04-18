@@ -148,7 +148,7 @@ pub trait Residency {
 
     // Default parser (not to be used)
     fn parse_exchange_rates(&self, _body: &str) -> Result<(f32, String), String> {
-        panic!("This method should not be used. Implement your own if needed!");
+        Err("parse_exchange_rates not implemented for this residency".to_string())
     }
 
     fn get_currency_exchange_rates(

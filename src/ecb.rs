@@ -12,11 +12,22 @@ pub fn get_eur_to_usd_exchange_rate(
         ("startPeriod", start_date.format("%Y-%m-%d").to_string()),
         ("endPeriod", end_date.format("%Y-%m-%d").to_string()),
     ];
-    let response: String =
-        get_blocking_exchange_rate(ECB_URL, &query).expect("Failed to get exchange rate");
-    let ecb_response = EcbResponse::from_xml_string(&response).unwrap();
-    assert_eq!(ecb_response.currency, "USD");
-    assert_eq!(ecb_response.currency_denom, "EUR");
+    let response: String = get_blocking_exchange_rate(ECB_URL, &query)
+        .map_err(|e| format!("Failed to get exchange rate: {e}"))?;
+    let ecb_response = EcbResponse::from_xml_string(&response)
+        .map_err(|e| format!("Failed to parse ECB response: {e}"))?;
+    if ecb_response.currency != "USD" {
+        return Err(format!(
+            "Unexpected ECB currency: {}, expected USD",
+            ecb_response.currency
+        ));
+    }
+    if ecb_response.currency_denom != "EUR" {
+        return Err(format!(
+            "Unexpected ECB currency_denom: {}, expected EUR",
+            ecb_response.currency_denom
+        ));
+    }
     let usd_to_eur = ecb_response
         .rate
         .parse::<f32>()

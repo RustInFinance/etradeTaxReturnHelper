@@ -10,7 +10,7 @@ pub use crate::logging::ResultExt;
 use crate::{SoldTransaction, Transaction};
 
 /// Check if all interests rate transactions come from the same year
-pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T, T)>) -> Result<(), String> {
+pub fn verify_interests_transactions<T>(transactions: &[(String, T, T)]) -> Result<(), String> {
     let mut trans = transactions.iter();
     let transaction_date = match trans.next() {
         Some((x, _, _)) => x,
@@ -39,7 +39,7 @@ pub fn verify_interests_transactions<T>(transactions: &Vec<(String, T, T)>) -> R
 
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions<T>(
-    div_transactions: &Vec<(String, T, T, Option<String>)>,
+    div_transactions: &[(String, T, T, Option<String>)],
 ) -> Result<(), String> {
     let mut trans = div_transactions.iter();
     let transaction_date = match trans.next() {
@@ -68,7 +68,7 @@ pub fn verify_dividends_transactions<T>(
 }
 
 pub fn verify_transactions<T>(
-    transactions: &Vec<(String, String, T, T, Option<String>)>,
+    transactions: &[(String, String, T, T, Option<String>)],
 ) -> Result<(), String> {
     let mut trans = transactions.iter();
     let transaction_date = match trans.next() {

@@ -122,6 +122,32 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     }
 }
 
+fn sanitize_df(df: &DataFrame) -> DataFrame {
+    if let Ok(col) = df.column("Description") {
+        if let Ok(utf) = col.utf8() {
+            let vals: Vec<String> = utf
+                .into_iter()
+                .map(|opt| {
+                    opt.map(|st| {
+                        let replaced = st
+                            .replace("\r\n", " ")
+                            .replace('\n', " ")
+                            .replace('\r', " ");
+                        replaced.split_whitespace().collect::<Vec<_>>().join(" ")
+                    })
+                    .unwrap_or_default()
+                })
+                .collect();
+            let new_series = Series::new("Description", vals);
+            let mut new_df = df.clone();
+            if new_df.with_column(new_series).is_ok() {
+                return new_df;
+            }
+        }
+    }
+    df.clone()
+}
+
 fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
     let df_transactions = if df.get_column_names().contains(&"Currency") {
         df.select([
@@ -536,11 +562,11 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
             .finish()
             .map_err(|e| format!("Error reading CSV: {e}"))?;
 
-        log::info!("CSV DataFrame: {df}");
+        log::info!("CSV DataFrame: {}", sanitize_df(&df));
 
         let filtred_df = extract_intrest_rate_transactions(&df)?;
 
-        log::info!("Filtered data of Interest: {filtred_df}");
+        log::info!("Filtered data of Interest: {}", sanitize_df(&filtred_df));
 
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Completed Date")?;
 
@@ -851,6 +877,40 @@ mod tests {
                 crate::Currency::EUR(5452.74)
             ])
         );
+
+        Ok(())
+    }
+    #[test]
+    fn test_sanitize_df_removes_newlines() -> Result<(), String> {
+        let desc = vec!["Line1\nLine2", "LineA\r\nLineB"];
+        let dates = vec!["01 Jan 2025", "02 Jan 2025"];
+        let prod = vec!["P", "Q"];
+        let money_out = vec!["null", "-€10"];
+        let money_in = vec!["+€0.01", "+€5"];
+        let balance = vec!["€0", "€5.01"];
+
+        let df = DataFrame::new(vec![
+            Series::new("Completed Date", dates),
+            Series::new("Product name", prod),
+            Series::new("Description", desc),
+            Series::new("Money out", money_out),
+            Series::new("Money in", money_in),
+            Series::new("Balance", balance),
+        ])
+        .map_err(|e| format!("DataFrame creation failed: {e}"))?;
+
+        let sanitized = sanitize_df(&df);
+        let desc_col = sanitized
+            .column("Description")
+            .map_err(|_| "Missing Description column")?;
+        let utf = desc_col.utf8().map_err(|_| "Description not utf8")?;
+        for opt in utf.into_iter() {
+            if let Some(s) = opt {
+                if s.contains('\n') || s.contains('\r') {
+                    return Err(format!("Found newline in Description after sanitize: {s}"));
+                }
+            }
+        }
 
         Ok(())
     }

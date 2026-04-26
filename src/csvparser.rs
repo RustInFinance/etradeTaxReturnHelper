@@ -91,6 +91,7 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
         cashline.to_string().replace(",", ".")
     };
     let cashline_string: String = cashline_string.replace(" ", "");
+    let cashline_string: String = cashline_string.trim_start_matches('+').to_string();
     log::info!("Processed moneyin/total amount line: {cashline_string}");
     let mut euro_parser = tuple((double::<&str, Error<_>>, tag("€")));
     let mut euro_parser2 = tuple((tag("€"), double::<&str, Error<_>>));
@@ -1668,6 +1669,33 @@ mod tests {
             parse_revolut_transactions("revolut_data/revolut_div.csv"),
             expected_result
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_eur_savings_20260426() -> Result<(), String> {
+        let res = parse_revolut_transactions("revolut_data/eur_savings_2026-04-26.csv");
+        if res.is_err() {
+            return Err(format!("Parsing failed: {:?}", res));
+        }
+        let dividends = res.unwrap().dividend_transactions;
+        // dates, incomes, taxes, symbols
+        let expected_result = vec![
+            (
+                "03/22/25".to_owned(),
+                crate::Currency::EUR(0.01),
+                crate::Currency::EUR(0.00),
+                None,
+            ),
+            (
+                "03/23/25".to_owned(),
+                crate::Currency::EUR(0.01),
+                crate::Currency::EUR(0.00),
+                None,
+            ),
+        ];
+        assert_eq!(dividends, expected_result);
+
         Ok(())
     }
 }

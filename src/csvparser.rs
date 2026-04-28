@@ -489,6 +489,72 @@ fn process_tax_consolidated_data(
     Ok(())
 }
 
+fn process_tax_consolidated_statement_v2 (
+    delimiter: u8,
+    ta: &mut TransactionAccumulator,
+    ) -> Result<(), String> 
+{
+        let mut state = ParsingState::None;
+
+        for result in rdr.records() {
+            let record = result.map_err(|e| format!("Error reading CSV record: {e}"))?;
+            let line = record
+                .into_iter()
+                .collect::<Vec<&str>>()
+                .join(DELIMITER_AS_STR);
+            if line.starts_with("Transactions for") {
+                process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
+
+                if line.contains("Savings Accounts - EUR") {
+                    log::info!("Starting to collect: EUR interests");
+                    state = ParsingState::InterestsEUR(String::new());
+                } else if line.contains("Savings Accounts - PLN") {
+                    log::info!("Starting to collect: PLN interests");
+                    state = ParsingState::InterestsPLN(String::new());
+                } else if line.contains("Brokerage Account sells - EUR") {
+                    log::info!("Starting to collect: EUR Sells");
+                    state = ParsingState::SellEUR(String::new());
+                } else if line.contains("Brokerage Account sells - USD") {
+                    log::info!("Starting to collect: USD Sells");
+                    state = ParsingState::SellUSD(String::new());
+                } else if line.contains("Brokerage Account dividends - EUR") {
+                    log::info!("Starting to collect: EUR dividends");
+                    state = ParsingState::DividendsEUR(String::new());
+                } else if line.contains("Brokerage Account dividends - USD") {
+                    log::info!("Starting to collect: USD dividends");
+                    state = ParsingState::DividendsUSD(String::new());
+                } else if line.contains("Crypto") {
+                    log::info!("Starting to collect: Crypto transactions");
+                    state = ParsingState::Crypto(String::new());
+                } else {
+                    return Err("ERROR: Unsupported CSV type of document".to_string());
+                }
+            } else {
+                match &mut state {
+                    ParsingState::None => (),
+                    ParsingState::SellEUR(s)
+                    | ParsingState::SellUSD(s)
+                    | ParsingState::DividendsEUR(s)
+                    | ParsingState::DividendsUSD(s) => {
+                        // Skip a line with info on protfolio creation
+                        if line.contains("Portfolio") == false {
+                            s.push_str(&line);
+                            s.push('\n');
+                        }
+                    }
+                    ParsingState::InterestsEUR(s)
+                    | ParsingState::InterestsPLN(s)
+                    | ParsingState::Crypto(s) => {
+                        s.push_str(&line);
+                        s.push('\n');
+                    }
+                }
+            }
+        }
+        process_tax_consolidated_data(&state, delimiter, &mut ta)?;
+        Ok(())
+}
+
 /// Parse revolut CSV documents (savings account, trading, crypto)
 /// returns: (
 /// dividend transactions in a form: date, gross income, tax taken, company name (if available)
@@ -701,6 +767,14 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
             }
         }
         process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
+    } else if result
+        .iter()
+        .any(|field| field.starts_with("Current Accounts Summaries") == true)
+    {
+        process_tax_consolidated_statement_v2(DELIMITER,&mut ta)?;
+
+
+
     } else {
         return Err("ERROR: Unsupported CSV type of document: {csvtoparse}".to_string());
     }

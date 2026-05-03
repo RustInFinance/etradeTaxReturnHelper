@@ -7,6 +7,10 @@ use nom::{
 };
 use polars::prelude::*;
 
+const DELIMITER: u8 = b';';
+const DELIMITER_AS_STR: &str = ";";
+
+#[derive(PartialEq)]
 enum ParsingState {
     None,
     Crypto(String),
@@ -17,6 +21,23 @@ enum ParsingState {
     DividendsEUR(String),
     DividendsUSD(String),
 }
+
+impl std::fmt::Display for ParsingState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsingState::None => write!(f, "ParsingState::None"),
+            ParsingState::InterestsPLN(_) => write!(f, "ParsingState::InterestsPLN"),
+            ParsingState::Crypto(_) => write!(f, "ParsingState::Crypto"),
+            ParsingState::InterestsEUR(_) => write!(f, "ParsingState::InterestsEUR"),
+            ParsingState::SellUSD(_) => write!(f, "ParsingState::SellUSD"),
+            ParsingState::SellEUR(_) => write!(f, "ParsingState::SellEUR"),
+            ParsingState::DividendsEUR(_) => write!(f, "ParsingState::DividendsEUR"),
+            ParsingState::DividendsUSD(_) => write!(f, "ParsingState::DividendsUSD"),
+        }
+        
+    }
+}
+
 
 #[derive(Default)]
 struct InvestmentTransactions {
@@ -193,12 +214,19 @@ fn extract_investment_gains_and_costs_transactions(
 
 fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> {
     // 1. Get rows with transactions
-    let mut df_transactions = if df.get_column_names().contains(&"Completed Date") {
-        df.select(&["Description", "Money in", "Completed Date"])
+    let (mut df_transactions, income_column) = if df.get_column_names().contains(&"Completed Date") {
+        (df.select(&["Description", "Money in", "Completed Date"])
+         .map_err(|_| "Error: Unable to select collumns in Revolut Interests rate transactions")?,
+         "Money in")
+    } else if df.get_column_names().contains(&"Gross interest") {
+        (df.select(&["Description", "Gross interest", "Date"])
+         .map_err(|_| "Error: Unable to select collumns in Revolut Interests rate transactions")?,
+         "Gross interest")
     } else {
-        df.select(&["Description", "Money in", "Date"])
-    }
-    .map_err(|_| "Error: Unable to select collumns in Revolut Interests rate transactions")?;
+        (df.select(&["Description", "Money in", "Date"])
+         .map_err(|_| "Error: Unable to select collumns in Revolut Interests rate transactions")?,
+         "Money in")
+    };
 
     // This code maps diffrent Description types related to interests into "odsetki"
     let intrest_rate = df_transactions
@@ -210,6 +238,7 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
                 AnyValue::Utf8(x) => {
                     if x.contains("Odsetki brutto")
                         || x.contains("Gross interest")
+                        || x.contains("Gross Interest")
                         || x.contains("Interest earned")
                     {
                         Some("odsetki")
@@ -223,19 +252,24 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
         })
         .collect::<Vec<_>>();
 
-    // cols: "Completed Date", "Description" , "Money In"
+    // cols: "Completed Date", "Description" , "Money In" or "Gross interest"
     let new_desc = Series::new("Description", intrest_rate);
-    df_transactions
+    let df_transactions_ref = df_transactions
         .with_column(new_desc)
         .expect("Unable to replace Description column");
-    let intrest_rate_mask = df_transactions
+    let intrest_rate_mask = df_transactions_ref
         .column("Description")
         .map_err(|_| "Error: Unable to get Description")?
         .equal("odsetki")
         .expect("Error creating mask");
 
-    let filtred_df = df.filter(&intrest_rate_mask).expect("Error filtering");
-    // I need to get (Currecy, Transaction Data and amount)
+    let mut filtred_df = df.filter(&intrest_rate_mask).expect("Error filtering");
+    
+    // Rename income column to standardized "Money in" for consistent processing
+    if income_column == "Gross interest" {
+        filtred_df.rename("Gross interest", "Money in")
+            .map_err(|_| "Error: Unable to rename Gross interest to Money in")?;
+    }
 
     Ok(filtred_df)
 }
@@ -292,6 +326,7 @@ fn parse_investment_transaction_dates(
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d"))
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%e %b %Y"))
                 .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%b %d, %Y"))
+                .or_else(|_| chrono::NaiveDate::parse_from_str(&d, "%m/%d/%y"))
                 .map_err(|_| "Error converting cell to NaiveDate")?
                 .format("%m/%d/%y")
                 .to_string();
@@ -387,6 +422,7 @@ fn process_tax_consolidated_data(
                 .map_err(|e| format!("Error reading CSV (Interests): {e}"))?;
             log::info!("Content of Interests: {df}");
             let filtred_df = extract_intrest_rate_transactions(&df)?;
+            log::trace!("DF: {filtred_df}");
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
@@ -490,7 +526,7 @@ fn process_tax_consolidated_data(
 }
 
 fn process_tax_consolidated_statement_v2 (
-    delimiter: u8,
+    rdr :&mut csv::Reader<std::fs::File>,
     ta: &mut TransactionAccumulator,
     ) -> Result<(), String> 
 {
@@ -502,56 +538,45 @@ fn process_tax_consolidated_statement_v2 (
                 .into_iter()
                 .collect::<Vec<&str>>()
                 .join(DELIMITER_AS_STR);
-            if line.starts_with("Transactions for") {
-                process_tax_consolidated_data(&state, DELIMITER, &mut ta)?;
-
-                if line.contains("Savings Accounts - EUR") {
-                    log::info!("Starting to collect: EUR interests");
-                    state = ParsingState::InterestsEUR(String::new());
-                } else if line.contains("Savings Accounts - PLN") {
-                    log::info!("Starting to collect: PLN interests");
-                    state = ParsingState::InterestsPLN(String::new());
-                } else if line.contains("Brokerage Account sells - EUR") {
-                    log::info!("Starting to collect: EUR Sells");
-                    state = ParsingState::SellEUR(String::new());
-                } else if line.contains("Brokerage Account sells - USD") {
-                    log::info!("Starting to collect: USD Sells");
-                    state = ParsingState::SellUSD(String::new());
-                } else if line.contains("Brokerage Account dividends - EUR") {
-                    log::info!("Starting to collect: EUR dividends");
-                    state = ParsingState::DividendsEUR(String::new());
-                } else if line.contains("Brokerage Account dividends - USD") {
-                    log::info!("Starting to collect: USD dividends");
-                    state = ParsingState::DividendsUSD(String::new());
-                } else if line.contains("Crypto") {
-                    log::info!("Starting to collect: Crypto transactions");
-                    state = ParsingState::Crypto(String::new());
-                } else {
-                    return Err("ERROR: Unsupported CSV type of document".to_string());
-                }
-            } else {
+                // IF line contains specific pattern then we will mark that
+                log::trace!("V2 CSV processed line: {line}");
                 match &mut state {
-                    ParsingState::None => (),
+                    ParsingState::None => {
+                            if line.contains("only interest receipt") {
+                                log::info!("V2 Starting to collect: interests");
+                                state = ParsingState::InterestsPLN(String::new());
+                            } else if line.contains("Units which have been sold") {
+                                log::info!("Starting to collect: Stock Sells");
+                                state = ParsingState::SellUSD(String::new());
+                            } else if line.contains("only dividend receipt") {
+                                log::info!("Starting to collect: dividends");
+                                state = ParsingState::DividendsEUR(String::new());
+                            } else if line.contains("Crypto") {
+                                log::info!("Starting to collect: Crypto transactions");
+                                log::warn!("Crypto taxation is not supported!");
+                            } 
+                    },
+
                     ParsingState::SellEUR(s)
                     | ParsingState::SellUSD(s)
                     | ParsingState::DividendsEUR(s)
-                    | ParsingState::DividendsUSD(s) => {
-                        // Skip a line with info on protfolio creation
-                        if line.contains("Portfolio") == false {
+                    | ParsingState::DividendsUSD(s) 
+                    | ParsingState::InterestsEUR(s)
+                    | ParsingState::InterestsPLN(s)
+                    | ParsingState::Crypto(s) => {
+                        // If we are in the state that we look for line that finish it
+                        // "---------"
+                        if line.contains("---------") {
+                            log::info!("V2 Starting to process gathered lines for state: {state}");
+                            process_tax_consolidated_data(&state, DELIMITER,ta)?;
+                            state = ParsingState::None;
+                        } else {
                             s.push_str(&line);
                             s.push('\n');
                         }
                     }
-                    ParsingState::InterestsEUR(s)
-                    | ParsingState::InterestsPLN(s)
-                    | ParsingState::Crypto(s) => {
-                        s.push_str(&line);
-                        s.push('\n');
-                    }
                 }
             }
-        }
-        process_tax_consolidated_data(&state, delimiter, &mut ta)?;
         Ok(())
 }
 
@@ -580,8 +605,6 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     } else {
         b','
     };
-    const DELIMITER: u8 = b';';
-    const DELIMITER_AS_STR: &str = ";";
 
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -771,7 +794,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         .iter()
         .any(|field| field.starts_with("Current Accounts Summaries") == true)
     {
-        process_tax_consolidated_statement_v2(DELIMITER,&mut ta)?;
+        process_tax_consolidated_statement_v2(&mut rdr, &mut ta)?;
 
 
 
@@ -1349,6 +1372,67 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_parse_revolut_transactions_consolidated_v2_eng() -> Result<(), String> {
+        // Note: Format v2 has dividends and sold transactions in the CSV file,
+        // but process_tax_consolidated_statement_v2 doesn't parse them yet
+        // because they have different column names than format v1.
+        // This test expects full parsing - it will fail until v2 parsing is implemented.
+        let expected_result = Ok(RevolutTransactions {
+            dividend_transactions: vec![
+                // EUR interests
+                ("01/27/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("01/30/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/03/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/06/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/09/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/13/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/16/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/19/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/23/26".to_owned(), crate::Currency::EUR(0.01), crate::Currency::EUR(0.00), None),
+                ("02/25/26".to_owned(), crate::Currency::EUR(0.23), crate::Currency::EUR(0.00), None),
+                ("02/26/26".to_owned(), crate::Currency::EUR(0.24), crate::Currency::EUR(0.00), None),
+                ("02/27/26".to_owned(), crate::Currency::EUR(0.23), crate::Currency::EUR(0.00), None),
+                // PLN interests (Aion account)
+                ("01/01/26".to_owned(), crate::Currency::PLN(1.81), crate::Currency::PLN(0.00), None),
+                ("01/01/26".to_owned(), crate::Currency::PLN(4.39), crate::Currency::PLN(0.00), None),
+                ("01/02/26".to_owned(), crate::Currency::PLN(1.81), crate::Currency::PLN(0.00), None),
+                ("01/02/26".to_owned(), crate::Currency::PLN(4.40), crate::Currency::PLN(0.00), None),
+                ("01/03/26".to_owned(), crate::Currency::PLN(1.79), crate::Currency::PLN(0.00), None),
+                // USD dividends
+                ("01/06/26".to_owned(), crate::Currency::PLN(405.87), crate::Currency::PLN(60.86), Some("US0865161014".to_string())),
+                ("01/07/26".to_owned(), crate::Currency::PLN(98.47), crate::Currency::PLN(24.61), Some("CA1363851017".to_string())),
+                ("01/09/26".to_owned(), crate::Currency::PLN(92.42), crate::Currency::PLN(13.84), Some("US24906P1093".to_string())),
+                ("01/09/26".to_owned(), crate::Currency::PLN(249.68), crate::Currency::PLN(0.00), Some("US02319V1035".to_string())),
+                // EUR dividend
+                ("04/23/26".to_owned(), crate::Currency::PLN(554.74), crate::Currency::PLN(83.20), Some("NL0011794037".to_string())),
+            ],
+            sold_transactions: vec![
+                // ConAgra Foods - 3 transactions
+                // Sale date: Jan 16, 2026, Purchase: May 14, 2024
+                // Cost: 78,935.63 PLN + 0.47 PLN fee = 78,936.10 PLN, Proceeds: 39,914.26 PLN
+                ("05/14/24".to_owned(), "01/16/26".to_owned(), crate::Currency::PLN(78936.10), crate::Currency::PLN(39914.26), Some("US2058871029".to_string())),
+                // Sale date: Jan 16, 2026, Purchase: Feb 26, 2025
+                // Cost: 1,972.96 PLN, Proceeds: 1,197.49 PLN
+                ("02/26/25".to_owned(), "01/16/26".to_owned(), crate::Currency::PLN(1972.96), crate::Currency::PLN(1197.49), Some("US2058871029".to_string())),
+                // Sale date: Jan 16, 2026, Purchase: Apr 9, 2025
+                // Cost: 3,799.41 PLN + 0.03 PLN fee = 3,799.44 PLN, Proceeds: 2,432.86 PLN
+                ("04/09/25".to_owned(), "01/16/26".to_owned(), crate::Currency::PLN(3799.44), crate::Currency::PLN(2432.86), Some("US2058871029".to_string())),
+                // Dentsply - Sale: Mar 2, 2026, Purchase: Feb 26, 2025
+                // Cost: 11,837.81 PLN + 0.10 PLN fee = 11,837.91 PLN, Proceeds: 8,326.02 PLN
+                ("02/26/25".to_owned(), "03/02/26".to_owned(), crate::Currency::PLN(11837.91), crate::Currency::PLN(8326.02), Some("US24906P1093".to_string())),
+                // IBM - Sale: Mar 4, 2026, Purchase: Feb 24, 2026
+                // Cost: 2,500.55 PLN + 0.03 PLN fee + 6.23 PLN fee = 2,506.81 PLN, Proceeds: 2,742.05 PLN
+                ("02/24/26".to_owned(), "03/04/26".to_owned(), crate::Currency::PLN(2506.81), crate::Currency::PLN(2742.05), Some("US4592001014".to_string())),
+            ],
+            crypto_transactions: vec![],
+        });
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/consolidated-statement-v2-eng.csv"),
+            expected_result
+        );
+        Ok(())
+    }
     #[test]
     fn test_parse_revolut_investment_gain_and_losses_dividends() -> Result<(), String> {
         let expected_result = Ok(RevolutTransactions {

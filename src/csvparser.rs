@@ -174,6 +174,14 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             "Gross proceeds",
             "Currency",
         ])
+    } else if df.get_column_names().contains(&"Date (of Sale, of Purchase)") {
+        df.select([
+            "Date (of Sale, of Purchase)",
+            "Description, symbol and ISIN",
+            "Value (of Sale, of Purchase)",
+            "Other taxes",
+            "Fees",
+        ])
     } else {
         df.select([
             "Date acquired",

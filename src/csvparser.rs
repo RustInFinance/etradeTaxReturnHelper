@@ -512,7 +512,7 @@ fn process_tax_consolidated_data_v2(
             ta.stock.acquired_dates.extend(lacquired_dates);
             ta.stock
                 .symbols
-                .extend(parse_symbols(&filtred_df, "Symbol")?);
+                .extend(parse_symbols(&filtred_df, "Description, symbol and ISIN")?);
             let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
             ta.stock
                 .gross

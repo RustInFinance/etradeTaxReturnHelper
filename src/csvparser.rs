@@ -499,7 +499,7 @@ fn process_tax_consolidated_data_v2(
                 .finish()
                 .map_err(|e| format!("Error reading CSV (Sells): {e}"))?;
             log::trace!("Content of Sells: {df}");
-            let filtred_df = extract_sold_transactions(&df)?;
+            let filtred_df = extract_sold_transactions(&df)?.drop_nulls::<String>(None).map_err(|_| "Error: Removing null rows in Revolut sold transactions")?;;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
             let (lacquired_dates, lsold_dates) = parse_investment_pairs_transaction_dates(&filtred_df, "Date (of Sale, of Purchase)")?;
             log::info!("dates:: {:?}", ta.stock.acquired_dates);                           
@@ -535,7 +535,7 @@ fn process_tax_consolidated_data_v2(
                 .finish()
                 .map_err(|e| format!("Error reading CSV (Dividends): {e}"))?;
             log::info!("Content of Dividends: {df}");
-            let filtred_df = extract_dividends_transactions(&df)?;
+            let filtred_df = extract_dividends_transactions(&df)?.drop_nulls::<String>(None).map_err(|_| "Error: Removing null rows in Revolut dividends transactions")?;
             log::info!("Filtered Dividend Data of interest: {filtred_df}");
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
@@ -724,7 +724,11 @@ fn process_tax_consolidated_statement_v2 (
                         line.contains("Other brokerage account transactions") {
                             log::info!("V2 Starting to process gathered lines for state: {state}");
                             process_tax_consolidated_data_v2(&state, DELIMITER,ta)?;
-                            state = ParsingState::None;
+                            state = if line.contains("Units which have been sold") {
+                                ParsingState::SellUSD(String::new())
+                            } else {
+                                ParsingState::None
+                            };
                         } else {
                             s.push_str(&line);
                             s.push('\n');

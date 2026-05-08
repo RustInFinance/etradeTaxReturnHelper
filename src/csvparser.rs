@@ -151,6 +151,13 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             "Withholding tax",
             "Currency",
         ])
+    } else if df.get_column_names().contains(&"Taxes withheld") {
+        df.select([
+            "Date",
+            "Description & symbol",
+            "Gross dividend / income",
+            "Taxes withheld",
+        ])
     } else {
         df.select([
             "Date",
@@ -303,6 +310,51 @@ fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, 
     Ok(symbols)
 }
 
+fn parse_investment_pairs_transaction_dates(
+    df: &DataFrame,
+    col_name: &str,
+) -> Result<(Vec<String>,Vec<String>), &'static str> {
+    let date = df
+        .column(col_name)
+        .map_err(|_| "Error: Unable to select Date")?;
+
+    let mut sold_dates : Vec<String> = vec![];
+    let mut acquire_dates : Vec<String> = vec![];
+
+    let possible_dates = date
+        .utf8()
+        .map_err(|_| "Error: Unable to convert to utf8")?;
+
+    possible_dates.into_iter().try_for_each(|x| {
+        if let Some(d) = x {
+            // Split by ',' and then having four parts
+            // group each two making up single date
+            let parts = d.split(",").collect::<Vec<_>>();
+
+            let sell_date = format!("{}, {}", parts[0],parts[1]); 
+            let acquire_date = format!("{}, {}", parts[2],parts[3]); 
+
+            let cd = chrono::NaiveDate::parse_from_str(&sell_date, "%b %e, %Y")
+                .or_else(|_| chrono::NaiveDate::parse_from_str(&sell_date, "%b %d, %Y"))
+                .map_err(|_| "Error converting cell to NaiveDate")?
+                .format("%m/%d/%y")
+                .to_string();
+            sold_dates.push(cd);
+
+            let cd = chrono::NaiveDate::parse_from_str(&acquire_date, " %b %e, %Y")
+                .or_else(|_| chrono::NaiveDate::parse_from_str(&acquire_date, " %b %d, %Y"))
+                .map_err(|_| "Error converting cell to NaiveDate")?
+                .format("%m/%d/%y")
+                .to_string();
+            acquire_dates.push(cd);
+        }
+        Ok::<(), &str>(())
+    })?;
+
+    Ok((acquire_dates,sold_dates))
+}
+
+
 fn parse_investment_transaction_dates(
     df: &DataFrame,
     col_name: &str,
@@ -411,6 +463,99 @@ fn parse_income_with_currency(
     }
 
     Ok(incomes)
+}
+
+/// Process gathered financial operations from revolut consolidated v2 document
+fn process_tax_consolidated_data_v2(
+    state: &ParsingState,
+    delimiter: u8,
+    ta: &mut TransactionAccumulator,
+) -> Result<(), String> {
+    match state {
+        ParsingState::None => {}
+        ParsingState::InterestsEUR(s) | ParsingState::InterestsPLN(s) => {
+            log::trace!("String to parse of Interests: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV (Interests): {e}"))?;
+            log::info!("Content of Interests: {df}");
+            let filtred_df = extract_intrest_rate_transactions(&df)?;
+            log::trace!("DF: {filtred_df}");
+            ta.dates
+                .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+            let lincomes = parse_incomes(&filtred_df, "Money in")?;
+            ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
+            let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
+            ta.taxes.extend(ltaxes);
+            ta.incomes.extend(lincomes);
+        }
+        ParsingState::SellEUR(s) | ParsingState::SellUSD(s) => {
+            log::trace!("String to parse of Sells: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV (Sells): {e}"))?;
+            log::trace!("Content of Sells: {df}");
+            let filtred_df = extract_sold_transactions(&df)?;
+            log::info!("Filtered Sold Data of interest: {filtred_df}");
+            let (lacquired_dates, lsold_dates) = parse_investment_pairs_transaction_dates(&filtred_df, "Date (of Sale, of Purchase)")?;
+            log::info!("dates:: {:?}", ta.stock.acquired_dates);                           
+
+            // For each sold data has to be one acquire date
+            if lacquired_dates.len() != lsold_dates.len() {
+                return Err("ERROR: Different number of acquired and sold dates".to_string());
+            }
+            ta.stock.sold_dates.extend(lsold_dates);
+            ta.stock.acquired_dates.extend(lacquired_dates);
+            ta.stock
+                .symbols
+                .extend(parse_symbols(&filtred_df, "Symbol")?);
+            let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
+            ta.stock
+                .gross
+                .extend(parse_incomes(&filtred_df, "Gross proceeds base currency")?);
+            let fees = parse_incomes(&filtred_df, "Fees  base currency")?;
+
+            // Add fees to costs
+            let lcosts: Vec<crate::Currency> = lcosts
+                .iter()
+                .zip(fees)
+                .map(|(x, y)| x.derive(x.value() + y.value()))
+                .collect();
+            ta.stock.costs.extend(lcosts);
+        }
+        ParsingState::DividendsEUR(s) | ParsingState::DividendsUSD(s) => {
+            log::trace!("String to parse of Dividends: {s}");
+            let df = CsvReader::new(std::io::Cursor::new(s.as_bytes()))
+                .truncate_ragged_lines(true)
+                .with_separator(delimiter)
+                .finish()
+                .map_err(|e| format!("Error reading CSV (Dividends): {e}"))?;
+            log::info!("Content of Dividends: {df}");
+            let filtred_df = extract_dividends_transactions(&df)?;
+            log::info!("Filtered Dividend Data of interest: {filtred_df}");
+            ta.dates
+                .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
+
+            ta.symbols.extend(parse_symbols(&filtred_df, "Description & symbol")?);
+
+            // parse income
+            let lincomes = parse_incomes(&filtred_df, "Gross dividend / income")?;
+            // parse taxes
+            let ltaxes = parse_incomes(&filtred_df, "Taxes withheld")?;
+
+            ta.incomes.extend(lincomes);
+            ta.taxes.extend(ltaxes);
+        }
+        ParsingState::Crypto(s) => {
+            log::trace!("Warning: String to parse of Crypto: {s}");
+            log::warn!("Warning: processing crypto is not supported");
+        }
+    }
+    Ok(())
 }
 
 /// Process gathered financial operations from revolut consolidated tax document
@@ -573,10 +718,12 @@ fn process_tax_consolidated_statement_v2 (
                     | ParsingState::InterestsPLN(s)
                     | ParsingState::Crypto(s) => {
                         // If we are in the state that we look for line that finish it
-                        // "---------"
-                        if line.contains("---------") {
+                        // "---------" or "Units which has been sold" or....
+                        if line.contains("---------") ||
+                        line.contains("Units which have been sold") || 
+                        line.contains("Other brokerage account transactions") {
                             log::info!("V2 Starting to process gathered lines for state: {state}");
-                            process_tax_consolidated_data(&state, DELIMITER,ta)?;
+                            process_tax_consolidated_data_v2(&state, DELIMITER,ta)?;
                             state = ParsingState::None;
                         } else {
                             s.push_str(&line);

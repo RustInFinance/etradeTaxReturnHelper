@@ -114,12 +114,18 @@ fn extract_income_and_cost(cashline: &str) -> Result<(crate::Currency, crate::Cu
     let usd_income_parser = tuple((many_m_n(0, 1, tag("+")),tag("US$"), double::<&str, Error<_>>));
     let usd_cost_parser = tuple((many_m_n(0, 1, tag("-")),tag("US$"), double::<&str, Error<_>>));
     let mut usd_parser = tuple((usd_income_parser, tag(" "), usd_cost_parser));
+    // example +€10,961.04, -€20,000 (+39,914.26 PLN, -78,935.63 PLN)
+    let euro_income_parser = tuple((many_m_n(0, 1, tag("+")),tag("€"), double::<&str, Error<_>>));
+    let euro_cost_parser = tuple((many_m_n(0, 1, tag("-")),tag("€"), double::<&str, Error<_>>));
+    let mut euro_parser = tuple((euro_income_parser, tag(" "), euro_cost_parser));
 
-    // TODO: euro stocks
     if let Ok((_,((_,_,income), _, (_,_,cost)))) = usd_parser(cashline_string.as_str()) {
         log::trace!("Extracted cost: {cost} income: {income}");
         return Ok(( crate::Currency::USD(cost), crate::Currency::USD(income)));
-    }
+    } else if let Ok((_,((_,_,income), _, (_,_,cost)))) = euro_parser(cashline_string.as_str()) {
+        log::trace!("Extracted cost: {cost} income: {income}");
+        return Ok(( crate::Currency::EUR(cost), crate::Currency::EUR(income)));
+    } 
     Err(format!("Error extracing income and cost from cashline: {cashline_string}"))
 }
 
@@ -1116,6 +1122,50 @@ mod tests {
 
         assert_eq!(extract_cash("63,28$"), Ok(crate::Currency::USD(63.28)));
         assert_eq!(extract_cash("0$"), Ok(crate::Currency::USD(0.0)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_income_and_cost() -> Result<(), String> {
+        // USD format from Revolut CSV v2: "+US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)"
+        // Function extracts: (cost, income) - note the order!
+        
+        // Test USD with comma thousands separator
+        assert_eq!(
+            extract_income_and_cost("+US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)"),
+            Ok((crate::Currency::USD(20000.0), crate::Currency::USD(10961.04)))
+        );
+
+        // Test USD without thousands separator
+        assert_eq!(
+            extract_income_and_cost("+US$328.85, -US$500 (+1,197.49 PLN, -1,972.96 PLN)"),
+            Ok((crate::Currency::USD(500.0), crate::Currency::USD(328.85)))
+        );
+
+        // Test USD with decimals in cost
+        assert_eq!(
+            extract_income_and_cost("+US$668.10, -US$981.99 (+2,432.86 PLN, -3,799.41 PLN)"),
+            Ok((crate::Currency::USD(981.99), crate::Currency::USD(668.10)))
+        );
+
+        // Test USD with thousands separator in both values
+        assert_eq!(
+            extract_income_and_cost("+US$2,298.25, -US$3,000 (+8,326.02 PLN, -11,837.81 PLN)"),
+            Ok((crate::Currency::USD(3000.0), crate::Currency::USD(2298.25)))
+        );
+
+        // Test EUR format: "+€5,980.74, -€10,000 (+25,266.56 PLN, -42,000.00 PLN)"
+        assert_eq!(
+            extract_income_and_cost("+€5,980.74, -€10,000 (+25,266.56 PLN, -42,000.00 PLN)"),
+            Ok((crate::Currency::EUR(10000.0), crate::Currency::EUR(5980.74)))
+        );
+
+        // Test EUR without thousands separator
+        assert_eq!(
+            extract_income_and_cost("+€130.75, -€250.50 (+554.74 PLN, -1,062.12 PLN)"),
+            Ok((crate::Currency::EUR(250.50), crate::Currency::EUR(130.75)))
+        );
+
         Ok(())
     }
 

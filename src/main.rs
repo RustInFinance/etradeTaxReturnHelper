@@ -16,7 +16,6 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
-// TODO: sells of Euro stock for v2
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Extend structure of TaxCalculationResult with country
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem

@@ -118,7 +118,7 @@ fn extract_income_and_cost(cashline: &str) -> Result<(crate::Currency, crate::Cu
     // TODO: euro stocks
     if let Ok((_,((_,_,income), _, (_,_,cost)))) = usd_parser(cashline_string.as_str()) {
         log::trace!("Extracted cost: {cost} income: {income}");
-        return Ok(( crate::Currency::EUR(cost), crate::Currency::EUR(income)));
+        return Ok(( crate::Currency::USD(cost), crate::Currency::USD(income)));
     }
     Err(format!("Error extracing income and cost from cashline: {cashline_string}"))
 }
@@ -1619,22 +1619,22 @@ mod tests {
                 // Sale: Jan 16, 2026, Purchase: May 14, 2024
                 // CSV: +US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN), Fee: US$0.13 (0.47 PLN)
                 // Cost: $20,000 + $0.13 = $20,000.13, Proceeds: $10,961.04
-                ("05/14/24".to_owned(), "01/16/26".to_owned(), crate::Currency::EUR(20000.13), crate::Currency::EUR(10961.04), Some("ConAgra Foods CAG (US2058871029)".to_string())),
+                ("05/14/24".to_owned(), "01/16/26".to_owned(), crate::Currency::USD(20000.13), crate::Currency::USD(10961.04), Some("ConAgra Foods CAG (US2058871029)".to_string())),
                 // Sale: Jan 16, 2026, Purchase: Feb 26, 2025
                 // CSV: +US$328.85, -US$500, no fee
-                ("02/26/25".to_owned(), "01/16/26".to_owned(), crate::Currency::EUR(500.00), crate::Currency::EUR(328.85), Some("ConAgra Foods CAG (US2058871029)".to_string())),
+                ("02/26/25".to_owned(), "01/16/26".to_owned(), crate::Currency::USD(500.00), crate::Currency::USD(328.85), Some("ConAgra Foods CAG (US2058871029)".to_string())),
                 // Sale: Jan 16, 2026, Purchase: Apr 9, 2025
                 // CSV: +US$668.10, -US$981.99, Fee: US$0.01 (0.03 PLN)
                 // Cost: $981.99 + $0.01 = $982.00
-                ("04/09/25".to_owned(), "01/16/26".to_owned(), crate::Currency::EUR(982.00), crate::Currency::EUR(668.10), Some("ConAgra Foods CAG (US2058871029)".to_string())),
+                ("04/09/25".to_owned(), "01/16/26".to_owned(), crate::Currency::USD(982.00), crate::Currency::USD(668.10), Some("ConAgra Foods CAG (US2058871029)".to_string())),
                 // Dentsply - Sale: Mar 2, 2026, Purchase: Feb 26, 2025
                 // CSV: +US$2,298.25, -US$3,000, Fee: US$0.03 (0.10 PLN)
                 // Cost: $3,000 + $0.03 = $3,000.03
-                ("02/26/25".to_owned(), "03/02/26".to_owned(), crate::Currency::EUR(3000.03), crate::Currency::EUR(2298.25), Some("Dentsply XRAY (US24906P1093)".to_string())),
+                ("02/26/25".to_owned(), "03/02/26".to_owned(), crate::Currency::USD(3000.03), crate::Currency::USD(2298.25), Some("Dentsply XRAY (US24906P1093)".to_string())),
                 // IBM - Sale: Mar 4, 2026, Purchase: Feb 24, 2026
                 // CSV: +US$747.61, -US$698.24, Fee: US$1.74 (6.23 PLN) + US$0.01 (0.03 PLN)
                 // Cost: $698.24 + $1.74 + $0.01 = $699.99
-                ("02/24/26".to_owned(), "03/04/26".to_owned(), crate::Currency::EUR(699.99), crate::Currency::EUR(747.61), Some("IBM IBM (US4592001014)".to_string())),
+                ("02/24/26".to_owned(), "03/04/26".to_owned(), crate::Currency::USD(699.99), crate::Currency::USD(747.61), Some("IBM IBM (US4592001014)".to_string())),
             ],
             crypto_transactions: vec![],
         });

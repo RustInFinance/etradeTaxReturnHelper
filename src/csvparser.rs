@@ -100,6 +100,30 @@ fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::C
         _ => Err(format!("Error converting: {cashline_string}")),
     }
 }
+fn extract_income_and_cost(cashline: &str) -> Result<(crate::Currency, crate::Currency), String> {
+    log::info!("Entry moneyin/total amount line: {cashline}");
+    // replace "," to "." only if there are is no "." already
+    // otherwise remove ','
+    let cashline_string: String = if cashline.contains(',') && cashline.contains(".") {
+        cashline.to_string().replace(",", "")
+    } else {
+        cashline.to_string().replace(",", ".")
+    };
+    log::info!("Processed moneyin/total amount line: {cashline_string}");
+    // example +US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)
+    let usd_income_parser = tuple((many_m_n(0, 1, tag("+")),tag("US$"), double::<&str, Error<_>>));
+    let usd_cost_parser = tuple((many_m_n(0, 1, tag("-")),tag("US$"), double::<&str, Error<_>>));
+    let mut usd_parser = tuple((usd_income_parser, tag(" "), usd_cost_parser));
+
+    // TODO: euro stocks
+    if let Ok((_,((_,_,income), _, (_,_,cost)))) = usd_parser(cashline_string.as_str()) {
+        log::trace!("Extracted cost: {cost} income: {income}");
+        return Ok(( crate::Currency::EUR(cost), crate::Currency::EUR(income)));
+    }
+    Err(format!("Error extracing income and cost from cashline: {cashline_string}"))
+}
+
+
 
 fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     // We need to erase "," before processing it by parser
@@ -398,6 +422,23 @@ fn parse_investment_transaction_dates(
     Ok(dates)
 }
 
+fn parse_sold_incomes(df: &DataFrame, col: &str) -> Result<(Vec<crate::Currency>, Vec<crate::Currency>), String> {
+    let moneyin = df
+        .column(col)
+        .map_err(|_| format!("Error: Unable to select column '{}'", col))?;
+    let possible_incomes = moneyin
+        .utf8()
+        .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
+
+    possible_incomes
+        .into_iter()
+        .filter_map(|x| x)
+        .map(|d| extract_income_and_cost(&d))
+        .collect::<Result<Vec<(crate::Currency,crate::Currency)>,String>>()
+        
+        .map(|v| v.into_iter().unzip())
+}
+
 fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, String> {
     let moneyin = df
         .column(col)
@@ -499,7 +540,7 @@ fn process_tax_consolidated_data_v2(
                 .finish()
                 .map_err(|e| format!("Error reading CSV (Sells): {e}"))?;
             log::trace!("Content of Sells: {df}");
-            let filtred_df = extract_sold_transactions(&df)?.drop_nulls::<String>(None).map_err(|_| "Error: Removing null rows in Revolut sold transactions")?;;
+            let filtred_df = extract_sold_transactions(&df)?.drop_nulls::<String>(None).map_err(|_| "Error: Removing null rows in Revolut sold transactions")?;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
             let (lacquired_dates, lsold_dates) = parse_investment_pairs_transaction_dates(&filtred_df, "Date (of Sale, of Purchase)")?;
             log::info!("dates:: {:?}", ta.stock.acquired_dates);                           
@@ -513,17 +554,19 @@ fn process_tax_consolidated_data_v2(
             ta.stock
                 .symbols
                 .extend(parse_symbols(&filtred_df, "Description, symbol and ISIN")?);
-            let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
+            let (lcosts, lsells) = parse_sold_incomes(&filtred_df, "Value (of Sale, of Purchase)")?;
             ta.stock
                 .gross
-                .extend(parse_incomes(&filtred_df, "Gross proceeds base currency")?);
-            let fees = parse_incomes(&filtred_df, "Fees  base currency")?;
+                .extend(lsells);
+            let fees = parse_incomes(&filtred_df, "Fees")?;
+            let other_taxes = parse_incomes(&filtred_df, "Other taxes")?;
 
-            // Add fees to costs
+            // Add fees and other taxes (Sec taxes) to costs
             let lcosts: Vec<crate::Currency> = lcosts
                 .iter()
                 .zip(fees)
-                .map(|(x, y)| x.derive(x.value() + y.value()))
+                .zip(other_taxes)
+                .map(|((x, y), z)| x.derive(x.value() + y.value() + z.value()))
                 .collect();
             ta.stock.costs.extend(lcosts);
         }

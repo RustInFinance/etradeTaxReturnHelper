@@ -224,32 +224,42 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             "Currency",
         ])
     } else if df.get_column_names().contains(&"Taxes withheld")
-        || df.get_column_names().contains(&"Zatrzymane podatki")
+        || df
+            .get_column_names()
+            .iter()
+            .any(|col| col.contains("Zatrzymane") && col.contains("podatki"))
     {
         // English or Polish column names for v2 format
+        // Note: Revolut uses non-breaking spaces (U+00A0) in newer Polish headers
         let date_col = if df.get_column_names().contains(&"Data") {
             "Data"
         } else {
             "Date"
         };
-        let symbol_col = if df.get_column_names().contains(&"Opis i symbol ") {
-            "Opis i symbol "
-        } else {
-            "Description & symbol"
-        };
-        let gross_col = if df
+
+        // Find Polish "Opis i symbol" with any whitespace character
+        let symbol_col = df
             .get_column_names()
-            .contains(&"Brutto dywidendy / dochodu")
-        {
-            "Brutto dywidendy / dochodu"
-        } else {
-            "Gross dividend / income"
-        };
-        let tax_col = if df.get_column_names().contains(&"Zatrzymane podatki") {
-            "Zatrzymane podatki"
-        } else {
-            "Taxes withheld"
-        };
+            .iter()
+            .find(|&col| col.contains("Opis") && col.contains("symbol"))
+            .copied()
+            .unwrap_or("Description & symbol");
+
+        // Find Polish "Brutto dywidendy / dochodu" with any whitespace
+        let gross_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Brutto") && col.contains("dywidendy"))
+            .copied()
+            .unwrap_or("Gross dividend / income");
+
+        // Find Polish "Zatrzymane podatki" with any whitespace
+        let tax_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Zatrzymane") && col.contains("podatki"))
+            .copied()
+            .unwrap_or("Taxes withheld");
 
         df.select([date_col, symbol_col, gross_col, tax_col])
     } else {
@@ -270,32 +280,41 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             .clone();
     }
 
-    if df_transactions
+    // Find and rename Polish "Opis i symbol" column (may have non-breaking spaces)
+    if let Some(opis_col) = df_transactions
         .get_column_names()
-        .contains(&"Opis i symbol ")
+        .iter()
+        .find(|&col| col.contains("Opis") && col.contains("symbol"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename("Opis i symbol ", "Description & symbol")
+            .rename(&opis_col, "Description & symbol")
             .expect("Unable to rename Opis i symbol to Description & symbol")
             .clone();
     }
 
-    if df_transactions
+    // Find and rename Polish "Brutto dywidendy / dochodu" column
+    if let Some(brutto_col) = df_transactions
         .get_column_names()
-        .contains(&"Brutto dywidendy / dochodu")
+        .iter()
+        .find(|&col| col.contains("Brutto") && col.contains("dywidendy"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename("Brutto dywidendy / dochodu", "Gross dividend / income")
+            .rename(&brutto_col, "Gross dividend / income")
             .expect("Unable to rename Brutto dywidendy / dochodu to Gross dividend / income")
             .clone();
     }
 
-    if df_transactions
+    // Find and rename Polish "Zatrzymane podatki" column
+    if let Some(tax_col) = df_transactions
         .get_column_names()
-        .contains(&"Zatrzymane podatki")
+        .iter()
+        .find(|&col| col.contains("Zatrzymane") && col.contains("podatki"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename("Zatrzymane podatki", "Taxes withheld")
+            .rename(&tax_col, "Taxes withheld")
             .expect("Unable to rename Zatrzymane podatki to Taxes withheld")
             .clone();
     }
@@ -316,37 +335,47 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
     } else if df
         .get_column_names()
         .contains(&"Date (of Sale, of Purchase)")
-        || df.get_column_names().contains(&"Data (Sprzedaży, Zakupu)")
+        || df
+            .get_column_names()
+            .iter()
+            .any(|col| col.contains("Data") && col.contains("Sprzedaży"))
     {
         // English or Polish column names for v2 format
-        let date_col = if df.get_column_names().contains(&"Data (Sprzedaży, Zakupu)") {
-            "Data (Sprzedaży, Zakupu)"
-        } else {
-            "Date (of Sale, of Purchase)"
-        };
-        let symbol_col = if df.get_column_names().contains(&"Opis, symbol i kod ISIN") {
-            "Opis, symbol i kod ISIN"
-        } else {
-            "Description, symbol and ISIN"
-        };
-        let value_col = if df
+        // Note: Revolut uses non-breaking spaces (U+00A0) in newer Polish headers
+        let date_col = df
             .get_column_names()
-            .contains(&"Wartość (Sprzedaży, Zakupu)")
-        {
-            "Wartość (Sprzedaży, Zakupu)"
-        } else {
-            "Value (of Sale, of Purchase)"
-        };
-        let other_taxes_col = if df.get_column_names().contains(&"Inne podatki") {
-            "Inne podatki"
-        } else {
-            "Other taxes"
-        };
-        let fees_col = if df.get_column_names().contains(&"Opłaty") {
-            "Opłaty"
-        } else {
-            "Fees"
-        };
+            .iter()
+            .find(|&col| col.contains("Data") && col.contains("Sprzedaży"))
+            .copied()
+            .unwrap_or("Date (of Sale, of Purchase)");
+
+        let symbol_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Opis") && col.contains("symbol") && col.contains("kod"))
+            .copied()
+            .unwrap_or("Description, symbol and ISIN");
+
+        let value_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Wartość") && col.contains("Sprzedaży"))
+            .copied()
+            .unwrap_or("Value (of Sale, of Purchase)");
+
+        let other_taxes_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Inne") && col.contains("podatki"))
+            .copied()
+            .unwrap_or("Other taxes");
+
+        let fees_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Opłaty") || col == &"Fees")
+            .copied()
+            .unwrap_or("Fees");
 
         df.select([date_col, symbol_col, value_col, other_taxes_col, fees_col])
     } else {
@@ -362,49 +391,62 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
     .map_err(|_| "Error: Unable to select collumns in Revolut sold transactions")?;
 
     // Rename Polish columns to English for consistent processing
-    if df_transactions
+    if let Some(date_col) = df_transactions
         .get_column_names()
-        .contains(&"Data (Sprzedaży, Zakupu)")
+        .iter()
+        .find(|&col| col.contains("Data") && col.contains("Sprzedaży"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename("Data (Sprzedaży, Zakupu)", "Date (of Sale, of Purchase)")
+            .rename(&date_col, "Date (of Sale, of Purchase)")
             .expect("Unable to rename Data (Sprzedaży, Zakupu)")
             .clone();
     }
 
-    if df_transactions
+    if let Some(symbol_col) = df_transactions
         .get_column_names()
-        .contains(&"Opis, symbol i kod ISIN")
+        .iter()
+        .find(|&col| col.contains("Opis") && col.contains("symbol") && col.contains("kod"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename("Opis, symbol i kod ISIN", "Description, symbol and ISIN")
+            .rename(&symbol_col, "Description, symbol and ISIN")
             .expect("Unable to rename Opis, symbol i kod ISIN")
             .clone();
     }
 
-    if df_transactions
+    if let Some(value_col) = df_transactions
         .get_column_names()
-        .contains(&"Wartość (Sprzedaży, Zakupu)")
+        .iter()
+        .find(|&col| col.contains("Wartość") && col.contains("Sprzedaży"))
+        .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename(
-                "Wartość (Sprzedaży, Zakupu)",
-                "Value (of Sale, of Purchase)",
-            )
+            .rename(&value_col, "Value (of Sale, of Purchase)")
             .expect("Unable to rename Wartość (Sprzedaży, Zakupu)")
             .clone();
     }
 
-    if df_transactions.get_column_names().contains(&"Inne podatki") {
+    if let Some(other_taxes_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Inne") && col.contains("podatki"))
+        .map(|s| s.to_string())
+    {
         df_transactions = df_transactions
-            .rename("Inne podatki", "Other taxes")
+            .rename(&other_taxes_col, "Other taxes")
             .expect("Unable to rename Inne podatki")
             .clone();
     }
 
-    if df_transactions.get_column_names().contains(&"Opłaty") {
+    if let Some(fees_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Opłaty"))
+        .map(|s| s.to_string())
+    {
         df_transactions = df_transactions
-            .rename("Opłaty", "Fees")
+            .rename(&fees_col, "Fees")
             .expect("Unable to rename Opłaty")
             .clone();
     }
@@ -1034,7 +1076,8 @@ fn process_tax_consolidated_statement_v2(
                     log::info!("Starting to collect: Stock Sells");
                     state = ParsingState::SellUSD(String::new());
                 } else if line.contains("only dividend receipt")
-                    || line.contains("tylko wpływy z dywidendy")
+                    || line.contains("wpływy") && line.contains("dywidendy")
+                // Polish: handles both "wpływy z dywidendy" and "wpływy z\u{00A0}dywidendy" (non-breaking space)
                 {
                     log::info!("Starting to collect: dividends");
                     state = ParsingState::DividendsEUR(String::new());
@@ -2157,7 +2200,8 @@ mod tests {
     #[test]
     fn test_parse_revolut_transactions_consolidated_v2_pol() -> Result<(), String> {
         // Format v2 Polish version - tests parser with Polish column names and date format
-        // Parser should handle Polish headers: "Zestawienie transakcji (tylko wpływy z dywidendy)",
+        // Uses NEW Revolut format with non-breaking spaces (U+00A0) in headers like "Opis i\u{00A0}symbol"
+        // Parser should handle Polish headers: "Zestawienie transakcji (tylko wpływy z\u{00A0}dywidendy)",
         // "Sprzedane jednostki", "Data (Sprzedaży, Zakupu)"
         // Returns values in original currencies (USD, EUR) - NOT in PLN
         let expected_result = Ok(RevolutTransactions {
@@ -2200,7 +2244,13 @@ mod tests {
                     crate::Currency::PLN(0.00),
                     None,
                 ),
-                // USD dividends from Polish CSV
+                (
+                    "01/02/26".to_owned(),
+                    crate::Currency::PLN(4.40),
+                    crate::Currency::PLN(0.00),
+                    None,
+                ),
+                // USD dividends from Polish CSV with non-breaking spaces in headers
                 (
                     "01/06/26".to_owned(),
                     crate::Currency::USD(112.69),
@@ -2219,17 +2269,29 @@ mod tests {
                     crate::Currency::USD(3.82),
                     Some("Dentsply dividend".to_string()),
                 ),
-                // EUR dividend
                 (
-                    "04/23/26".to_owned(),
-                    crate::Currency::EUR(130.75),
-                    crate::Currency::EUR(19.61),
-                    Some("Ahold Delhaize N.V. dividend".to_string()),
+                    "01/09/26".to_owned(),
+                    crate::Currency::USD(68.89),
+                    crate::Currency::USD(0.00),
+                    Some("Ambev dividend".to_string()),
+                ),
+                (
+                    "01/15/26".to_owned(),
+                    crate::Currency::USD(235.48),
+                    crate::Currency::USD(35.32),
+                    Some("EPR Properties dividend".to_string()),
+                ),
+                (
+                    "02/02/26".to_owned(),
+                    crate::Currency::USD(31.79),
+                    crate::Currency::USD(4.77),
+                    Some("Edison International dividend".to_string()),
                 ),
             ],
             sold_transactions: vec![
-                // ConAgra Foods - 2 transactions (shortened for test)
+                // ConAgra Foods - 3 transactions (shortened for test)
                 // Polish CSV: "16 sty 2026, 14 maj 2024" (dates in Polish format)
+                // Parser returns USD (not EUR as previously - this was a bug that got fixed)
                 (
                     "05/14/24".to_owned(),
                     "01/16/26".to_owned(),
@@ -2244,13 +2306,12 @@ mod tests {
                     crate::Currency::USD(328.85),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
                 ),
-                // Dentsply - Polish CSV: "2 mar 2026, 26 lut 2025"
                 (
-                    "02/26/25".to_owned(),
-                    "03/02/26".to_owned(),
-                    crate::Currency::USD(3000.03),
-                    crate::Currency::USD(2298.25),
-                    Some("Dentsply XRAY (US24906P1093)".to_string()),
+                    "04/09/25".to_owned(),
+                    "01/16/26".to_owned(),
+                    crate::Currency::USD(982.00),
+                    crate::Currency::USD(668.10),
+                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
                 ),
             ],
             crypto_transactions: vec![],

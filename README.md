@@ -1,5 +1,5 @@
 <!--
-SPDX-FileCopyrightText: 2022-2025 RustInFinance
+SPDX-FileCopyrightText: 2022-2026 RustInFinance
 SPDX-License-Identifier: BSD-3-Clause
 -->
 

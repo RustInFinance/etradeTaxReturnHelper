@@ -8,6 +8,9 @@ mod pdfparser;
 mod transactions;
 mod xlsxparser;
 
+// Public because the `etradeAnonymizer` binary references it as `etradeTaxReturnHelper::anonymizer::...`.
+pub mod anonymizer;
+
 type ReqwestClient = reqwest::blocking::Client;
 
 pub use logging::ResultExt;

@@ -50,6 +50,14 @@ impl Currency {
     }
 }
 
+/// If taxation report should be extended
+/// with aggregation of computed data per country or per company etc..
+pub enum ReportMode {
+    None,
+    PerCompany,
+    PerCountry,
+}
+
 ///
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
@@ -372,7 +380,7 @@ pub fn validate_file_names(files: &Vec<String>) -> Result<(), String> {
 pub fn run_taxation(
     rd: &Box<dyn Residency>,
     names: Vec<String>,
-    per_company: bool,
+    report_mode: ReportMode,
     multiyear: bool,
 ) -> Result<TaxCalculationResult, String> {
     validate_file_names(&names)?;
@@ -507,16 +515,22 @@ pub fn run_taxation(
     let revolut_sold_transactions =
         create_detailed_revolut_sold_transactions(parsed_revolut_sold_transactions, &dates)?;
 
-    if per_company {
-        let per_company_report = create_per_company_report(
-            &interests,
-            &transactions,
-            &sold_transactions,
-            &revolut_dividends_transactions,
-            &revolut_sold_transactions,
-        )?;
+    match report_mode {
+        ReportMode::PerCompany => {
+            let per_company_report = create_per_company_report(
+                &interests,
+                &transactions,
+                &sold_transactions,
+                &revolut_dividends_transactions,
+                &revolut_sold_transactions,
+            )?;
 
-        println!("{}", per_company_report);
+            println!("{}", per_company_report);
+        },
+        ReportMode::PerCountry => {
+            todo!();
+        },
+        ReportMode::None => (),
     }
 
     let (gross_interests, _) = compute_div_taxation(&interests);

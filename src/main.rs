@@ -53,6 +53,14 @@ fn create_cmd_line_pattern(myapp: Command) -> Command {
                 .action(clap::ArgAction::SetTrue)
         )
         .arg(
+            Arg::new("per-country")
+                .long("per-country")
+                .help("Enable per-country mode")
+                .action(clap::ArgAction::SetTrue)
+                .conflicts_with("per-company"), // either per-company is active or per-country. Not
+                                                // both
+        )
+        .arg(
             Arg::new("multiyear")
                 .long("multiyear")
                 .help("Allow processing documents across more than year")
@@ -269,6 +277,51 @@ mod tests {
                 ))
             }
         };
+        Ok(())
+    }
+    #[test]
+    fn test_cmdline_per_country() -> Result<(), clap::Error> {
+        // Init Transactions
+        let myapp = Command::new("E-trade tax helper");
+        let matches =
+            create_cmd_line_pattern(myapp).get_matches_from(vec!["mytest", "data/example.pdf"]);
+        let per_country = matches.get_flag("per-country");
+        match per_country {
+            false => (),
+            true => {
+                return Err(clap::error::Error::<clap::error::DefaultFormatter>::new(
+                    clap::error::ErrorKind::InvalidValue,
+                ))
+            }
+        };
+        let myapp = Command::new("E-trade tax helper");
+        let matches = create_cmd_line_pattern(myapp).get_matches_from(vec![
+            "mytest",
+            "--per-country",
+            "data/example.pdf",
+        ]);
+        let per_country = matches.get_flag("per-country");
+        match per_country {
+            true => (),
+            false => {
+                return Err(clap::error::Error::<clap::error::DefaultFormatter>::new(
+                    clap::error::ErrorKind::InvalidValue,
+                ))
+            }
+        };
+        let myapp = Command::new("E-trade tax helper");
+        let res = create_cmd_line_pattern(myapp).try_get_matches_from(vec![
+            "mytest",
+            "--per-country",
+            "--per-company",
+            "data/example.pdf",
+        ]);
+        assert!(res.is_err());
+        assert_eq!(
+            res.unwrap_err().kind(),
+            clap::error::ErrorKind::ArgumentConflict
+        );
+
         Ok(())
     }
 

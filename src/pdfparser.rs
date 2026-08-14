@@ -329,7 +329,15 @@ fn create_trade_parsing_sequence(sequence: &mut std::collections::VecDeque<Box<d
 fn yield_sold_transaction(
     transaction: &mut std::slice::Iter<'_, Box<dyn Entry>>,
     transaction_dates: &mut Vec<String>,
-) -> Option<(String, String, f32, f32, f32, Option<String>)> {
+) -> Option<(
+    String,
+    String,
+    f32,
+    f32,
+    f32,
+    Option<String>,
+    Option<String>,
+)> {
     let symbol = transaction
         .next()
         .unwrap()
@@ -382,6 +390,7 @@ fn yield_sold_transaction(
         price,
         amount_sold,
         Some(symbol),
+        Some("US".to_string()),
     ))
 }
 
@@ -462,8 +471,16 @@ fn recognize_statement(page: PageRc) -> Result<StatementType, String> {
 
 fn process_transaction(
     interests_transactions: &mut Vec<(String, f32, f32)>,
-    div_transactions: &mut Vec<(String, f32, f32, Option<String>)>,
-    sold_transactions: &mut Vec<(String, String, f32, f32, f32, Option<String>)>,
+    div_transactions: &mut Vec<(String, f32, f32, Option<String>, Option<String>)>,
+    sold_transactions: &mut Vec<(
+        String,
+        String,
+        f32,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )>,
     actual_string: &pdf::primitive::PdfString,
     transaction_dates: &mut Vec<String>,
     processed_sequence: &mut Vec<Box<dyn Entry>>,
@@ -590,6 +607,7 @@ fn process_transaction(
                             gross_us,
                             0.0, // No tax info yet. It will be added later in Tax section
                             Some(symbol),
+                            Some("US".to_string()), // All e-trade companies INTC, AMD are from US
                         ));
                         log::info!("Completed parsing Dividend transaction");
                     }
@@ -689,8 +707,16 @@ fn parse_account_statement<'a, I>(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32, Option<String>)>,
-        Vec<(String, String, f32, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32, Option<String>, Option<String>)>,
+        Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -699,8 +725,16 @@ where
     I: Iterator<Item = Result<PageRc, pdf::error::PdfError>>,
 {
     let mut interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
+    let mut div_transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> = vec![];
+    let mut sold_transactions: Vec<(
+        String,
+        String,
+        f32,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )> = vec![];
     let trades: Vec<(String, String, i32, f32, f32, f32, f32, f32)> = vec![];
     let mut state = ParserState::SearchingYear;
     let mut sequence: std::collections::VecDeque<Box<dyn Entry>> =
@@ -814,8 +848,16 @@ pub fn parse_statement(
 ) -> Result<
     (
         Vec<(String, f32, f32)>,
-        Vec<(String, f32, f32, Option<String>)>,
-        Vec<(String, String, f32, f32, f32, Option<String>)>,
+        Vec<(String, f32, f32, Option<String>, Option<String>)>,
+        Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )>,
         Vec<(String, String, i32, f32, f32, f32, f32, f32)>,
     ),
     String,
@@ -1121,7 +1163,8 @@ mod tests {
                     "12/1/23".to_owned(),
                     386.50,
                     57.98,
-                    Some("INTEL CORP".to_string())
+                    Some("INTEL CORP".to_string()),
+                    Some("US".to_string()),
                 ),],
                 vec![(
                     "12/21/23".to_owned(),
@@ -1129,7 +1172,8 @@ mod tests {
                     82.0,
                     46.45,
                     3808.86,
-                    Some("INTEL CORP".to_string())
+                    Some("INTEL CORP".to_string()),
+                    Some("US".to_string()),
                 )],
                 vec![]
             )))
@@ -1175,13 +1219,15 @@ mod tests {
                         "6/3/24".to_owned(),
                         57.25,
                         8.59,
-                        Some("INTEL CORP".to_owned())
+                        Some("INTEL CORP".to_owned()),
+                        Some("US".to_string()),
                     ), // Dividends date, gross, tax_us
                     (
                         "3/1/24".to_owned(),
                         380.25,
                         57.04,
-                        Some("INTEL CORP".to_owned())
+                        Some("INTEL CORP".to_owned()),
+                        Some("US".to_string()),
                     )
                 ],
                 vec![
@@ -1191,7 +1237,8 @@ mod tests {
                         30.0,
                         22.5,
                         674.98,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ),
                     (
                         "12/5/24".to_owned(),
@@ -1199,7 +1246,8 @@ mod tests {
                         55.0,
                         21.96,
                         1207.76,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ),
                     (
                         "11/1/24".to_owned(),
@@ -1207,7 +1255,8 @@ mod tests {
                         15.0,
                         23.32,
                         349.79,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ),
                     (
                         "9/3/24".to_owned(),
@@ -1215,7 +1264,8 @@ mod tests {
                         17.0,
                         21.53,
                         365.99,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ), // Sold
                     (
                         "9/9/24".to_owned(),
@@ -1223,7 +1273,8 @@ mod tests {
                         14.0,
                         18.98,
                         265.71,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ),
                     (
                         "8/5/24".to_owned(),
@@ -1231,7 +1282,8 @@ mod tests {
                         14.0,
                         20.21,
                         282.93,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string()),
                     ),
                     (
                         "8/20/24".to_owned(),
@@ -1239,7 +1291,8 @@ mod tests {
                         328.0,
                         21.0247,
                         6895.89,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "7/31/24".to_owned(),
@@ -1247,7 +1300,8 @@ mod tests {
                         151.0,
                         30.44,
                         4596.31,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "6/3/24".to_owned(),
@@ -1255,7 +1309,8 @@ mod tests {
                         14.0,
                         31.04,
                         434.54,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
@@ -1263,7 +1318,8 @@ mod tests {
                         126.0,
                         30.14,
                         3797.6,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
@@ -1271,7 +1327,8 @@ mod tests {
                         124.0,
                         30.14,
                         3737.33,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/1/24".to_owned(),
@@ -1279,7 +1336,8 @@ mod tests {
                         89.0,
                         30.6116,
                         2724.4,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/2/24".to_owned(),
@@ -1287,7 +1345,8 @@ mod tests {
                         182.0,
                         30.56,
                         5561.87,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
@@ -1295,7 +1354,8 @@ mod tests {
                         440.0,
                         30.835,
                         13567.29,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
@@ -1303,7 +1363,8 @@ mod tests {
                         198.0,
                         30.835,
                         6105.28,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
@@ -1311,7 +1372,8 @@ mod tests {
                         146.0,
                         30.8603,
                         4505.56,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
@@ -1319,7 +1381,8 @@ mod tests {
                         145.0,
                         30.8626,
                         4475.04,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/3/24".to_owned(),
@@ -1327,7 +1390,8 @@ mod tests {
                         75.0,
                         30.815,
                         2311.11,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/6/24".to_owned(),
@@ -1335,7 +1399,8 @@ mod tests {
                         458.0,
                         31.11,
                         14248.26,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "5/31/24".to_owned(),
@@ -1343,7 +1408,8 @@ mod tests {
                         18.0,
                         30.22,
                         543.94,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/3/24".to_owned(),
@@ -1351,7 +1417,8 @@ mod tests {
                         31.0,
                         40.625,
                         1259.36,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
@@ -1359,7 +1426,8 @@ mod tests {
                         209.0,
                         37.44,
                         7824.89,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/11/24".to_owned(),
@@ -1367,7 +1435,8 @@ mod tests {
                         190.0,
                         37.44,
                         7113.54,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/16/24".to_owned(),
@@ -1375,7 +1444,8 @@ mod tests {
                         310.0,
                         36.27,
                         11243.61,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
@@ -1383,7 +1453,8 @@ mod tests {
                         153.0,
                         31.87,
                         4876.07,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
@@ -1391,7 +1462,8 @@ mod tests {
                         131.0,
                         31.87,
                         4174.93,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "4/29/24".to_owned(),
@@ -1399,7 +1471,8 @@ mod tests {
                         87.0,
                         31.87,
                         2772.66,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "3/11/24".to_owned(),
@@ -1407,7 +1480,8 @@ mod tests {
                         38.0,
                         43.85,
                         1666.28,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "2/20/24".to_owned(),
@@ -1415,7 +1489,8 @@ mod tests {
                         150.0,
                         43.9822,
                         6597.27,
-                        Some("INTEL CORP".to_string())
+                        Some("INTEL CORP".to_string()),
+                        Some("US".to_string())
                     )
                 ],
                 vec![]
@@ -1439,7 +1514,8 @@ mod tests {
                         72.0,
                         118.13,
                         8505.29,
-                        Some("ADVANCED MICRO DEVICES".to_string())
+                        Some("ADVANCED MICRO DEVICES".to_string()),
+                        Some("US".to_string())
                     ),
                     (
                         "11/22/23".to_owned(),
@@ -1447,43 +1523,14 @@ mod tests {
                         162.0,
                         122.4511,
                         19836.92,
-                        Some("ADVANCED MICRO DEVICES".to_string())
+                        Some("ADVANCED MICRO DEVICES".to_string()),
+                        Some("US".to_string())
                     ),
                 ],
                 vec![]
             ))
         );
 
-        //TODO(jczaja): Renable reinvest dividends case as soon as you get some PDFs
-        //assert_eq!(
-        //    parse_statement("data/example3.pdf"),
-        //    (
-        //        vec![
-        //            ("06/01/21".to_owned(), 0.17, 0.03),
-        //            ("06/01/21".to_owned(), 45.87, 6.88)
-        //        ],
-        //        vec![],
-        //        vec![]
-        //    )
-        //);
-
-        //assert_eq!(
-        //    parse_statement("data/example5.pdf"),
-        //    (
-        //        vec![],
-        //        vec![],
-        //        vec![(
-        //            "04/11/22".to_owned(),
-        //            "04/13/22".to_owned(),
-        //            1,
-        //            46.92,
-        //            46.92,
-        //            0.01,
-        //           0.01,
-        //            46.9
-        //        )]
-        //    )
-        //);
         Ok(())
     }
 }

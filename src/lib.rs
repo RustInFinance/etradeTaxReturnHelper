@@ -74,6 +74,7 @@ pub struct Transaction {
     pub exchange_rate_date: String,
     pub exchange_rate: f32,
     pub company: Option<String>,
+    pub country: Option<String>,
 }
 
 impl Transaction {
@@ -124,8 +125,7 @@ pub struct SoldTransaction {
     pub exchange_rate_acquisition_date: String,
     pub exchange_rate_acquisition: f32,
     pub company: Option<String>,
-    // TODO
-    //pub country : Option<String>,
+    pub country: Option<String>,
 }
 
 impl SoldTransaction {
@@ -386,13 +386,23 @@ pub fn run_taxation(
     validate_file_names(&names)?;
 
     let mut parsed_interests_transactions: Vec<(String, f32, f32)> = vec![];
-    let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
-    let mut parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
+    let mut parsed_div_transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> =
+        vec![];
+    let mut parsed_sold_transactions: Vec<(
+        String,
+        String,
+        f32,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )> = vec![];
     let mut parsed_gain_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
     let mut parsed_revolut_dividends_transactions: Vec<(
         String,
         Currency,
         Currency,
+        Option<String>,
         Option<String>,
     )> = vec![];
     let mut parsed_revolut_sold_transactions: Vec<(
@@ -400,6 +410,7 @@ pub fn run_taxation(
         String,
         Currency,
         Currency,
+        Option<String>,
         Option<String>,
     )> = vec![];
 
@@ -461,14 +472,14 @@ pub fn run_taxation(
         });
     parsed_div_transactions
         .iter()
-        .for_each(|(trade_date, _, _, _)| {
+        .for_each(|(trade_date, _, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
         });
     detailed_sold_transactions.iter().for_each(
-        |(trade_date, settlement_date, acquisition_date, _, _, _)| {
+        |(trade_date, settlement_date, acquisition_date, _, _, _, _)| {
             let ex = Exchange::USD(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -485,14 +496,14 @@ pub fn run_taxation(
     );
     parsed_revolut_dividends_transactions
         .iter()
-        .for_each(|(trade_date, gross, _, _)| {
+        .for_each(|(trade_date, gross, _, _, _)| {
             let ex = gross.derive_exchange(trade_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
             }
         });
     parsed_revolut_sold_transactions.iter().for_each(
-        |(acquired_date, sold_date, cost, gross, _)| {
+        |(acquired_date, sold_date, cost, gross, _, _)| {
             let ex = cost.derive_exchange(acquired_date.clone());
             if dates.contains_key(&ex) == false {
                 dates.insert(ex, None);
@@ -526,10 +537,10 @@ pub fn run_taxation(
             )?;
 
             println!("{}", per_company_report);
-        },
+        }
         ReportMode::PerCountry => {
             todo!();
-        },
+        }
         ReportMode::None => (),
     }
 
@@ -625,6 +636,7 @@ mod tests {
             exchange_rate_date: "N/A".to_string(),
             exchange_rate: 4.0,
             company: Some("INTEL CORP".to_owned()),
+            country: Some("US".to_string()),
         }];
         assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
         Ok(())
@@ -641,6 +653,7 @@ mod tests {
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 4.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
@@ -649,6 +662,7 @@ mod tests {
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
         ];
         assert_eq!(
@@ -667,6 +681,7 @@ mod tests {
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
                 company: None,
+                country: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -675,6 +690,7 @@ mod tests {
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 1.0,
                 company: None,
+                country: None,
             },
         ];
         assert_eq!(
@@ -694,6 +710,7 @@ mod tests {
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
                 company: None,
+                country: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -702,6 +719,7 @@ mod tests {
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
                 company: None,
+                country: None,
             },
         ];
         assert_eq!(
@@ -725,6 +743,7 @@ mod tests {
             exchange_rate_acquisition_date: "N/A".to_string(),
             exchange_rate_acquisition: 6.0,
             company: Some("TFC".to_owned()),
+            country: Some("US".to_string()),
         }];
         assert_eq!(
             compute_sold_taxation(&transactions),
@@ -748,6 +767,7 @@ mod tests {
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 6.0,
                 company: Some("PXD".to_owned()),
+                country: Some("US".to_string()),
             },
             SoldTransaction {
                 trade_date: "N/A".to_string(),
@@ -760,6 +780,7 @@ mod tests {
                 exchange_rate_acquisition_date: "N/A".to_string(),
                 exchange_rate_acquisition: 3.0,
                 company: Some("TFC".to_owned()),
+                country: Some("US".to_string()),
             },
         ];
         assert_eq!(

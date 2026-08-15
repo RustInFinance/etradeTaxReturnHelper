@@ -2535,7 +2535,7 @@ mod tests {
                     crate::Currency::PLN(0.34),
                     crate::Currency::PLN(0.08),
                     Some("EXI2".to_string()),
-                    Some("US".to_string()),
+                    Some("DE".to_string()),
                 ),
                 (
                     "06/28/24".to_owned(),
@@ -2549,7 +2549,7 @@ mod tests {
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
                     Some("IBCD".to_string()),
-                    Some("US".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "09/27/24".to_owned(),

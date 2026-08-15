@@ -59,7 +59,13 @@ struct TransactionAccumulator {
 
 #[derive(Debug, PartialEq)]
 pub struct RevolutTransactions {
-    pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>, Option<String>)>,
+    pub dividend_transactions: Vec<(
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+        Option<String>,
+    )>,
     pub sold_transactions: Vec<(
         String,
         String,
@@ -225,6 +231,7 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             "Gross amount",
             "Withholding tax",
             "Currency",
+            "Country",
         ])
     } else if df.get_column_names().contains(&"Taxes withheld")
         || df
@@ -388,7 +395,14 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             .copied()
             .unwrap_or("Country");
 
-        df.select([date_col, symbol_col, value_col, other_taxes_col, fees_col, country_col])
+        df.select([
+            date_col,
+            symbol_col,
+            value_col,
+            other_taxes_col,
+            fees_col,
+            country_col,
+        ])
     } else {
         df.select([
             "Date acquired",
@@ -614,6 +628,7 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
 }
 
 fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, &'static str> {
+    println!("DF: {df}");
     let symbol = df
         .column(col_name)
         .map_err(|_| "Error: Unable to select Symbol/Country")?;
@@ -941,8 +956,7 @@ fn process_tax_consolidated_data_v2(
 
             ta.symbols
                 .extend(parse_symbols(&filtred_df, "Description & symbol")?);
-            ta.countries
-                .extend(parse_symbols(&filtred_df, "Country")?);
+            ta.countries.extend(parse_symbols(&filtred_df, "Country")?);
 
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross dividend / income")?;
@@ -1155,14 +1169,19 @@ fn process_tax_consolidated_statement_v2(
 
 /// Parse revolut CSV documents (savings account, trading, crypto)
 /// returns: (
-/// dividend transactions in a form: date, gross income, tax taken, 
+/// dividend transactions in a form: date, gross income, tax taken,
 /// company name (if available), country (if available)
 /// sold transactions in a form date acquired, date sold, cost basis, gross income
 /// crypto transactions in a form date acquired, date sold, cost basis, gross income
 /// )
 pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransactions, String> {
-    let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>, Option<String>)> =
-        vec![];
+    let mut dividend_transactions: Vec<(
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+        Option<String>,
+    )> = vec![];
     let mut sold_transactions: Vec<(
         String,
         String,
@@ -1229,8 +1248,9 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Filtered Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
         ta.symbols = parse_symbols(&filtred_df, "Ticker")?;
-        ta.countries = parse_symbols(&filtred_df, "Country")?; // It is not in this outdated
-                                                               // document
+        // It (Country) is not present in this document
+        ta.countries
+            .extend(std::iter::repeat(None).take(ta.symbols.len()));
         ta.incomes = parse_incomes(&filtred_df, "Total Amount")?;
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
@@ -1283,6 +1303,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
             .map_err(|e| format!("Error reading CSV: {e}"))?;
         log::info!("Content of first to be DataFrame: {sales}");
 
+        println!("Sales: {sales}");
         let filtred_df = extract_sold_transactions(&sales)?;
         log::info!("Filtered Sold Data of interest: {filtred_df}");
         ta.stock.acquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
@@ -1298,6 +1319,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
         log::info!("Content of second to be DataFrame: {others}");
 
+        println!("Others: {others}");
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Dividend Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
@@ -1402,19 +1424,21 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         ));
     }
 
-    let iter = std::iter::zip(ta.stock.countries,
-std::iter::zip(
-        ta.stock.acquired_dates,
+    let iter = std::iter::zip(
+        ta.stock.countries,
         std::iter::zip(
-            ta.stock.symbols,
+            ta.stock.acquired_dates,
             std::iter::zip(
-                ta.stock.sold_dates,
-                std::iter::zip(ta.stock.costs, ta.stock.gross),
+                ta.stock.symbols,
+                std::iter::zip(
+                    ta.stock.sold_dates,
+                    std::iter::zip(ta.stock.costs, ta.stock.gross),
+                ),
             ),
         ),
-    ));
+    );
     iter.for_each(|(ctry, (acq_d, (s, (sol_d, (c, g)))))| {
-        sold_transactions.push((acq_d, sol_d, c, g, s,ctry));
+        sold_transactions.push((acq_d, sol_d, c, g, s, ctry));
     });
     // Crypto transactions
     log::info!("Crypto Acquire Dates: {:?}", ta.crypto.acquired_dates);
@@ -1450,9 +1474,12 @@ std::iter::zip(
         ));
     }
 
-    let iter = std::iter::zip(ta.countries, std::iter::zip(
-        ta.dates,
-        std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes))),
+    let iter = std::iter::zip(
+        ta.countries,
+        std::iter::zip(
+            ta.dates,
+            std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes)),
+        ),
     );
     iter.for_each(|(c, (d, (s, (m, t))))| {
         dividend_transactions.push((d, m, t, s, c));
@@ -2637,7 +2664,7 @@ mod tests {
                     crate::Currency::PLN(264.74),
                     crate::Currency::PLN(0.00),
                     Some("AMCR".to_string()),
-                    Some("US".to_string()),
+                    Some("JE".to_string()),
                 ),
                 (
                     "06/18/24".to_owned(),
@@ -2882,7 +2909,7 @@ mod tests {
                     crate::Currency::USD(2.94),
                     crate::Currency::USD(0.00),
                     Some("AMCR".to_string()),
-                    Some("JE".to_string()),
+                    None,
                 ),
             ],
             sold_transactions: vec![],

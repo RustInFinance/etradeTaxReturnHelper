@@ -199,7 +199,7 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
 
 fn sanitize_df(df: &DataFrame) -> DataFrame {
     if let Ok(col) = df.column("Description") {
-        if let Ok(utf) = col.utf8() {
+        if let Ok(utf) = col.str() {
             let vals: Vec<String> = utf
                 .into_iter()
                 .map(|opt| {
@@ -591,7 +591,7 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
         .iter()
         .map(|x| {
             let m = match x {
-                AnyValue::Utf8(x) => {
+                AnyValue::String(x) => {
                     if x.contains("Odsetki brutto")
                         || x.contains("Oprocentowanie brutto")
                         || x.contains("Gross interest")
@@ -655,7 +655,7 @@ fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, 
         .map_err(|_| "Error: Unable to select Symbol/Country")?;
     let mut symbols: Vec<Option<String>> = vec![];
     let possible_symbols = symbol
-        .utf8()
+        .str()
         .map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_symbols.into_iter().try_for_each(|maybe_symbol| {
@@ -682,7 +682,7 @@ fn parse_investment_pairs_transaction_dates(
     let mut acquire_dates: Vec<String> = vec![];
 
     let possible_dates = date
-        .utf8()
+        .str()
         .map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_dates.into_iter().try_for_each(|x| {
@@ -764,7 +764,7 @@ fn parse_investment_transaction_dates(
         .map_err(|_| "Error: Unable to select Date")?;
     let mut dates: Vec<String> = vec![];
     let possible_dates = date
-        .utf8()
+        .str()
         .map_err(|_| "Error: Unable to convert to utf8")?;
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
@@ -812,7 +812,7 @@ fn parse_sold_incomes(
         .column(col)
         .map_err(|_| format!("Error: Unable to select column '{}'", col))?;
     let possible_incomes = moneyin
-        .utf8()
+        .str()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
 
     possible_incomes
@@ -828,7 +828,7 @@ fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, Stri
         .column(col)
         .map_err(|_| format!("Error: Unable to select Money In column '{}'", col))?;
     let possible_incomes = moneyin
-        .utf8()
+        .str()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
 
     possible_incomes
@@ -851,7 +851,7 @@ fn parse_income_with_currency(
         .column(currency_col)
         .map_err(|_| "Error: Unable to select Currency column")?;
     let possible_currency = currency
-        .utf8()
+        .str()
         .map_err(|e| format!("Unable to convert to utf8. Error: {e}"))?;
     match moneyin.dtype() {
         DataType::Float64 => {
@@ -869,9 +869,9 @@ fn parse_income_with_currency(
                     Ok::<(), String>(())
                 })?;
         }
-        DataType::Utf8 => {
+        DataType::String => {
             let possible_incomes = moneyin
-                .utf8()
+                .str()
                 .map_err(|e| format!("Unable to convert to utf8. Error: {e}"))?;
 
             possible_incomes
@@ -1650,7 +1650,7 @@ mod tests {
         let desc_col = sanitized
             .column("Description")
             .map_err(|_| "Missing Description column")?;
-        let utf = desc_col.utf8().map_err(|_| "Description not utf8")?;
+        let utf = desc_col.str().map_err(|_| "Description not utf8")?;
         for opt in utf.into_iter() {
             if let Some(s) = opt {
                 if s.contains('\n') || s.contains('\r') {

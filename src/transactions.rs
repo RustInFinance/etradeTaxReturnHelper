@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(df.height(), 1);
         assert_eq!(df.width(), 4);
 
-        let country_col = df.column("Country").unwrap().utf8().unwrap();
+        let country_col = df.column("Country").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         let us_index = match country_col.get(0) {
@@ -736,7 +736,7 @@ mod tests {
         assert_eq!(df.height(), 2);
         assert_eq!(df.width(), 4);
 
-        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let company_col = df.column("Company").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         let (abev_index, intc_index) = match company_col.get(0) {
@@ -818,7 +818,7 @@ mod tests {
         assert_eq!(df.height(), 2);
         assert_eq!(df.width(), 4);
 
-        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let company_col = df.column("Company").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let cost_col = df.column("Cost[PLN]").unwrap();
         let (abev_index, intc_index) = match company_col.get(0) {
@@ -900,7 +900,7 @@ mod tests {
         assert_eq!(df.height(), 2);
         assert_eq!(df.width(), 4);
 
-        let country_col = df.column("Country").unwrap().utf8().unwrap();
+        let country_col = df.column("Country").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let cost_col = df.column("Cost[PLN]").unwrap();
         let (ca_index, us_index) = match country_col.get(0) {

@@ -471,6 +471,76 @@ pub(crate) fn create_per_company_report(
         .map_err(|_| "Unable to sort per company report dataframe")
 }
 
+pub(crate) fn create_per_country_report(
+    interests: &[Transaction],
+    dividends: &[Transaction],
+    sold_transactions: &[SoldTransaction],
+    revolut_dividends_transactions: &[Transaction],
+    revolut_sold_transactions: &[SoldTransaction],
+) -> Result<DataFrame, &'static str> {
+    // Key: Company Name , Value : (gross_pl, tax_paid_in_us_pl, cost_pl)
+    let mut per_country_data: HashMap<Option<String>, (f32, f32, f32)> = HashMap::new();
+
+    let interests_or_dividends = interests
+        .iter()
+        .chain(dividends.iter())
+        .chain(revolut_dividends_transactions.iter());
+
+    interests_or_dividends.for_each(|x| {
+        let entry = per_country_data
+            .entry(x.country.clone())
+            .or_insert((0.0, 0.0, 0.0));
+        entry.0 += x.exchange_rate * x.gross.value() as f32;
+        entry.1 += x.exchange_rate * x.tax_paid.value() as f32;
+        // No cost for dividends being paid
+    });
+
+    let sells = sold_transactions
+        .iter()
+        .chain(revolut_sold_transactions.iter());
+    sells.for_each(|x| {
+        let entry = per_country_data
+            .entry(x.country.clone())
+            .or_insert((0.0, 0.0, 0.0));
+        entry.0 += x.income_us * x.exchange_rate_settlement;
+        // No tax from sold transactions
+        entry.2 += x.cost_basis * x.exchange_rate_acquisition;
+    });
+
+    // Convert my HashMap into DataFrame
+    let mut countries: Vec<Option<String>> = Vec::new();
+    let mut gross: Vec<f32> = Vec::new();
+    let mut tax: Vec<f32> = Vec::new();
+    let mut cost: Vec<f32> = Vec::new();
+    per_country_data
+        .iter()
+        .try_for_each(|(country, (gross_pl, tax_paid_in_us_pl, cost_pl))| {
+            log::info!(
+                "Country: {:?}, Gross PLN: {:.2}, Tax Paid in USD PLN: {:.2}, Cost PLN: {:.2}",
+                country,
+                gross_pl,
+                tax_paid_in_us_pl,
+                cost_pl
+            );
+            countries.push(country.clone());
+            gross.push(*gross_pl);
+            tax.push(*tax_paid_in_us_pl);
+            cost.push(*cost_pl);
+
+            Ok::<(), &str>(())
+        })?;
+    let series = vec![
+        Series::new("Country", countries),
+        Series::new("Gross[PLN]", gross),
+        Series::new("Cost[PLN]", cost),
+        Series::new("Tax Paid in USD[PLN]", tax),
+    ];
+    DataFrame::new(series)
+        .map_err(|_| "Unable to create per country report dataframe")?
+        .sort(["Country"], false, true)
+        .map_err(|_| "Unable to sort per country report dataframe")
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -479,6 +549,50 @@ mod tests {
 
     fn round4(val: f64) -> f64 {
         (val * 10_000.0).round() / 10_000.0
+    }
+
+    #[test]
+    fn test_create_per_country_report_interests() -> Result<(), String> {
+        let input = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::EUR(0.05),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+                company: None,
+                country: None,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::EUR(0.07),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+                company: None,
+                country: None,
+            },
+        ];
+        let df = create_per_country_report(&input, &[], &[], &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Interests are having company == None, and data should be folded to one row
+        assert_eq!(df.height(), 1);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap();
+        assert_eq!(country_col.get(0).is_err(), false); // None company
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        assert_eq!(
+            round4(gross_col.get(0).unwrap().extract::<f64>().unwrap()),
+            round4(0.05 * 2.0 + 0.07 * 3.0)
+        );
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
     }
 
     #[test]

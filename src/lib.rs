@@ -14,7 +14,7 @@ pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
-    create_detailed_sold_transactions, create_per_company_report, reconstruct_sold_transactions,
+    create_detailed_sold_transactions, create_per_company_report, create_per_country_report, reconstruct_sold_transactions,
     verify_dividends_transactions, verify_interests_transactions, verify_transactions,
 };
 
@@ -539,7 +539,15 @@ pub fn run_taxation(
             println!("{}", per_company_report);
         }
         ReportMode::PerCountry => {
-            todo!();
+            let per_country_report = create_per_country_report(
+                &interests,
+                &transactions,
+                &sold_transactions,
+                &revolut_dividends_transactions,
+                &revolut_sold_transactions,
+            )?;
+
+            println!("{}", per_country_report);
         }
         ReportMode::None => (),
     }

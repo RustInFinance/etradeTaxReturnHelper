@@ -638,6 +638,65 @@ mod tests {
 
         Ok(())
     }
+    #[test]
+    fn test_create_per_country_report_dividends() -> Result<(), String> {
+        let input = vec![
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(25.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::USD(126.0),
+                tax_paid: crate::Currency::USD(10.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            Transaction {
+                transaction_date: "03/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 10.0,
+                company: Some("ABEV".to_owned()),
+                country: Some("US".to_string()),
+            },
+        ];
+        let df = create_per_country_report(&[], &input, &[], &[], &[])
+            .map_err(|e| format!("Error creating per company report: {}", e))?;
+
+        // Interests are having company == None, and data should be folded to one row
+        assert_eq!(df.height(), 1);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap().utf8().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        let us_index = match country_col.get(0) {
+            Some("US") => 0,
+            _ => return Err("Unexpected country name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
+            round4(100.0 * 3.0 + 126.0 * 2.0 + 10.0*100.0)
+        );
+        assert_eq!(
+            tax_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            round4(25.0 * 3.0 + 10.0 * 2.0 + 10.0*0.0 )
+        );
+
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
 
     #[test]
     fn test_create_per_company_report_dividends() -> Result<(), String> {

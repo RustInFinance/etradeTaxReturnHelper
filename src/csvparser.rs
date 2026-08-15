@@ -969,12 +969,10 @@ fn process_tax_consolidated_data_v2(
                 .finish()
                 .map_err(|e| format!("Error reading CSV (Dividends): {e}"))?;
             log::info!("Content of Dividends: {df}");
-            println!("DF: {df}");
             let filtred_df = extract_dividends_transactions(&df)?
                 .drop_nulls::<String>(None)
                 .map_err(|_| "Error: Removing null rows in Revolut dividends transactions")?;
             log::info!("Filtered Dividend Data of interest: {filtred_df}");
-            println!("FilteredDF: {df}");
             ta.dates
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
 

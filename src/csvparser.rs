@@ -259,7 +259,7 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
         let country_col = df
             .get_column_names()
             .iter()
-            .find(|&col| col.contains("Kraj"))
+            .find(|&col| col.contains("Kraj") || col == &"Country")
             .copied()
             .unwrap_or("Country");
 
@@ -296,6 +296,19 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
         df_transactions = df_transactions
             .rename("Data", "Date")
             .expect("Unable to rename Data to Date")
+            .clone();
+    }
+
+    // Find and rename Polish "Opis i symbol" column (may have non-breaking spaces)
+    if let Some(country_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Kraj"))
+        .map(|s| s.to_string())
+    {
+        df_transactions = df_transactions
+            .rename(&country_col, "Country")
+            .expect("Unable to rename Kraj to Country")
             .clone();
     }
 
@@ -1315,7 +1328,6 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
             .map_err(|e| format!("Error reading CSV: {e}"))?;
         log::info!("Content of first to be DataFrame: {sales}");
 
-        println!("Sales: {sales}");
         let filtred_df = extract_sold_transactions(&sales)?;
         log::info!("Filtered Sold Data of interest: {filtred_df}");
         ta.stock.acquired_dates = parse_investment_transaction_dates(&filtred_df, "Date acquired")?;
@@ -1331,7 +1343,6 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
 
         log::info!("Content of second to be DataFrame: {others}");
 
-        println!("Others: {others}");
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Dividend Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;

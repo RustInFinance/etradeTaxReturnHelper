@@ -123,19 +123,13 @@ fn main() {
         etradeTaxReturnHelper::ReportMode::None
     };
 
-
     let TaxCalculationResult {
         gross_income: gross_div,
         tax: tax_div,
         gross_sold,
         cost_sold,
         ..
-    } = match run_taxation(
-        &rd,
-        pdfnames,
-        report_mode, 
-        matches.get_flag("multiyear"),
-    ) {
+    } = match run_taxation(&rd, pdfnames, report_mode, matches.get_flag("multiyear")) {
         Ok(res) => res,
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
@@ -436,7 +430,12 @@ mod tests {
             .expect_and_log("error getting financial documents names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames, etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(_) => panic!("Expected an error from run_taxation, but got Ok"),
             Err(_) => Ok(()), // Expected error, test passes
         }
@@ -457,7 +456,12 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames,  etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -490,7 +494,12 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames,  etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -523,7 +532,12 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames,  etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -557,7 +571,12 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames,  etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,
@@ -588,7 +607,12 @@ mod tests {
             .expect_and_log("error getting brokarage statements pdfs names");
         let pdfnames: Vec<String> = pdfnames.map(|x| x.to_string()).collect();
 
-        match etradeTaxReturnHelper::run_taxation(&rd, pdfnames,  etradeTaxReturnHelper::ReportMode::None, false) {
+        match etradeTaxReturnHelper::run_taxation(
+            &rd,
+            pdfnames,
+            etradeTaxReturnHelper::ReportMode::None,
+            false,
+        ) {
             Ok(TaxCalculationResult {
                 gross_income: gross_div,
                 tax: tax_div,

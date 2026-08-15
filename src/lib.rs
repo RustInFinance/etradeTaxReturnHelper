@@ -14,8 +14,9 @@ pub use logging::ResultExt;
 use transactions::{
     create_detailed_div_transactions, create_detailed_interests_transactions,
     create_detailed_revolut_sold_transactions, create_detailed_revolut_transactions,
-    create_detailed_sold_transactions, create_per_company_report, create_per_country_report, reconstruct_sold_transactions,
-    verify_dividends_transactions, verify_interests_transactions, verify_transactions,
+    create_detailed_sold_transactions, create_per_company_report, create_per_country_report,
+    reconstruct_sold_transactions, verify_dividends_transactions, verify_interests_transactions,
+    verify_transactions,
 };
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]

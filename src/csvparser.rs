@@ -681,9 +681,7 @@ fn parse_investment_pairs_transaction_dates(
     let mut sold_dates: Vec<String> = vec![];
     let mut acquire_dates: Vec<String> = vec![];
 
-    let possible_dates = date
-        .str()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
+    let possible_dates = date.str().map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
@@ -763,9 +761,7 @@ fn parse_investment_transaction_dates(
         .column(col_name)
         .map_err(|_| "Error: Unable to select Date")?;
     let mut dates: Vec<String> = vec![];
-    let possible_dates = date
-        .str()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
+    let possible_dates = date.str().map_err(|_| "Error: Unable to convert to utf8")?;
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
             // Replace Polish month abbreviations with English ones
@@ -912,7 +908,8 @@ fn process_tax_consolidated_data_v2(
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
             ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
-            ta.countries.extend(std::iter::repeat_n(None, lincomes.len()));
+            ta.countries
+                .extend(std::iter::repeat_n(None, lincomes.len()));
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
             ta.incomes.extend(lincomes);
@@ -1018,7 +1015,8 @@ fn process_tax_consolidated_data(
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
             ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
-            ta.countries.extend(std::iter::repeat_n(None, lincomes.len()));
+            ta.countries
+                .extend(std::iter::repeat_n(None, lincomes.len()));
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
             ta.incomes.extend(lincomes);

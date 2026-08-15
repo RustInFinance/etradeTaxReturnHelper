@@ -670,7 +670,7 @@ mod tests {
             },
         ];
         let df = create_per_country_report(&[], &input, &[], &[], &[])
-            .map_err(|e| format!("Error creating per company report: {}", e))?;
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
 
         // Interests are having company == None, and data should be folded to one row
         assert_eq!(df.height(), 1);
@@ -685,11 +685,11 @@ mod tests {
         };
         assert_eq!(
             round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
-            round4(100.0 * 3.0 + 126.0 * 2.0 + 10.0*100.0)
+            round4(100.0 * 3.0 + 126.0 * 2.0 + 10.0 * 100.0)
         );
         assert_eq!(
             tax_col.get(us_index).unwrap().extract::<f64>().unwrap(),
-            round4(25.0 * 3.0 + 10.0 * 2.0 + 10.0*0.0 )
+            round4(25.0 * 3.0 + 10.0 * 2.0 + 10.0 * 0.0)
         );
 
         let cost_col = df.column("Cost[PLN]").unwrap();
@@ -850,7 +850,87 @@ mod tests {
         Ok(())
     }
 
-    // TODO: test_create_per_country_report
+    #[test]
+    fn test_create_per_country_report_sells() -> Result<(), String> {
+        let input = vec![
+            SoldTransaction {
+                trade_date: "03/01/21".to_string(),
+                settlement_date: "03/03/21".to_string(),
+                acquisition_date: "01/01/21".to_string(),
+                income_us: 20.0,
+                cost_basis: 20.0,
+                exchange_rate_settlement_date: "03/02/21".to_string(),
+                exchange_rate_settlement: 2.5,
+                exchange_rate_acquisition_date: "02/28/21".to_string(),
+                exchange_rate_acquisition: 5.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 25.0,
+                cost_basis: 10.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 20.0,
+                cost_basis: 0.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("BMO".to_owned()),
+                country: Some("CA".to_string()),
+            },
+        ];
+        let df = create_per_country_report(&[], &[], &input, &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Solds are having company
+        assert_eq!(df.height(), 2);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap().utf8().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        let (ca_index, us_index) = match country_col.get(0) {
+            Some("US") => (1, 0),
+            Some("CA") => (0, 1),
+            _ => return Err("Unexpected country name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 2.5 + 25.0 * 4.0)
+        );
+        assert_eq!(
+            round4(gross_col.get(ca_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 4.0)
+        );
+        assert_eq!(
+            cost_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            round4(20.0 * 5.0 + 10.0 * 6.0)
+        );
+        assert_eq!(
+            cost_col.get(ca_index).unwrap().extract::<f64>().unwrap(),
+            round4(0.0)
+        );
+
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        assert_eq!(tax_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
 
     #[test]
     fn test_interests_verification_ok() -> Result<(), String> {

@@ -39,11 +39,11 @@ pub fn verify_interests_transactions<T>(transactions: &[(String, T, T)]) -> Resu
 
 /// Check if all dividends transaction come from the same year
 pub fn verify_dividends_transactions<T>(
-    div_transactions: &[(String, T, T, Option<String>)],
+    div_transactions: &[(String, T, T, Option<String>, Option<String>)],
 ) -> Result<(), String> {
     let mut trans = div_transactions.iter();
     let transaction_date = match trans.next() {
-        Some((x, _, _, _)) => x,
+        Some((x, _, _, _, _)) => x,
         None => {
             log::info!("No Dividends transactions");
             return Ok(());
@@ -54,7 +54,7 @@ pub fn verify_dividends_transactions<T>(
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
-    trans.try_for_each(|(tr_date, _, _, _)| {
+    trans.try_for_each(|(tr_date, _, _, _, _)| {
         let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
@@ -68,11 +68,11 @@ pub fn verify_dividends_transactions<T>(
 }
 
 pub fn verify_transactions<T>(
-    transactions: &[(String, String, T, T, Option<String>)],
+    transactions: &[(String, String, T, T, Option<String>, Option<String>)],
 ) -> Result<(), String> {
     let mut trans = transactions.iter();
     let transaction_date = match trans.next() {
-        Some((_, x, _, _, _)) => x,
+        Some((_, x, _, _, _, _)) => x,
         None => {
             log::info!("No revolut sold transactions");
             return Ok(());
@@ -83,7 +83,7 @@ pub fn verify_transactions<T>(
         .map_err(|_| format!("Unable to parse transaction date: \"{transaction_date}\""))?
         .year();
     let mut verification: Result<(), String> = Ok(());
-    trans.try_for_each(|(_, tr_date, _, _, _)| {
+    trans.try_for_each(|(_, tr_date, _, _, _, _)| {
         let tr_year = chrono::NaiveDate::parse_from_str(tr_date, "%m/%d/%y")
             .map_err(|_| format!("Unable to parse transaction date: \"{tr_date}\""))?
             .year();
@@ -107,9 +107,28 @@ pub fn verify_transactions<T>(
 /// transfered on settlement date      
 
 pub fn reconstruct_sold_transactions(
-    sold_transactions: &Vec<(String, String, f32, f32, f32, Option<String>)>,
+    sold_transactions: &Vec<(
+        String,
+        String,
+        f32,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )>,
     gains_and_losses: &Vec<(String, String, f32, f32, f32)>,
-) -> Result<Vec<(String, String, String, f32, f32, Option<String>)>, String> {
+) -> Result<
+    Vec<(
+        String,
+        String,
+        String,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )>,
+    String,
+> {
     // Ok What do I need.
     // 1. trade date
     // 2. settlement date
@@ -117,8 +136,15 @@ pub fn reconstruct_sold_transactions(
     // 4. gross income
     // 5. cost cost basis
     // 6. company symbol (ticker)
-    let mut detailed_sold_transactions: Vec<(String, String, String, f32, f32, Option<String>)> =
-        vec![];
+    let mut detailed_sold_transactions: Vec<(
+        String,
+        String,
+        String,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )> = vec![];
 
     if sold_transactions.len() > 0 && gains_and_losses.is_empty() {
         return Err("\n\nERROR: Sold transaction detected, but corressponding Gain&Losses document is missing. Please download Gain&Losses  XLSX document at:\n
@@ -133,7 +159,7 @@ pub fn reconstruct_sold_transactions(
         let trade_date = chrono::NaiveDate::parse_from_str(&tr_date, "%m/%d/%Y")
             .expect_and_log(&format!("Unable to parse trade date: {tr_date}"));
 
-        let (_, settlement_date, _, _, _, symbol) = sold_transactions.iter().find(|(trade_dt, _, _, _, income, _)|{
+        let (_, settlement_date, _, _, _, symbol, country) = sold_transactions.iter().find(|(trade_dt, _, _, _, income, _, _)|{
             log::info!("Candidate Sold transaction from PDF: trade_date: {trade_dt} income: {income}");
             let trade_date_pdf = chrono::NaiveDate::parse_from_str(&trade_dt, "%m/%d/%y").expect_and_log(&format!("Unable to parse trade date: {trade_dt}"));
             trade_date ==  trade_date_pdf
@@ -155,6 +181,7 @@ pub fn reconstruct_sold_transactions(
             *inc,
             *cost_basis,
             symbol.clone(),
+            country.clone(),
         ));
     }
 
@@ -162,14 +189,20 @@ pub fn reconstruct_sold_transactions(
 }
 
 pub fn create_detailed_revolut_transactions(
-    transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)>,
+    transactions: Vec<(
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+        Option<String>,
+    )>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
 
     transactions
         .iter()
-        .try_for_each(|(transaction_date, gross, tax, company)| {
+        .try_for_each(|(transaction_date, gross, tax, company, country)| {
             let (exchange_rate_date, exchange_rate) = dates
                 [&gross.derive_exchange(transaction_date.clone())]
                 .clone()
@@ -182,6 +215,7 @@ pub fn create_detailed_revolut_transactions(
                 exchange_rate_date,
                 exchange_rate,
                 company: company.clone(),
+                country: country.clone(),
             };
 
             let msg = transaction.format_to_print("REVOLUT")?;
@@ -214,6 +248,7 @@ pub fn create_detailed_interests_transactions(
                 exchange_rate_date,
                 exchange_rate,
                 company: None, // No company info when interests are paid on money
+                country: None, // TODO: check interests country of origin
             };
 
             let msg = transaction.format_to_print("INTERESTS")?;
@@ -227,13 +262,12 @@ pub fn create_detailed_interests_transactions(
 }
 
 pub fn create_detailed_div_transactions(
-    transactions: Vec<(String, f32, f32, Option<String>)>,
+    transactions: Vec<(String, f32, f32, Option<String>, Option<String>)>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<Transaction>, &str> {
     let mut detailed_transactions: Vec<Transaction> = Vec::new();
-    transactions
-        .iter()
-        .try_for_each(|(transaction_date, gross_us, tax_us, company)| {
+    transactions.iter().try_for_each(
+        |(transaction_date, gross_us, tax_us, company, country)| {
             let (exchange_rate_date, exchange_rate) = dates
                 [&crate::Exchange::USD(transaction_date.clone())]
                 .clone()
@@ -246,6 +280,7 @@ pub fn create_detailed_div_transactions(
                 exchange_rate_date,
                 exchange_rate,
                 company: company.clone(),
+                country: country.clone(),
             };
 
             let msg = transaction.format_to_print("DIV")?;
@@ -254,7 +289,8 @@ pub fn create_detailed_div_transactions(
             log::info!("{}", msg);
             detailed_transactions.push(transaction);
             Ok::<(), &str>(())
-        })?;
+        },
+    )?;
     Ok(detailed_transactions)
 }
 
@@ -268,12 +304,20 @@ pub fn create_detailed_div_transactions(
 //    pub exchange_rate_acquisition_date: String,
 //    pub exchange_rate_acquisition: f32,
 pub fn create_detailed_sold_transactions(
-    transactions: Vec<(String, String, String, f32, f32, Option<String>)>,
+    transactions: Vec<(
+        String,
+        String,
+        String,
+        f32,
+        f32,
+        Option<String>,
+        Option<String>,
+    )>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions.iter().for_each(
-        |(trade_date, settlement_date, acquisition_date, income, cost_basis, symbol)| {
+        |(trade_date, settlement_date, acquisition_date, income, cost_basis, symbol, country)| {
             let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
                 [&crate::Exchange::USD(settlement_date.clone())]
                 .clone()
@@ -294,6 +338,7 @@ pub fn create_detailed_sold_transactions(
                 exchange_rate_acquisition_date,
                 exchange_rate_acquisition,
                 company: symbol.clone(),
+                country: country.clone(),
             };
 
             let msg = transaction.format_to_print("");
@@ -314,12 +359,13 @@ pub fn create_detailed_revolut_sold_transactions(
         crate::Currency,
         crate::Currency,
         Option<String>,
+        Option<String>,
     )>,
     dates: &std::collections::HashMap<crate::Exchange, Option<(String, f32)>>,
 ) -> Result<Vec<SoldTransaction>, &str> {
     let mut detailed_transactions: Vec<SoldTransaction> = Vec::new();
     transactions.iter().for_each(
-        |(acquired_date, sold_date, cost_basis, gross_income, symbol)| {
+        |(acquired_date, sold_date, cost_basis, gross_income, symbol, country)| {
             let (exchange_rate_settlement_date, exchange_rate_settlement) = dates
                 [&gross_income.derive_exchange(sold_date.clone())] // TODO: settlement date???
                 .clone()
@@ -340,6 +386,7 @@ pub fn create_detailed_revolut_sold_transactions(
                 exchange_rate_acquisition_date,
                 exchange_rate_acquisition,
                 company: symbol.clone(),
+                country: country.clone(),
             };
 
             let msg = transaction.format_to_print("REVOLUT ");
@@ -424,6 +471,76 @@ pub(crate) fn create_per_company_report(
         .map_err(|_| "Unable to sort per company report dataframe")
 }
 
+pub(crate) fn create_per_country_report(
+    interests: &[Transaction],
+    dividends: &[Transaction],
+    sold_transactions: &[SoldTransaction],
+    revolut_dividends_transactions: &[Transaction],
+    revolut_sold_transactions: &[SoldTransaction],
+) -> Result<DataFrame, &'static str> {
+    // Key: Company Name , Value : (gross_pl, tax_paid_in_us_pl, cost_pl)
+    let mut per_country_data: HashMap<Option<String>, (f32, f32, f32)> = HashMap::new();
+
+    let interests_or_dividends = interests
+        .iter()
+        .chain(dividends.iter())
+        .chain(revolut_dividends_transactions.iter());
+
+    interests_or_dividends.for_each(|x| {
+        let entry = per_country_data
+            .entry(x.country.clone())
+            .or_insert((0.0, 0.0, 0.0));
+        entry.0 += x.exchange_rate * x.gross.value() as f32;
+        entry.1 += x.exchange_rate * x.tax_paid.value() as f32;
+        // No cost for dividends being paid
+    });
+
+    let sells = sold_transactions
+        .iter()
+        .chain(revolut_sold_transactions.iter());
+    sells.for_each(|x| {
+        let entry = per_country_data
+            .entry(x.country.clone())
+            .or_insert((0.0, 0.0, 0.0));
+        entry.0 += x.income_us * x.exchange_rate_settlement;
+        // No tax from sold transactions
+        entry.2 += x.cost_basis * x.exchange_rate_acquisition;
+    });
+
+    // Convert my HashMap into DataFrame
+    let mut countries: Vec<Option<String>> = Vec::new();
+    let mut gross: Vec<f32> = Vec::new();
+    let mut tax: Vec<f32> = Vec::new();
+    let mut cost: Vec<f32> = Vec::new();
+    per_country_data
+        .iter()
+        .try_for_each(|(country, (gross_pl, tax_paid_in_us_pl, cost_pl))| {
+            log::info!(
+                "Country: {:?}, Gross PLN: {:.2}, Tax Paid in USD PLN: {:.2}, Cost PLN: {:.2}",
+                country,
+                gross_pl,
+                tax_paid_in_us_pl,
+                cost_pl
+            );
+            countries.push(country.clone());
+            gross.push(*gross_pl);
+            tax.push(*tax_paid_in_us_pl);
+            cost.push(*cost_pl);
+
+            Ok::<(), &str>(())
+        })?;
+    let series = vec![
+        Series::new("Country", countries),
+        Series::new("Gross[PLN]", gross),
+        Series::new("Cost[PLN]", cost),
+        Series::new("Tax Paid in USD[PLN]", tax),
+    ];
+    DataFrame::new(series)
+        .map_err(|_| "Unable to create per country report dataframe")?
+        .sort(["Country"], false, true)
+        .map_err(|_| "Unable to sort per country report dataframe")
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -432,6 +549,50 @@ mod tests {
 
     fn round4(val: f64) -> f64 {
         (val * 10_000.0).round() / 10_000.0
+    }
+
+    #[test]
+    fn test_create_per_country_report_interests() -> Result<(), String> {
+        let input = vec![
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::EUR(0.05),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+                company: None,
+                country: None,
+            },
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::EUR(0.07),
+                tax_paid: crate::Currency::EUR(0.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+                company: None,
+                country: None,
+            },
+        ];
+        let df = create_per_country_report(&input, &[], &[], &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Interests are having company == None, and data should be folded to one row
+        assert_eq!(df.height(), 1);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap();
+        assert_eq!(country_col.get(0).is_err(), false); // None company
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        assert_eq!(
+            round4(gross_col.get(0).unwrap().extract::<f64>().unwrap()),
+            round4(0.05 * 2.0 + 0.07 * 3.0)
+        );
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
     }
 
     #[test]
@@ -444,6 +605,7 @@ mod tests {
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
                 company: None,
+                country: None,
             },
             Transaction {
                 transaction_date: "04/11/21".to_string(),
@@ -452,6 +614,7 @@ mod tests {
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
                 company: None,
+                country: None,
             },
         ];
         let df = create_per_company_report(&input, &[], &[], &[], &[])
@@ -475,6 +638,65 @@ mod tests {
 
         Ok(())
     }
+    #[test]
+    fn test_create_per_country_report_dividends() -> Result<(), String> {
+        let input = vec![
+            Transaction {
+                transaction_date: "04/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(25.0),
+                exchange_rate_date: "04/10/21".to_string(),
+                exchange_rate: 3.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            Transaction {
+                transaction_date: "03/01/21".to_string(),
+                gross: crate::Currency::USD(126.0),
+                tax_paid: crate::Currency::USD(10.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 2.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            Transaction {
+                transaction_date: "03/11/21".to_string(),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(0.0),
+                exchange_rate_date: "02/28/21".to_string(),
+                exchange_rate: 10.0,
+                company: Some("ABEV".to_owned()),
+                country: Some("US".to_string()),
+            },
+        ];
+        let df = create_per_country_report(&[], &input, &[], &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Interests are having company == None, and data should be folded to one row
+        assert_eq!(df.height(), 1);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap().str().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        let us_index = match country_col.get(0) {
+            Some("US") => 0,
+            _ => return Err("Unexpected country name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
+            round4(100.0 * 3.0 + 126.0 * 2.0 + 10.0 * 100.0)
+        );
+        assert_eq!(
+            tax_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            round4(25.0 * 3.0 + 10.0 * 2.0 + 10.0 * 0.0)
+        );
+
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        assert_eq!(cost_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
 
     #[test]
     fn test_create_per_company_report_dividends() -> Result<(), String> {
@@ -486,6 +708,7 @@ mod tests {
                 exchange_rate_date: "04/10/21".to_string(),
                 exchange_rate: 3.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
             Transaction {
                 transaction_date: "03/01/21".to_string(),
@@ -494,6 +717,7 @@ mod tests {
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 2.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
             Transaction {
                 transaction_date: "03/11/21".to_string(),
@@ -502,6 +726,7 @@ mod tests {
                 exchange_rate_date: "02/28/21".to_string(),
                 exchange_rate: 10.0,
                 company: Some("ABEV".to_owned()),
+                country: Some("US".to_string()),
             },
         ];
         let df = create_per_company_report(&[], &input, &[], &[], &[])
@@ -511,7 +736,7 @@ mod tests {
         assert_eq!(df.height(), 2);
         assert_eq!(df.width(), 4);
 
-        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let company_col = df.column("Company").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         let (abev_index, intc_index) = match company_col.get(0) {
@@ -557,6 +782,7 @@ mod tests {
                 exchange_rate_acquisition_date: "02/28/21".to_string(),
                 exchange_rate_acquisition: 5.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
             SoldTransaction {
                 trade_date: "06/01/21".to_string(),
@@ -569,6 +795,7 @@ mod tests {
                 exchange_rate_acquisition_date: "12/30/18".to_string(),
                 exchange_rate_acquisition: 6.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },
             SoldTransaction {
                 trade_date: "06/01/21".to_string(),
@@ -581,6 +808,7 @@ mod tests {
                 exchange_rate_acquisition_date: "12/30/18".to_string(),
                 exchange_rate_acquisition: 6.0,
                 company: Some("PXD".to_owned()),
+                country: Some("US".to_string()),
             },
         ];
         let df = create_per_company_report(&[], &[], &input, &[], &[])
@@ -590,7 +818,7 @@ mod tests {
         assert_eq!(df.height(), 2);
         assert_eq!(df.width(), 4);
 
-        let company_col = df.column("Company").unwrap().utf8().unwrap();
+        let company_col = df.column("Company").unwrap().str().unwrap();
         let gross_col = df.column("Gross[PLN]").unwrap();
         let cost_col = df.column("Cost[PLN]").unwrap();
         let (abev_index, intc_index) = match company_col.get(0) {
@@ -623,6 +851,88 @@ mod tests {
     }
 
     #[test]
+    fn test_create_per_country_report_sells() -> Result<(), String> {
+        let input = vec![
+            SoldTransaction {
+                trade_date: "03/01/21".to_string(),
+                settlement_date: "03/03/21".to_string(),
+                acquisition_date: "01/01/21".to_string(),
+                income_us: 20.0,
+                cost_basis: 20.0,
+                exchange_rate_settlement_date: "03/02/21".to_string(),
+                exchange_rate_settlement: 2.5,
+                exchange_rate_acquisition_date: "02/28/21".to_string(),
+                exchange_rate_acquisition: 5.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 25.0,
+                cost_basis: 10.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
+            },
+            SoldTransaction {
+                trade_date: "06/01/21".to_string(),
+                settlement_date: "06/03/21".to_string(),
+                acquisition_date: "01/01/19".to_string(),
+                income_us: 20.0,
+                cost_basis: 0.0,
+                exchange_rate_settlement_date: "06/05/21".to_string(),
+                exchange_rate_settlement: 4.0,
+                exchange_rate_acquisition_date: "12/30/18".to_string(),
+                exchange_rate_acquisition: 6.0,
+                company: Some("BMO".to_owned()),
+                country: Some("CA".to_string()),
+            },
+        ];
+        let df = create_per_country_report(&[], &[], &input, &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Solds are having company
+        assert_eq!(df.height(), 2);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap().str().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        let (ca_index, us_index) = match country_col.get(0) {
+            Some("US") => (1, 0),
+            Some("CA") => (0, 1),
+            _ => return Err("Unexpected country name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 2.5 + 25.0 * 4.0)
+        );
+        assert_eq!(
+            round4(gross_col.get(ca_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 4.0)
+        );
+        assert_eq!(
+            cost_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            round4(20.0 * 5.0 + 10.0 * 6.0)
+        );
+        assert_eq!(
+            cost_col.get(ca_index).unwrap().extract::<f64>().unwrap(),
+            round4(0.0)
+        );
+
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
+        assert_eq!(tax_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_interests_verification_ok() -> Result<(), String> {
         let transactions: Vec<(String, f32, f32)> = vec![
             ("06/01/21".to_string(), 100.0, 0.00),
@@ -633,13 +943,21 @@ mod tests {
 
     #[test]
     fn test_revolut_sold_verification_false() -> Result<(), String> {
-        let transactions: Vec<(String, String, Currency, Currency, Option<String>)> = vec![
+        let transactions: Vec<(
+            String,
+            String,
+            Currency,
+            Currency,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "06/01/21".to_string(),
                 "06/01/22".to_string(),
                 Currency::PLN(10.0),
                 Currency::PLN(2.0),
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "06/01/21".to_string(),
@@ -647,6 +965,7 @@ mod tests {
                 Currency::PLN(10.0),
                 Currency::PLN(2.0),
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
         assert_eq!(
@@ -658,18 +977,20 @@ mod tests {
 
     #[test]
     fn test_dividends_verification_ok() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+        let transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> = vec![
             (
                 "06/01/21".to_string(),
                 100.0,
                 25.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/21".to_string(),
                 126.0,
                 10.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
         verify_dividends_transactions(&transactions)
@@ -677,18 +998,20 @@ mod tests {
 
     #[test]
     fn test_dividends_verification_false() -> Result<(), String> {
-        let transactions: Vec<(String, Currency, Currency, Option<String>)> = vec![
+        let transactions: Vec<(String, Currency, Currency, Option<String>, Option<String>)> = vec![
             (
                 "06/01/21".to_string(),
                 Currency::PLN(10.0),
                 Currency::PLN(2.0),
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/22".to_string(),
                 Currency::PLN(126.0),
                 Currency::PLN(10.0),
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
         assert_eq!(
@@ -706,11 +1029,13 @@ mod tests {
                 crate::Currency::EUR(0.05),
                 crate::Currency::EUR(0.00),
                 None,
+                None,
             ),
             (
                 "04/11/21".to_owned(),
                 crate::Currency::EUR(0.07),
                 crate::Currency::EUR(0.00),
+                None,
                 None,
             ),
         ];
@@ -739,6 +1064,7 @@ mod tests {
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
                     company: None,
+                    country: None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -747,6 +1073,7 @@ mod tests {
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
                     company: None,
+                    country: None,
                 },
             ])
         );
@@ -761,11 +1088,13 @@ mod tests {
                 crate::Currency::PLN(0.44),
                 crate::Currency::PLN(0.00),
                 None,
+                None,
             ),
             (
                 "04/11/21".to_owned(),
                 crate::Currency::PLN(0.45),
                 crate::Currency::PLN(0.00),
+                None,
                 None,
             ),
         ];
@@ -794,6 +1123,7 @@ mod tests {
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
                     company: None,
+                    country: None,
                 },
                 Transaction {
                     transaction_date: "04/11/21".to_string(),
@@ -802,6 +1132,7 @@ mod tests {
                     exchange_rate_date: "N/A".to_string(),
                     exchange_rate: 1.0,
                     company: None,
+                    country: None,
                 },
             ])
         );
@@ -839,6 +1170,7 @@ mod tests {
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
                     company: None,
+                    country: None,
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -847,6 +1179,7 @@ mod tests {
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
                     company: None,
+                    country: None,
                 },
             ])
         );
@@ -855,18 +1188,20 @@ mod tests {
 
     #[test]
     fn test_create_detailed_div_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+        let parsed_transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> = vec![
             (
                 "04/11/21".to_string(),
                 100.0,
                 25.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/21".to_string(),
                 126.0,
                 10.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 
@@ -893,7 +1228,8 @@ mod tests {
                     tax_paid: crate::Currency::USD(25.0),
                     exchange_rate_date: "04/10/21".to_string(),
                     exchange_rate: 3.0,
-                    company: Some("INTEL CORP".to_owned())
+                    company: Some("INTEL CORP".to_owned()),
+                    country: Some("US".to_string()),
                 },
                 Transaction {
                     transaction_date: "03/01/21".to_string(),
@@ -901,7 +1237,8 @@ mod tests {
                     tax_paid: crate::Currency::USD(10.0),
                     exchange_rate_date: "02/28/21".to_string(),
                     exchange_rate: 2.0,
-                    company: Some("INTEL CORP".to_owned())
+                    company: Some("INTEL CORP".to_owned()),
+                    country: Some("US".to_string()),
                 },
             ])
         );
@@ -910,14 +1247,21 @@ mod tests {
 
     #[test]
     fn test_create_detailed_revolut_sold_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, String, Currency, Currency, Option<String>)> =
-            vec![(
-                "11/20/23".to_string(),
-                "12/08/24".to_string(),
-                Currency::USD(5000.0),
-                Currency::USD(5804.62),
-                Some("INTEL CORP".to_owned()),
-            )];
+        let parsed_transactions: Vec<(
+            String,
+            String,
+            Currency,
+            Currency,
+            Option<String>,
+            Option<String>,
+        )> = vec![(
+            "11/20/23".to_string(),
+            "12/08/24".to_string(),
+            Currency::USD(5000.0),
+            Currency::USD(5804.62),
+            Some("INTEL CORP".to_owned()),
+            Some("US".to_string()),
+        )];
 
         let mut dates: std::collections::HashMap<crate::Exchange, Option<(String, f32)>> =
             std::collections::HashMap::new();
@@ -946,6 +1290,7 @@ mod tests {
                 exchange_rate_acquisition_date: "11/19/23".to_string(),
                 exchange_rate_acquisition: 2.0,
                 company: Some("INTEL CORP".to_owned()),
+                country: Some("US".to_string()),
             },])
         );
         Ok(())
@@ -953,7 +1298,15 @@ mod tests {
 
     #[test]
     fn test_create_detailed_sold_transactions() -> Result<(), String> {
-        let parsed_transactions: Vec<(String, String, String, f32, f32, Option<String>)> = vec![
+        let parsed_transactions: Vec<(
+            String,
+            String,
+            String,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "03/01/21".to_string(),
                 "03/03/21".to_string(),
@@ -961,6 +1314,7 @@ mod tests {
                 20.0,
                 20.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "06/01/21".to_string(),
@@ -969,6 +1323,7 @@ mod tests {
                 25.0,
                 10.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 
@@ -1024,6 +1379,7 @@ mod tests {
                     exchange_rate_acquisition_date: "02/28/21".to_string(),
                     exchange_rate_acquisition: 5.0,
                     company: Some("INTEL CORP".to_owned()),
+                    country: Some("US".to_string()),
                 },
                 SoldTransaction {
                     trade_date: "06/01/21".to_string(),
@@ -1036,6 +1392,7 @@ mod tests {
                     exchange_rate_acquisition_date: "12/30/18".to_string(),
                     exchange_rate_acquisition: 6.0,
                     company: Some("INTEL CORP".to_owned()),
+                    country: Some("US".to_string()),
                 },
             ])
         );
@@ -1044,24 +1401,26 @@ mod tests {
 
     #[test]
     fn test_dividends_verification_empty_ok() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![];
+        let transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> = vec![];
         verify_dividends_transactions(&transactions)
     }
 
     #[test]
     fn test_dividends_verification_fail() -> Result<(), String> {
-        let transactions: Vec<(String, f32, f32, Option<String>)> = vec![
+        let transactions: Vec<(String, f32, f32, Option<String>, Option<String>)> = vec![
             (
                 "04/11/22".to_string(),
                 100.0,
                 25.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/21".to_string(),
                 126.0,
                 10.0,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
         assert!(verify_dividends_transactions(&transactions).is_err());
@@ -1070,7 +1429,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_dividiends_only() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![];
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![];
 
@@ -1087,7 +1454,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_ok() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "06/01/21".to_string(),
                 "06/03/21".to_string(),
@@ -1095,6 +1470,7 @@ mod tests {
                 25.0,
                 24.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/21".to_string(),
@@ -1103,6 +1479,7 @@ mod tests {
                 10.0,
                 19.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 
@@ -1140,7 +1517,8 @@ mod tests {
                     "01/01/19".to_string(),
                     24.8,
                     10.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
                 (
                     "03/01/21".to_string(),
@@ -1148,7 +1526,8 @@ mod tests {
                     "01/01/21".to_string(),
                     19.8,
                     20.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
             ]
         );
@@ -1157,7 +1536,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_single_digits_ok() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "6/1/21".to_string(),
                 "6/3/21".to_string(),
@@ -1165,6 +1552,7 @@ mod tests {
                 25.0,
                 24.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "3/1/21".to_string(),
@@ -1173,6 +1561,7 @@ mod tests {
                 10.0,
                 19.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 
@@ -1210,7 +1599,8 @@ mod tests {
                     "01/01/19".to_string(),
                     24.8,
                     10.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
                 (
                     "03/01/21".to_string(),
@@ -1218,7 +1608,8 @@ mod tests {
                     "01/01/21".to_string(),
                     19.8,
                     20.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
             ]
         );
@@ -1227,15 +1618,23 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_second_fail() {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> =
-            vec![(
-                "11/07/22".to_string(),        // trade date
-                "11/09/22".to_string(),        // settlement date
-                173.0,                         // quantity
-                28.2035,                       // price
-                4877.36,                       // amount sold
-                Some("INTEL CORP".to_owned()), // company symbol (ticker)
-            )];
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![(
+            "11/07/22".to_string(),        // trade date
+            "11/09/22".to_string(),        // settlement date
+            173.0,                         // quantity
+            28.2035,                       // price
+            4877.36,                       // amount sold
+            Some("INTEL CORP".to_owned()), // company symbol (ticker)
+            Some("US".to_string()),        // country of origin of company
+        )];
 
         let parsed_gains_and_losses: Vec<(String, String, f32, f32, f32)> = vec![
             (
@@ -1270,7 +1669,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_multistock() -> Result<(), String> {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "12/21/22".to_string(),
                 "12/23/22".to_string(),
@@ -1278,6 +1685,7 @@ mod tests {
                 26.5900,
                 4332.44,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "12/19/22".to_string(),
@@ -1286,6 +1694,7 @@ mod tests {
                 26.5900,
                 6698.00,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 
@@ -1332,7 +1741,8 @@ mod tests {
                     "08/19/21".to_string(),
                     2711.0954,
                     4336.4874,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
                 (
                     "12/21/22".to_string(),
@@ -1340,7 +1750,8 @@ mod tests {
                     "05/03/21".to_string(),
                     2046.61285,
                     0.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
                 (
                     "12/19/22".to_string(),
@@ -1348,7 +1759,8 @@ mod tests {
                     "08/19/22".to_string(),
                     3986.9048,
                     5045.6257,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
                 (
                     "12/21/22".to_string(),
@@ -1356,7 +1768,8 @@ mod tests {
                     "05/02/22".to_string(),
                     2285.82733,
                     0.0,
-                    Some("INTEL CORP".to_owned())
+                    Some("INTEL CORP".to_owned()),
+                    Some("US".to_string()),
                 ),
             ]
         );
@@ -1365,7 +1778,15 @@ mod tests {
 
     #[test]
     fn test_sold_transaction_reconstruction_no_gains_fail() {
-        let parsed_sold_transactions: Vec<(String, String, f32, f32, f32, Option<String>)> = vec![
+        let parsed_sold_transactions: Vec<(
+            String,
+            String,
+            f32,
+            f32,
+            f32,
+            Option<String>,
+            Option<String>,
+        )> = vec![
             (
                 "06/01/21".to_string(),
                 "06/03/21".to_string(),
@@ -1373,6 +1794,7 @@ mod tests {
                 25.0,
                 24.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
             (
                 "03/01/21".to_string(),
@@ -1381,6 +1803,7 @@ mod tests {
                 10.0,
                 19.8,
                 Some("INTEL CORP".to_owned()),
+                Some("US".to_string()),
             ),
         ];
 

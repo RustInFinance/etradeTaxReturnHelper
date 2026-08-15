@@ -44,6 +44,7 @@ struct InvestmentTransactions {
     pub costs: Vec<crate::Currency>,
     pub gross: Vec<crate::Currency>,
     pub symbols: Vec<Option<String>>,
+    pub countries: Vec<Option<String>>,
 }
 #[derive(Default)]
 struct TransactionAccumulator {
@@ -53,17 +54,25 @@ struct TransactionAccumulator {
     pub incomes: Vec<crate::Currency>,
     pub taxes: Vec<crate::Currency>,
     pub symbols: Vec<Option<String>>,
+    pub countries: Vec<Option<String>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct RevolutTransactions {
-    pub dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)>,
+    pub dividend_transactions: Vec<(
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+        Option<String>,
+    )>,
     pub sold_transactions: Vec<(
         String,
         String,
         crate::Currency,
         crate::Currency,
-        Option<String>,
+        Option<String>, // company
+        Option<String>, // country
     )>,
     pub crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)>,
 }
@@ -190,7 +199,7 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
 
 fn sanitize_df(df: &DataFrame) -> DataFrame {
     if let Ok(col) = df.column("Description") {
-        if let Ok(utf) = col.utf8() {
+        if let Ok(utf) = col.str() {
             let vals: Vec<String> = utf
                 .into_iter()
                 .map(|opt| {
@@ -222,6 +231,7 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             "Gross amount",
             "Withholding tax",
             "Currency",
+            "Country",
         ])
     } else if df.get_column_names().contains(&"Taxes withheld")
         || df
@@ -245,6 +255,14 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             .copied()
             .unwrap_or("Description & symbol");
 
+        // Find Polish "Kraj" with any whitespace character
+        let country_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Kraj") || col == &"Country")
+            .copied()
+            .unwrap_or("Country");
+
         // Find Polish "Brutto dywidendy / dochodu" with any whitespace
         let gross_col = df
             .get_column_names()
@@ -261,13 +279,14 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
             .copied()
             .unwrap_or("Taxes withheld");
 
-        df.select([date_col, symbol_col, gross_col, tax_col])
+        df.select([date_col, symbol_col, gross_col, tax_col, country_col])
     } else {
         df.select([
             "Date",
             "Symbol",
             "Gross amount base currency",
             "Net amount base currency",
+            "Country",
         ])
     }
     .map_err(|_| "Error: Unable to select collumns in Revolut dividends transactions")?;
@@ -277,6 +296,19 @@ fn extract_dividends_transactions(df: &DataFrame) -> Result<DataFrame, &'static 
         df_transactions = df_transactions
             .rename("Data", "Date")
             .expect("Unable to rename Data to Date")
+            .clone();
+    }
+
+    // Find and rename Polish "Opis i symbol" column (may have non-breaking spaces)
+    if let Some(country_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Kraj"))
+        .map(|s| s.to_string())
+    {
+        df_transactions = df_transactions
+            .rename(&country_col, "Country")
+            .expect("Unable to rename Kraj to Country")
             .clone();
     }
 
@@ -331,6 +363,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             "Cost basis",
             "Gross proceeds",
             "Currency",
+            "Country",
         ])
     } else if df
         .get_column_names()
@@ -377,7 +410,21 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             .copied()
             .unwrap_or("Fees");
 
-        df.select([date_col, symbol_col, value_col, other_taxes_col, fees_col])
+        let country_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Kraj") || col == &"Country")
+            .copied()
+            .unwrap_or("Country");
+
+        df.select([
+            date_col,
+            symbol_col,
+            value_col,
+            other_taxes_col,
+            fees_col,
+            country_col,
+        ])
     } else {
         df.select([
             "Date acquired",
@@ -386,6 +433,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             "Cost basis base currency",
             "Gross proceeds base currency",
             "Fees  base currency",
+            "Country",
         ])
     }
     .map_err(|_| "Error: Unable to select collumns in Revolut sold transactions")?;
@@ -448,6 +496,18 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         df_transactions = df_transactions
             .rename(&fees_col, "Fees")
             .expect("Unable to rename Opłaty")
+            .clone();
+    }
+
+    if let Some(country_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Kraj"))
+        .map(|s| s.to_string())
+    {
+        df_transactions = df_transactions
+            .rename(&country_col, "Country")
+            .expect("Unable to rename Kraj")
             .clone();
     }
 
@@ -531,7 +591,7 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
         .iter()
         .map(|x| {
             let m = match x {
-                AnyValue::Utf8(x) => {
+                AnyValue::String(x) => {
                     if x.contains("Odsetki brutto")
                         || x.contains("Oprocentowanie brutto")
                         || x.contains("Gross interest")
@@ -592,10 +652,10 @@ fn extract_intrest_rate_transactions(df: &DataFrame) -> Result<DataFrame, &'stat
 fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, &'static str> {
     let symbol = df
         .column(col_name)
-        .map_err(|_| "Error: Unable to select Symbol")?;
+        .map_err(|_| "Error: Unable to select Symbol/Country")?;
     let mut symbols: Vec<Option<String>> = vec![];
     let possible_symbols = symbol
-        .utf8()
+        .str()
         .map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_symbols.into_iter().try_for_each(|maybe_symbol| {
@@ -621,9 +681,7 @@ fn parse_investment_pairs_transaction_dates(
     let mut sold_dates: Vec<String> = vec![];
     let mut acquire_dates: Vec<String> = vec![];
 
-    let possible_dates = date
-        .utf8()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
+    let possible_dates = date.str().map_err(|_| "Error: Unable to convert to utf8")?;
 
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
@@ -703,9 +761,7 @@ fn parse_investment_transaction_dates(
         .column(col_name)
         .map_err(|_| "Error: Unable to select Date")?;
     let mut dates: Vec<String> = vec![];
-    let possible_dates = date
-        .utf8()
-        .map_err(|_| "Error: Unable to convert to utf8")?;
+    let possible_dates = date.str().map_err(|_| "Error: Unable to convert to utf8")?;
     possible_dates.into_iter().try_for_each(|x| {
         if let Some(d) = x {
             // Replace Polish month abbreviations with English ones
@@ -752,7 +808,7 @@ fn parse_sold_incomes(
         .column(col)
         .map_err(|_| format!("Error: Unable to select column '{}'", col))?;
     let possible_incomes = moneyin
-        .utf8()
+        .str()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
 
     possible_incomes
@@ -768,7 +824,7 @@ fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, Stri
         .column(col)
         .map_err(|_| format!("Error: Unable to select Money In column '{}'", col))?;
     let possible_incomes = moneyin
-        .utf8()
+        .str()
         .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
 
     possible_incomes
@@ -791,7 +847,7 @@ fn parse_income_with_currency(
         .column(currency_col)
         .map_err(|_| "Error: Unable to select Currency column")?;
     let possible_currency = currency
-        .utf8()
+        .str()
         .map_err(|e| format!("Unable to convert to utf8. Error: {e}"))?;
     match moneyin.dtype() {
         DataType::Float64 => {
@@ -809,9 +865,9 @@ fn parse_income_with_currency(
                     Ok::<(), String>(())
                 })?;
         }
-        DataType::Utf8 => {
+        DataType::String => {
             let possible_incomes = moneyin
-                .utf8()
+                .str()
                 .map_err(|e| format!("Unable to convert to utf8. Error: {e}"))?;
 
             possible_incomes
@@ -852,6 +908,8 @@ fn process_tax_consolidated_data_v2(
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
             ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
+            ta.countries
+                .extend(std::iter::repeat_n(None, lincomes.len()));
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
             ta.incomes.extend(lincomes);
@@ -883,6 +941,9 @@ fn process_tax_consolidated_data_v2(
             ta.stock
                 .symbols
                 .extend(parse_symbols(&filtred_df, "Description, symbol and ISIN")?);
+            ta.stock
+                .countries
+                .extend(parse_symbols(&filtred_df, "Country")?);
             let (lcosts, lsells) = parse_sold_incomes(&filtred_df, "Value (of Sale, of Purchase)")?;
             ta.stock.gross.extend(lsells);
             let fees = parse_incomes(&filtred_df, "Fees")?;
@@ -914,6 +975,7 @@ fn process_tax_consolidated_data_v2(
 
             ta.symbols
                 .extend(parse_symbols(&filtred_df, "Description & symbol")?);
+            ta.countries.extend(parse_symbols(&filtred_df, "Country")?);
 
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross dividend / income")?;
@@ -953,6 +1015,8 @@ fn process_tax_consolidated_data(
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
             let lincomes = parse_incomes(&filtred_df, "Money in")?;
             ta.symbols.extend(std::iter::repeat_n(None, lincomes.len()));
+            ta.countries
+                .extend(std::iter::repeat_n(None, lincomes.len()));
             let ltaxes: Vec<crate::Currency> = lincomes.iter().map(|i| i.derive(0.0)).collect();
             ta.taxes.extend(ltaxes);
             ta.incomes.extend(lincomes);
@@ -980,6 +1044,9 @@ fn process_tax_consolidated_data(
             ta.stock
                 .symbols
                 .extend(parse_symbols(&filtred_df, "Symbol")?);
+            ta.stock
+                .countries
+                .extend(parse_symbols(&filtred_df, "Country")?);
             let lcosts = parse_incomes(&filtred_df, "Cost basis base currency")?;
             ta.stock
                 .gross
@@ -1008,6 +1075,7 @@ fn process_tax_consolidated_data(
                 .extend(parse_investment_transaction_dates(&filtred_df, "Date")?);
 
             ta.symbols.extend(parse_symbols(&filtred_df, "Symbol")?);
+            ta.countries.extend(parse_symbols(&filtred_df, "Country")?);
 
             // parse income
             let lincomes = parse_incomes(&filtred_df, "Gross amount base currency")?;
@@ -1122,18 +1190,25 @@ fn process_tax_consolidated_statement_v2(
 
 /// Parse revolut CSV documents (savings account, trading, crypto)
 /// returns: (
-/// dividend transactions in a form: date, gross income, tax taken, company name (if available)
+/// dividend transactions in a form: date, gross income, tax taken,
+/// company name (if available), country (if available)
 /// sold transactions in a form date acquired, date sold, cost basis, gross income
 /// crypto transactions in a form date acquired, date sold, cost basis, gross income
 /// )
 pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransactions, String> {
-    let mut dividend_transactions: Vec<(String, crate::Currency, crate::Currency, Option<String>)> =
-        vec![];
+    let mut dividend_transactions: Vec<(
+        String,
+        crate::Currency,
+        crate::Currency,
+        Option<String>,
+        Option<String>,
+    )> = vec![];
     let mut sold_transactions: Vec<(
         String,
         String,
         crate::Currency,
         crate::Currency,
+        Option<String>,
         Option<String>,
     )> = vec![];
     let mut crypto_transactions: Vec<(String, String, crate::Currency, crate::Currency)> = vec![];
@@ -1178,6 +1253,8 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
         ta.symbols
             .extend(std::iter::repeat(None).take(ta.incomes.len()));
+        ta.countries
+            .extend(std::iter::repeat(None).take(ta.incomes.len()));
     } else if result.iter().any(|field| field == "Price per share") {
         log::info!("Detected Investment account statement: {csvtoparse}");
         let df = CsvReader::from_path(csvtoparse)
@@ -1192,6 +1269,9 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         log::info!("Filtered Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
         ta.symbols = parse_symbols(&filtred_df, "Ticker")?;
+        // It (Country) is not present in this document
+        ta.countries
+            .extend(std::iter::repeat(None).take(ta.symbols.len()));
         ta.incomes = parse_incomes(&filtred_df, "Total Amount")?;
         ta.taxes = ta.incomes.iter().map(|i| i.derive(0.0)).collect();
     } else if result.iter().any(|field| field == "Income from Sells") {
@@ -1255,14 +1335,16 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
         ta.stock.costs = parse_income_with_currency(&filtred_df, "Cost basis", "Currency")?;
         ta.stock.gross = parse_income_with_currency(&filtred_df, "Gross proceeds", "Currency")?;
         ta.stock.symbols = parse_symbols(&filtred_df, "Symbol")?;
+        ta.stock.countries = parse_symbols(&filtred_df, "Country")?;
 
         log::info!("Content of second to be DataFrame: {others}");
 
         let filtred_df = extract_dividends_transactions(&others)?;
         log::info!("Filtered Dividend Data of interest: {filtred_df}");
         ta.dates = parse_investment_transaction_dates(&filtred_df, "Date")?;
-        // parse symbols of companies
+        // parse symbols of companies and countries they are from
         ta.symbols = parse_symbols(&filtred_df, "Symbol")?;
+        ta.countries = parse_symbols(&filtred_df, "Country")?;
 
         // parse income
         ta.incomes = parse_income_with_currency(&filtred_df, "Gross amount", "Currency")?;
@@ -1343,33 +1425,39 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     log::info!("Sold Sold Dates: {:?}", ta.stock.sold_dates);
     log::info!("Sold Incomes: {:?}", ta.stock.gross);
     log::info!("Sold Cost Basis: {:?}", ta.stock.costs);
+    log::info!("Sold Symbols: {:?}", ta.stock.symbols);
+    log::info!("Sold Countries: {:?}", ta.stock.countries);
 
     if ta.stock.acquired_dates.len() != ta.stock.gross.len()
         || ta.stock.acquired_dates.len() != ta.stock.sold_dates.len()
         || ta.stock.acquired_dates.len() != ta.stock.symbols.len()
     {
         return Err(format!(
-            "ERROR: Different number of sold acquired_dates({}), sold_dates({}), gross({}), cost({}) or symbols({})",
+            "ERROR: Different number of sold acquired_dates({}), sold_dates({}), gross({}), cost({}), symbols({}) or countries({})",
             ta.stock.acquired_dates.len(),
             ta.stock.sold_dates.len(),
             ta.stock.gross.len(),
             ta.stock.costs.len(),
-            ta.stock.symbols.len()
+            ta.stock.symbols.len(),
+            ta.stock.countries.len()
         ));
     }
 
     let iter = std::iter::zip(
-        ta.stock.acquired_dates,
+        ta.stock.countries,
         std::iter::zip(
-            ta.stock.symbols,
+            ta.stock.acquired_dates,
             std::iter::zip(
-                ta.stock.sold_dates,
-                std::iter::zip(ta.stock.costs, ta.stock.gross),
+                ta.stock.symbols,
+                std::iter::zip(
+                    ta.stock.sold_dates,
+                    std::iter::zip(ta.stock.costs, ta.stock.gross),
+                ),
             ),
         ),
     );
-    iter.for_each(|(acq_d, (s, (sol_d, (c, g))))| {
-        sold_transactions.push((acq_d, sol_d, c, g, s));
+    iter.for_each(|(ctry, (acq_d, (s, (sol_d, (c, g)))))| {
+        sold_transactions.push((acq_d, sol_d, c, g, s, ctry));
     });
     // Crypto transactions
     log::info!("Crypto Acquire Dates: {:?}", ta.crypto.acquired_dates);
@@ -1406,11 +1494,14 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     }
 
     let iter = std::iter::zip(
-        ta.dates,
-        std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes)),
+        ta.countries,
+        std::iter::zip(
+            ta.dates,
+            std::iter::zip(ta.symbols, std::iter::zip(ta.incomes, ta.taxes)),
+        ),
     );
-    iter.for_each(|(d, (s, (m, t)))| {
-        dividend_transactions.push((d, m, t, s));
+    iter.for_each(|(c, (d, (s, (m, t))))| {
+        dividend_transactions.push((d, m, t, s, c));
     });
     Ok(RevolutTransactions {
         dividend_transactions,
@@ -1557,7 +1648,7 @@ mod tests {
         let desc_col = sanitized
             .column("Description")
             .map_err(|_| "Missing Description column")?;
-        let utf = desc_col.utf8().map_err(|_| "Description not utf8")?;
+        let utf = desc_col.str().map_err(|_| "Description not utf8")?;
         for opt in utf.into_iter() {
             if let Some(s) = opt {
                 if s.contains('\n') || s.contains('\r') {
@@ -1632,6 +1723,25 @@ mod tests {
             .map_err(|_| "Error creating DataFrame")?;
 
         assert_eq!(parse_symbols(&df, "Symbol"), Ok(expected_symbols));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_countries() -> Result<(), &'static str> {
+        let dates = vec!["25 Aug 2023", "1 Sep 2023"];
+        let countries = vec!["US", "DE"];
+        let expected_symbols = countries
+            .iter()
+            .map(|s| Some(s.to_string()))
+            .collect::<Vec<Option<String>>>();
+
+        let input_date_series = Series::new("Date", dates);
+        let input_countries = Series::new("Country", countries);
+
+        let df = DataFrame::new(vec![input_date_series, input_countries])
+            .map_err(|_| "Error creating DataFrame")?;
+
+        assert_eq!(parse_symbols(&df, "Country"), Ok(expected_symbols));
         Ok(())
     }
 
@@ -1818,7 +1928,7 @@ mod tests {
         parsed
             .dividend_transactions
             .iter()
-            .for_each(|(_, amount, _, _)| match amount {
+            .for_each(|(_, amount, _, _, _)| match amount {
                 crate::Currency::EUR(v) => sum_eur += v,
                 crate::Currency::PLN(v) => sum_pln += v,
                 _ => (),
@@ -1856,17 +1966,20 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/04/24".to_owned(),
                     crate::Currency::EUR(0.02),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/31/24".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
             ],
@@ -1890,11 +2003,13 @@ mod tests {
                     crate::Currency::EUR(0.26),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "04/12/24".to_owned(),
                     crate::Currency::EUR(0.24),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 // PLN interests
@@ -1903,11 +2018,13 @@ mod tests {
                     crate::Currency::PLN(0.86),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "05/31/24".to_owned(),
                     crate::Currency::PLN(1.26),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 // Euro dividends
@@ -1916,6 +2033,7 @@ mod tests {
                     crate::Currency::PLN(302.43),
                     crate::Currency::PLN(302.43 - 222.65),
                     Some("DE000A289XJ2".to_string()),
+                    Some("DE".to_string()),
                 ),
                 // USD dividends
                 (
@@ -1923,18 +2041,21 @@ mod tests {
                     crate::Currency::PLN(617.00),
                     crate::Currency::PLN(617.00 - 524.43),
                     Some("TFC".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "03/21/24".to_owned(),
                     crate::Currency::PLN(259.17),
                     crate::Currency::PLN(0.0),
                     Some("AMCR".to_string()),
+                    Some("JE".to_string()),
                 ),
                 (
                     "12/17/24".to_owned(),
                     crate::Currency::PLN(903.35),
                     crate::Currency::PLN(903.35 - 767.83),
                     Some("EPR".to_string()),
+                    Some("US".to_string()),
                 ),
             ],
             sold_transactions: vec![
@@ -1944,6 +2065,7 @@ mod tests {
                     crate::Currency::PLN(13037.94 + 65.94),
                     crate::Currency::PLN(13348.22),
                     Some("EU000A3K4DJ5".to_string()),
+                    Some("BE".to_string()),
                 ),
                 (
                     "09/09/24".to_owned(),
@@ -1951,6 +2073,7 @@ mod tests {
                     crate::Currency::PLN(16097.86 + 81.41),
                     crate::Currency::PLN(16477.91),
                     Some("XS1218821756".to_string()),
+                    Some("NL".to_string()),
                 ),
                 (
                     "11/20/23".to_owned(),
@@ -1958,6 +2081,7 @@ mod tests {
                     crate::Currency::PLN(19863.25 + 0.66),
                     crate::Currency::PLN(22865.17),
                     Some("XOM".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "06/11/24".to_owned(),
@@ -1965,6 +2089,7 @@ mod tests {
                     crate::Currency::PLN(525.08 + 0.0),
                     crate::Currency::PLN(624.00),
                     Some("TFC".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "10/23/23".to_owned(),
@@ -1972,6 +2097,7 @@ mod tests {
                     crate::Currency::PLN(835.88 + 0.03),
                     crate::Currency::PLN(1046.20),
                     Some("AMCR".to_string()),
+                    Some("JE".to_string()),
                 ),
                 (
                     "08/22/24".to_owned(),
@@ -1979,6 +2105,7 @@ mod tests {
                     crate::Currency::PLN(25135.50 + 128.17),
                     crate::Currency::PLN(26130.41),
                     Some("US13607LNF66".to_string()),
+                    Some("CA".to_string()),
                 ),
             ],
             crypto_transactions: vec![],
@@ -2003,11 +2130,13 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/30/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2015,11 +2144,13 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/06/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2027,11 +2158,13 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/13/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2039,11 +2172,13 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/19/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2051,11 +2186,13 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/25/26".to_owned(),
                     crate::Currency::EUR(0.23),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2063,11 +2200,13 @@ mod tests {
                     crate::Currency::EUR(0.24),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/27/26".to_owned(),
                     crate::Currency::EUR(0.23),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 // PLN interests (Aion account)
@@ -2076,11 +2215,13 @@ mod tests {
                     crate::Currency::PLN(1.81),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/01/26".to_owned(),
                     crate::Currency::PLN(4.39),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2088,17 +2229,20 @@ mod tests {
                     crate::Currency::PLN(1.81),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/02/26".to_owned(),
                     crate::Currency::PLN(4.40),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/03/26".to_owned(),
                     crate::Currency::PLN(1.79),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 // USD dividends - CSV: $112.69 (405.87 PLN), parser returns USD amount
@@ -2107,24 +2251,28 @@ mod tests {
                     crate::Currency::USD(112.69),
                     crate::Currency::USD(16.90),
                     Some("Best Buy dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "01/07/26".to_owned(),
                     crate::Currency::USD(27.32),
                     crate::Currency::USD(6.83),
                     Some("Canadian Natural Resources dividend".to_string()),
+                    Some("CA".to_string()),
                 ),
                 (
                     "01/09/26".to_owned(),
                     crate::Currency::USD(25.50),
                     crate::Currency::USD(3.82),
                     Some("Dentsply dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "01/09/26".to_owned(),
                     crate::Currency::USD(68.89),
                     crate::Currency::USD(0.00),
                     Some("Ambev dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 // EUR dividend - CSV: €130.75 (554.74 PLN), parser returns EUR amount
                 (
@@ -2132,6 +2280,7 @@ mod tests {
                     crate::Currency::EUR(130.75),
                     crate::Currency::EUR(19.61),
                     Some("Ahold Delhaize N.V. dividend".to_string()),
+                    Some("NL".to_string()),
                 ),
             ],
             sold_transactions: vec![
@@ -2147,6 +2296,7 @@ mod tests {
                     crate::Currency::USD(20000.13),
                     crate::Currency::USD(10961.04),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
                 // Sale: Jan 16, 2026, Purchase: Feb 26, 2025
                 // CSV: +US$328.85, -US$500, no fee
@@ -2156,6 +2306,7 @@ mod tests {
                     crate::Currency::USD(500.00),
                     crate::Currency::USD(328.85),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
                 // Sale: Jan 16, 2026, Purchase: Apr 9, 2025
                 // CSV: +US$668.10, -US$981.99, Fee: US$0.01 (0.03 PLN)
@@ -2166,6 +2317,7 @@ mod tests {
                     crate::Currency::USD(982.00),
                     crate::Currency::USD(668.10),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
                 // Dentsply - Sale: Mar 2, 2026, Purchase: Feb 26, 2025
                 // CSV: +US$2,298.25, -US$3,000, Fee: US$0.03 (0.10 PLN)
@@ -2176,6 +2328,7 @@ mod tests {
                     crate::Currency::USD(3000.03),
                     crate::Currency::USD(2298.25),
                     Some("Dentsply XRAY (US24906P1093)".to_string()),
+                    Some("US".to_string()),
                 ),
                 // IBM - Sale: Mar 4, 2026, Purchase: Feb 24, 2026
                 // CSV: +US$747.61, -US$698.24, Fee: US$1.74 (6.23 PLN) + US$0.01 (0.03 PLN)
@@ -2186,6 +2339,7 @@ mod tests {
                     crate::Currency::USD(699.99),
                     crate::Currency::USD(747.61),
                     Some("IBM IBM (US4592001014)".to_string()),
+                    Some("US".to_string()),
                 ),
             ],
             crypto_transactions: vec![],
@@ -2212,17 +2366,20 @@ mod tests {
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/30/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
                     None,
+                    None,
                 ),
                 (
                     "02/03/26".to_owned(),
                     crate::Currency::EUR(0.01),
                     crate::Currency::EUR(0.00),
+                    None,
                     None,
                 ),
                 // PLN interests (Aion account)
@@ -2231,11 +2388,13 @@ mod tests {
                     crate::Currency::PLN(1.81),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/01/26".to_owned(),
                     crate::Currency::PLN(4.39),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2243,11 +2402,13 @@ mod tests {
                     crate::Currency::PLN(1.81),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "01/02/26".to_owned(),
                     crate::Currency::PLN(4.40),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 // USD dividends from Polish CSV with non-breaking spaces in headers
@@ -2256,36 +2417,42 @@ mod tests {
                     crate::Currency::USD(112.69),
                     crate::Currency::USD(16.90),
                     Some("Best Buy dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "01/07/26".to_owned(),
                     crate::Currency::USD(27.32),
                     crate::Currency::USD(6.83),
                     Some("Canadian Natural Resources dividend".to_string()),
+                    Some("CA".to_string()),
                 ),
                 (
                     "01/09/26".to_owned(),
                     crate::Currency::USD(25.50),
                     crate::Currency::USD(3.82),
                     Some("Dentsply dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "01/09/26".to_owned(),
                     crate::Currency::USD(68.89),
                     crate::Currency::USD(0.00),
                     Some("Ambev dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "01/15/26".to_owned(),
                     crate::Currency::USD(235.48),
                     crate::Currency::USD(35.32),
                     Some("EPR Properties dividend".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "02/02/26".to_owned(),
                     crate::Currency::USD(31.79),
                     crate::Currency::USD(4.77),
                     Some("Edison International dividend".to_string()),
+                    Some("US".to_string()),
                 ),
             ],
             sold_transactions: vec![
@@ -2298,6 +2465,7 @@ mod tests {
                     crate::Currency::USD(20000.13),
                     crate::Currency::USD(10961.04),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "02/26/25".to_owned(),
@@ -2305,6 +2473,7 @@ mod tests {
                     crate::Currency::USD(500.00),
                     crate::Currency::USD(328.85),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "04/09/25".to_owned(),
@@ -2312,6 +2481,7 @@ mod tests {
                     crate::Currency::USD(982.00),
                     crate::Currency::USD(668.10),
                     Some("ConAgra Foods CAG (US2058871029)".to_string()),
+                    Some("US".to_string()),
                 ),
             ],
             crypto_transactions: vec![],
@@ -2332,24 +2502,28 @@ mod tests {
                     crate::Currency::PLN(2.80),
                     crate::Currency::PLN(0.68),
                     Some("QDVY".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "06/20/24".to_owned(),
                     crate::Currency::PLN(0.34),
                     crate::Currency::PLN(0.08),
                     Some("EXI2".to_string()),
+                    Some("DE".to_string()),
                 ),
                 (
                     "06/28/24".to_owned(),
                     crate::Currency::PLN(3.79),
                     crate::Currency::PLN(0.94),
                     Some("IS3K".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "07/01/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
                     Some("IBCD".to_string()),
+                    Some("IE".to_string()),
                 ),
             ],
             sold_transactions: vec![],
@@ -2373,54 +2547,63 @@ mod tests {
                     crate::Currency::PLN(2.80),
                     crate::Currency::PLN(0.68),
                     Some("QDVY".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "06/20/24".to_owned(),
                     crate::Currency::PLN(0.34),
                     crate::Currency::PLN(0.08),
                     Some("EXI2".to_string()),
+                    Some("DE".to_string()),
                 ),
                 (
                     "06/28/24".to_owned(),
                     crate::Currency::PLN(3.79),
                     crate::Currency::PLN(0.94),
                     Some("IS3K".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "07/01/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
                     Some("IBCD".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "09/27/24".to_owned(),
                     crate::Currency::PLN(1.02),
                     crate::Currency::PLN(0.25),
                     Some("IBCD".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "09/27/24".to_owned(),
                     crate::Currency::PLN(1.71),
                     crate::Currency::PLN(0.42),
                     Some("IUSU".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "11/29/24".to_owned(),
                     crate::Currency::PLN(2.92),
                     crate::Currency::PLN(0.73),
                     Some("QDVY".to_string()),
+                    Some("IE".to_string()),
                 ),
                 (
                     "12/17/24".to_owned(),
                     crate::Currency::PLN(0.04),
                     crate::Currency::PLN(0.0),
                     Some("EXI2".to_string()),
+                    Some("DE".to_string()),
                 ),
                 (
                     "12/31/24".to_owned(),
                     crate::Currency::PLN(1.07),
                     crate::Currency::PLN(0.25),
                     Some("IBCD".to_string()),
+                    Some("IE".to_string()),
                 ),
             ],
             sold_transactions: vec![],
@@ -2444,96 +2627,112 @@ mod tests {
                     crate::Currency::PLN(617.00),
                     crate::Currency::PLN(92.57),
                     Some("TFC".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "03/21/24".to_owned(),
                     crate::Currency::PLN(259.17),
                     crate::Currency::PLN(0.0),
                     Some("AMCR".to_string()),
+                    Some("JE".to_string()),
                 ),
                 (
                     "03/25/24".to_owned(),
                     crate::Currency::PLN(212.39),
                     crate::Currency::PLN(31.87),
                     Some("PXD".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "05/16/24".to_owned(),
                     crate::Currency::PLN(700.17),
                     crate::Currency::PLN(105.04),
                     Some("EPR".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "05/31/24".to_owned(),
                     crate::Currency::PLN(875.82),
                     crate::Currency::PLN(131.38),
                     Some("UPS".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "06/03/24".to_owned(),
                     crate::Currency::PLN(488.26),
                     crate::Currency::PLN(73.25),
                     Some("ABR".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "06/04/24".to_owned(),
                     crate::Currency::PLN(613.2),
                     crate::Currency::PLN(92.00),
                     Some("TFC".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "06/11/24".to_owned(),
                     crate::Currency::PLN(186.16),
                     crate::Currency::PLN(27.92),
                     Some("XOM".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "06/13/24".to_owned(),
                     crate::Currency::PLN(264.74),
                     crate::Currency::PLN(0.00),
                     Some("AMCR".to_string()),
+                    Some("JE".to_string()),
                 ),
                 (
                     "06/18/24".to_owned(),
                     crate::Currency::PLN(858.33),
                     crate::Currency::PLN(128.74),
                     Some("EPR".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "07/12/24".to_owned(),
                     crate::Currency::PLN(421.5),
                     crate::Currency::PLN(63.23),
                     Some("BBY".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "07/16/24".to_owned(),
                     crate::Currency::PLN(834.55),
                     crate::Currency::PLN(125.18),
                     Some("EPR".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "08/16/24".to_owned(),
                     crate::Currency::PLN(834.79),
                     crate::Currency::PLN(125.23),
                     Some("EPR".to_string()),
+                    Some("US".to_string()),
                 ),
                 (
                     "08/26/24".to_owned(),
                     crate::Currency::PLN(302.43),
                     crate::Currency::PLN(79.77),
                     Some("DE000A289XJ2".to_string()),
+                    Some("DE".to_string()),
                 ),
                 (
                     "08/29/24".to_owned(),
                     crate::Currency::PLN(801.25),
                     crate::Currency::PLN(0.0),
                     Some("BMO".to_string()),
+                    Some("CA".to_string()),
                 ),
                 (
                     "08/30/24".to_owned(),
                     crate::Currency::PLN(872.56),
                     crate::Currency::PLN(130.90),
                     Some("CAG".to_string()),
+                    Some("US".to_string()),
                 ),
             ],
             sold_transactions: vec![(
@@ -2542,6 +2741,7 @@ mod tests {
                 crate::Currency::USD(5000.0),
                 crate::Currency::USD(5804.62),
                 Some("XOM".to_string()),
+                Some("US".to_string()),
             )],
             crypto_transactions: vec![],
         });
@@ -2565,11 +2765,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/13/23".to_owned(),
                     crate::Currency::PLN(0.20),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2577,11 +2779,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/16/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2589,11 +2793,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/18/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2601,11 +2807,13 @@ mod tests {
                     crate::Currency::PLN(0.41),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/20/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2613,11 +2821,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/22/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2625,11 +2835,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/24/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2637,11 +2849,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/26/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2649,11 +2863,13 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/28/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2661,17 +2877,20 @@ mod tests {
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/30/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/31/23".to_owned(),
                     crate::Currency::PLN(0.21),
                     crate::Currency::PLN(0.00),
+                    None,
                     None,
                 ),
             ],
@@ -2695,11 +2914,13 @@ mod tests {
                     crate::Currency::USD(-0.02),
                     crate::Currency::USD(0.00),
                     None,
+                    None,
                 ),
                 (
                     "12/01/23".to_owned(),
                     crate::Currency::USD(-0.51),
                     crate::Currency::USD(0.00),
+                    None,
                     None,
                 ),
                 (
@@ -2707,6 +2928,7 @@ mod tests {
                     crate::Currency::USD(2.94),
                     crate::Currency::USD(0.00),
                     Some("AMCR".to_string()),
+                    None,
                 ),
             ],
             sold_transactions: vec![],
@@ -2733,11 +2955,13 @@ mod tests {
                 crate::Currency::EUR(0.01),
                 crate::Currency::EUR(0.00),
                 None,
+                None,
             ),
             (
                 "03/23/25".to_owned(),
                 crate::Currency::EUR(0.01),
                 crate::Currency::EUR(0.00),
+                None,
                 None,
             ),
         ];

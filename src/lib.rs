@@ -143,10 +143,12 @@ impl SoldTransaction {
 }
 
 pub trait Residency {
+    fn get_tax_deduction_thresholds(&self) -> Box<dyn Fn(&str) -> f32>;
     fn present_result(
         &self,
         gross_div: f32,
         tax_div: f32,
+        demonstratable_tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
     ) -> (Vec<String>, Option<String>);
@@ -265,6 +267,7 @@ pub trait Residency {
 pub struct TaxCalculationResult {
     pub gross_income: f32,
     pub tax: f32,
+    pub demonstratable_tax: f32,
     pub gross_sold: f32,
     pub cost_sold: f32,
     pub interests: Vec<Transaction>,
@@ -295,8 +298,10 @@ fn create_client() -> reqwest::blocking::Client {
     let client = client.build().expect_and_log("Could not create client");
     client
 }
-
-fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
+fn compute_div_taxation(
+    transactions: &[Transaction],
+    threshold: Option<&dyn Fn(&str) -> f32>,
+) -> (f32, f32, f32) {
     // Gross income from dividends in target currency (PLN, EUR etc.)
     let gross_us_pl: f32 = transactions
         .iter()
@@ -307,7 +312,26 @@ fn compute_div_taxation(transactions: &Vec<Transaction>) -> (f32, f32) {
         .iter()
         .map(|x| x.exchange_rate * x.tax_paid.value() as f32)
         .sum();
-    (gross_us_pl, tax_us_pl)
+    let demonstratable_tax_pl = if let Some(threshold_func) = threshold {
+        // Tax paid in US in PLN that can fit into allowed threshold
+        transactions
+            .iter()
+            .map(|x| {
+                if let Some(country_code) = &x.country {
+                    let max_tax_to_be_deducted = threshold_func(country_code.as_ref() as &str);
+                    // Get lower out of two values e.g. actually paid tax vs
+                    // maximum of tax that can be indicated based on double tax avoidance agreement
+                    (x.exchange_rate * x.tax_paid.value() as f32)
+                        .min(max_tax_to_be_deducted * x.gross.value() as f32 * x.exchange_rate)
+                } else {
+                    x.exchange_rate * x.tax_paid.value() as f32
+                }
+            })
+            .sum()
+    } else {
+        tax_us_pl
+    };
+    (gross_us_pl, tax_us_pl, demonstratable_tax_pl)
 }
 
 fn compute_sold_taxation(transactions: &Vec<SoldTransaction>) -> (f32, f32) {
@@ -553,14 +577,21 @@ pub fn run_taxation(
         ReportMode::None => (),
     }
 
-    let (gross_interests, _) = compute_div_taxation(&interests);
-    let (gross_div, tax_div) = compute_div_taxation(&transactions);
+    let tax_deduction_thresholds = rd.get_tax_deduction_thresholds();
+
+    let (gross_interests, _, _) = compute_div_taxation(&interests, None);
+    let (gross_div, tax_div, demonstratable_tax) =
+        compute_div_taxation(&transactions, Some(&tax_deduction_thresholds));
     let (gross_sold, cost_sold) = compute_sold_taxation(&sold_transactions);
-    let (gross_revolut, tax_revolut) = compute_div_taxation(&revolut_dividends_transactions);
+    let (gross_revolut, tax_revolut, demonstratable_tax_revolut) = compute_div_taxation(
+        &revolut_dividends_transactions,
+        Some(&tax_deduction_thresholds),
+    );
     let (gross_revolut_sold, cost_revolut_sold) = compute_sold_taxation(&revolut_sold_transactions);
     Ok(TaxCalculationResult {
         gross_income: gross_interests + gross_div + gross_revolut,
         tax: tax_div + tax_revolut,
+        demonstratable_tax: demonstratable_tax + demonstratable_tax_revolut,
         gross_sold: gross_sold + gross_revolut_sold,
         cost_sold: cost_sold + cost_revolut_sold,
         interests,
@@ -647,7 +678,13 @@ mod tests {
             company: Some("INTEL CORP".to_owned()),
             country: Some("US".to_string()),
         }];
-        assert_eq!(compute_div_taxation(&transactions), (400.0, 100.0));
+
+        let threshold = Box::new(|_: &str| -> f32 { 0.15 });
+
+        assert_eq!(
+            compute_div_taxation(&transactions, Some(&threshold)),
+            (400.0, 100.0, 0.15 * 400.0)
+        );
         Ok(())
     }
 
@@ -666,17 +703,24 @@ mod tests {
             },
             Transaction {
                 transaction_date: "N/A".to_string(),
-                gross: crate::Currency::USD(126.0),
-                tax_paid: crate::Currency::USD(10.0),
+                gross: crate::Currency::USD(100.0),
+                tax_paid: crate::Currency::USD(26.0),
                 exchange_rate_date: "N/A".to_string(),
                 exchange_rate: 3.5,
-                company: Some("INTEL CORP".to_owned()),
-                country: Some("US".to_string()),
+                company: Some("BMO".to_owned()),
+                country: Some("CA".to_string()),
             },
         ];
+
+        let threshold = Box::new(|_: &str| -> f32 { 0.15 });
+
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (400.0 + 126.0 * 3.5, 100.0 + 10.0 * 3.5)
+            compute_div_taxation(&transactions, Some(&threshold)),
+            (
+                400.0 + 100.0 * 3.5,
+                100.0 + 26.0 * 3.5,
+                0.15 * 400.0 + 0.15 * 100.0 * 3.5
+            )
         );
         Ok(())
     }
@@ -703,8 +747,8 @@ mod tests {
             },
         ];
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (0.44 * 1.0 + 0.45 * 1.0, 0.0)
+            compute_div_taxation(&transactions, None),
+            (0.44 * 1.0 + 0.45 * 1.0, 0.0, 0.0)
         );
         Ok(())
     }
@@ -732,8 +776,8 @@ mod tests {
             },
         ];
         assert_eq!(
-            compute_div_taxation(&transactions),
-            (0.44 * 2.0 + 0.45 * 3.0, 0.0)
+            compute_div_taxation(&transactions, None),
+            (0.44 * 2.0 + 0.45 * 3.0, 0.0, 0.0)
         );
         Ok(())
     }

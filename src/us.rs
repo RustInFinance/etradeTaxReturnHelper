@@ -3,8 +3,7 @@
 
 pub struct US {}
 impl etradeTaxReturnHelper::Residency for US {
-
-    fn get_tax_deduction_thresholds(&self) ->  Box<dyn Fn(&str) -> f32> {
+    fn get_tax_deduction_thresholds(&self) -> Box<dyn Fn(&str) -> f32> {
         todo!("Thresholds for US of deductabile tax not implemented!");
     }
 

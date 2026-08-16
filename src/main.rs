@@ -127,7 +127,7 @@ fn main() {
     let TaxCalculationResult {
         gross_income: gross_div,
         tax: tax_div,
-        demonstratable_tax : demonstratable_tax,
+        demonstratable_tax: demonstratable_tax,
         gross_sold,
         cost_sold,
         ..
@@ -136,7 +136,13 @@ fn main() {
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
 
-    let (presentation, warning) = rd.present_result(gross_div, tax_div, demonstratable_tax , gross_sold, cost_sold);
+    let (presentation, warning) = rd.present_result(
+        gross_div,
+        tax_div,
+        demonstratable_tax,
+        gross_sold,
+        cost_sold,
+    );
     presentation.iter().for_each(|x| println!("{x}"));
 
     if let Some(warn_msg) = warning {

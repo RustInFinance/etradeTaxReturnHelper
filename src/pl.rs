@@ -239,12 +239,12 @@ impl etradeTaxReturnHelper::Residency for PL {
         Ok(())
     }
     fn get_tax_deduction_thresholds(&self) -> Box<dyn Fn(&str) -> f32> {
-        Box::new(|code : &str| -> f32 {
-           match code {
-               "JE" => 0.19,
-               _ => 0.15,
-           }
-        }) 
+        Box::new(|code: &str| -> f32 {
+            match code {
+                "JE" => 0.19,
+                _ => 0.15,
+            }
+        })
     }
 
     fn present_result(
@@ -391,7 +391,8 @@ mod tests {
             "(DYWIDENDY) PRZYCHÓD Z ZAGRANICY: 100.00 PLN".to_string(),
             "===> (DYWIDENDY) ZRYCZAŁTOWANY PODATEK: 19.00 PLN".to_string(),
             "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: 15.00 PLN
-                      (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: 30.00 PLN)".to_string(),
+                      (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: 30.00 PLN)"
+                .to_string(),
             "===> (SPRZEDAŻ AKCJI) PRZYCHÓD Z ZAGRANICY: 1000.00 PLN".to_string(),
             "===> (SPRZEDAŻ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];

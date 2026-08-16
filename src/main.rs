@@ -16,6 +16,7 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
+// TOOO: make unit test for tax for dividends with threshold
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Extend structure of TaxCalculationResult with country
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem
@@ -126,6 +127,7 @@ fn main() {
     let TaxCalculationResult {
         gross_income: gross_div,
         tax: tax_div,
+        demonstratable_tax : demonstratable_tax,
         gross_sold,
         cost_sold,
         ..
@@ -134,7 +136,7 @@ fn main() {
         Err(msg) => panic!("\nError: Unable to compute taxes. \n\nDetails: {msg}"),
     };
 
-    let (presentation, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+    let (presentation, warning) = rd.present_result(gross_div, tax_div, demonstratable_tax , gross_sold, cost_sold);
     presentation.iter().for_each(|x| println!("{x}"));
 
     if let Some(warn_msg) = warning {

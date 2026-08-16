@@ -238,34 +238,54 @@ impl etradeTaxReturnHelper::Residency for PL {
         })?;
         Ok(())
     }
+    fn get_tax_deduction_thresholds(&self) -> Box<dyn Fn(&str) -> f32> {
+        Box::new(|code : &str| -> f32 {
+           match code {
+               "JE" => 0.19,
+               _ => 0.15,
+           }
+        }) 
+    }
 
     fn present_result(
         &self,
         gross_div: f32,
         tax_div: f32,
+        demonstratable_tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
     ) -> (Vec<String>, Option<String>) {
         let mut presentation: Vec<String> = vec![];
         let tax_pl = 0.19 * gross_div;
         presentation.push(format!(
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
+            "(DYWIDENDY) PRZYCHÓD Z ZAGRANICY: {:.2} PLN",
             gross_div
         ));
         presentation.push(format!(
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: {:.2} PLN",
+            "===> (DYWIDENDY) ZRYCZAŁTOWANY PODATEK: {:.2} PLN",
             tax_pl
         ));
+        // If tax paid abroad exceeds what can be demonstrated to
+        // tax collectors e.g. certificate of residency was not presented
+        // then print information about paid tax and also what can be demonstrated(put into form)
+        if tax_div != demonstratable_tax_div {
+            presentation.push(format!(
+                "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: {:.2} PLN\n
+                      (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: {:.2} PLN)",
+                demonstratable_tax_div, tax_div,
+            ));
+        } else {
+            presentation.push(format!(
+                "===> (DYWIDENDY) PODATEK ZAPŁACONY ZAGRANICĄ: {:.2} PLN",
+                tax_div
+            ));
+        }
         presentation.push(format!(
-            "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: {:.2} PLN",
-            tax_div
-        ));
-        presentation.push(format!(
-            "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: {:.2} PLN",
+            "===> (SPRZEDAŻ AKCJI) PRZYCHÓD Z ZAGRANICY: {:.2} PLN",
             gross_sold
         ));
         presentation.push(format!(
-            "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: {:.2} PLN",
+            "===> (SPRZEDAŻ AKCJI) KOSZT UZYSKANIA PRZYCHODU: {:.2} PLN",
             cost_sold
         ));
         if tax_div > tax_pl {
@@ -285,18 +305,25 @@ mod tests {
 
         let gross_div = 100.0f32;
         let tax_div = 15.0f32;
+        let demonstrable_tax_div = 15.0f32;
         let gross_sold = 1000.0f32;
         let cost_sold = 10.0f32;
 
         let ref_results: Vec<String> = vec![
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
-            "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 15.00 PLN".to_string(),
-            "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
-            "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
+            "(DYWIDENDY) PRZYCHÓD Z ZAGRANICY: 100.00 PLN".to_string(),
+            "===> (DYWIDENDY) ZRYCZAŁTOWANY PODATEK: 19.00 PLN".to_string(),
+            "===> (DYWIDENDY) PODATEK ZAPŁACONY ZAGRANICĄ: 15.00 PLN".to_string(),
+            "===> (SPRZEDAŻ AKCJI) PRZYCHÓD Z ZAGRANICY: 1000.00 PLN".to_string(),
+            "===> (SPRZEDAŻ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];
 
-        let (results, _) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, _) = rd.present_result(
+            gross_div,
+            tax_div,
+            demonstrable_tax_div,
+            gross_sold,
+            cost_sold,
+        );
 
         results
             .iter()
@@ -356,18 +383,26 @@ mod tests {
 
         let gross_div = 100.0f32;
         let tax_div = 30.0f32;
+        let demonstrable_tax_div = 15.0f32;
         let gross_sold = 1000.0f32;
         let cost_sold = 10.0f32;
 
         let ref_results: Vec<String> = vec![
-            "(DYWIDENDY) PRZYCHOD Z ZAGRANICY: 100.00 PLN".to_string(),
-            "===> (DYWIDENDY) ZRYCZALTOWANY PODATEK: 19.00 PLN".to_string(),
-            "===> (DYWIDENDY) PODATEK ZAPLACONY ZAGRANICA: 30.00 PLN".to_string(),
-            "===> (SPRZEDAZ AKCJI) PRZYCHOD Z ZAGRANICY: 1000.00 PLN".to_string(),
-            "===> (SPRZEDAZ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
+            "(DYWIDENDY) PRZYCHÓD Z ZAGRANICY: 100.00 PLN".to_string(),
+            "===> (DYWIDENDY) ZRYCZAŁTOWANY PODATEK: 19.00 PLN".to_string(),
+            "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: 15.00 PLN\n
+                      (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: 30.00 PLN)".to_string(),
+            "===> (SPRZEDAŻ AKCJI) PRZYCHÓD Z ZAGRANICY: 1000.00 PLN".to_string(),
+            "===> (SPRZEDAŻ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),
         ];
 
-        let (results, warning) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, warning) = rd.present_result(
+            gross_div,
+            tax_div,
+            demonstrable_tax_div,
+            gross_sold,
+            cost_sold,
+        );
 
         results
             .iter()

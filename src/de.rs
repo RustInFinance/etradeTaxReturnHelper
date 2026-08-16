@@ -6,6 +6,9 @@ use regex::Regex;
 pub struct DE {}
 
 impl etradeTaxReturnHelper::Residency for DE {
+    fn get_tax_deduction_thresholds(&self) -> Box<dyn Fn(&str) -> f32> {
+        todo!("Thresholds for Germany of deductabile tax not implemented!");
+    }
     fn get_exchange_rates(
         &self,
         dates: &mut std::collections::HashMap<
@@ -59,6 +62,7 @@ impl etradeTaxReturnHelper::Residency for DE {
         &self,
         gross_div: f32,
         tax_div: f32,
+        demonstratable_tax_div: f32,
         gross_sold: f32,
         cost_sold: f32,
     ) -> (Vec<String>, Option<String>) {
@@ -85,6 +89,7 @@ mod tests {
 
         let gross_div = 100.0f32;
         let tax_div = 15.0f32;
+        let demonstratable_tax_div = 15.0f32;
         let gross_sold = 1000.0f32;
         let cost_sold = 10.0f32;
 
@@ -95,7 +100,13 @@ mod tests {
             "===> (SOLD STOCK) TAX DEDUCTIBLE COST: 10.00 EUR".to_string(),
         ];
 
-        let (results, _) = rd.present_result(gross_div, tax_div, gross_sold, cost_sold);
+        let (results, _) = rd.present_result(
+            gross_div,
+            tax_div,
+            demonstratable_tax_div,
+            gross_sold,
+            cost_sold,
+        );
 
         results
             .iter()

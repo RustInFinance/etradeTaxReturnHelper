@@ -16,7 +16,7 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
-// TOOO: make unit test for tax for dividends with threshold
+// Make per-country mode to show sells and dividends separatly
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Extend structure of TaxCalculationResult with country
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem

@@ -270,7 +270,7 @@ impl etradeTaxReturnHelper::Residency for PL {
         // then print information about paid tax and also what can be demonstrated(put into form)
         if tax_div != demonstratable_tax_div {
             presentation.push(format!(
-                "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: {:.2} PLN\n
+                "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: {:.2} PLN
                       (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: {:.2} PLN)",
                 demonstratable_tax_div, tax_div,
             ));
@@ -390,7 +390,7 @@ mod tests {
         let ref_results: Vec<String> = vec![
             "(DYWIDENDY) PRZYCHÓD Z ZAGRANICY: 100.00 PLN".to_string(),
             "===> (DYWIDENDY) ZRYCZAŁTOWANY PODATEK: 19.00 PLN".to_string(),
-            "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: 15.00 PLN\n
+            "===> (DYWIDENDY) PODATEK MOŻLIWY DO WYKAZANIA, ZAPŁACONY ZAGRANICĄ: 15.00 PLN
                       (PEŁNY PODATEK ZAPŁACONY ZAGRANICĄ: 30.00 PLN)".to_string(),
             "===> (SPRZEDAŻ AKCJI) PRZYCHÓD Z ZAGRANICY: 1000.00 PLN".to_string(),
             "===> (SPRZEDAŻ AKCJI) KOSZT UZYSKANIA PRZYCHODU: 10.00 PLN".to_string(),

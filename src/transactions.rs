@@ -488,7 +488,11 @@ pub(crate) fn create_per_country_report(
 
     interests_or_dividends.for_each(|x| {
         let entry = per_country_data
-            .entry(x.country.clone())
+            .entry(if let Some(code) = &x.country {
+                Some(code.clone() + " DIV")
+            } else {
+                None
+            })
             .or_insert((0.0, 0.0, 0.0));
         entry.0 += x.exchange_rate * x.gross.value() as f32;
         entry.1 += x.exchange_rate * x.tax_paid.value() as f32;
@@ -680,7 +684,7 @@ mod tests {
         let gross_col = df.column("Gross[PLN]").unwrap();
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         let us_index = match country_col.get(0) {
-            Some("US") => 0,
+            Some("US DIV") => 0,
             _ => return Err("Unexpected country name in first row".to_owned()),
         };
         assert_eq!(
@@ -846,6 +850,85 @@ mod tests {
         let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
         assert_eq!(tax_col.get(0).unwrap().extract::<f64>().unwrap(), 0.00);
         assert_eq!(tax_col.get(1).unwrap().extract::<f64>().unwrap(), 0.00);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_per_country_report_mixed() -> Result<(), String> {
+        let input = vec![Transaction {
+            transaction_date: "04/11/21".to_string(),
+            gross: crate::Currency::USD(100.0),
+            tax_paid: crate::Currency::USD(25.0),
+            exchange_rate_date: "04/10/21".to_string(),
+            exchange_rate: 3.0,
+            company: Some("INTEL CORP".to_owned()),
+            country: Some("US".to_string()),
+        }];
+        let input_sells = vec![SoldTransaction {
+            trade_date: "03/01/21".to_string(),
+            settlement_date: "03/03/21".to_string(),
+            acquisition_date: "01/01/21".to_string(),
+            income_us: 20.0,
+            cost_basis: 20.0,
+            exchange_rate_settlement_date: "03/02/21".to_string(),
+            exchange_rate_settlement: 2.5,
+            exchange_rate_acquisition_date: "02/28/21".to_string(),
+            exchange_rate_acquisition: 5.0,
+            company: Some("INTEL CORP".to_owned()),
+            country: Some("US".to_string()),
+        }];
+        let df = create_per_country_report(&[], &input, &input_sells, &[], &[])
+            .map_err(|e| format!("Error creating per country report: {}", e))?;
+
+        // Solds are having company
+        assert_eq!(df.height(), 2);
+        assert_eq!(df.width(), 4);
+
+        let country_col = df.column("Country").unwrap().str().unwrap();
+        let gross_col = df.column("Gross[PLN]").unwrap();
+        let cost_col = df.column("Cost[PLN]").unwrap();
+        let (us_index, us_div_index) = match country_col.get(0) {
+            Some("US") => (0, 1),
+            Some("US DIV") => (1, 0),
+            _ => return Err("Unexpected country name in first row".to_owned()),
+        };
+        assert_eq!(
+            round4(gross_col.get(us_index).unwrap().extract::<f64>().unwrap()),
+            round4(20.0 * 2.5)
+        );
+        assert_eq!(
+            round4(
+                gross_col
+                    .get(us_div_index)
+                    .unwrap()
+                    .extract::<f64>()
+                    .unwrap()
+            ),
+            round4(100.0 * 3.0)
+        );
+        assert_eq!(
+            cost_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            round4(20.0 * 5.0)
+        );
+        assert_eq!(
+            cost_col
+                .get(us_div_index)
+                .unwrap()
+                .extract::<f64>()
+                .unwrap(),
+            round4(0.0)
+        );
+
+        let tax_col = df.column("Tax Paid in USD[PLN]").unwrap();
+        assert_eq!(
+            tax_col.get(us_div_index).unwrap().extract::<f64>().unwrap(),
+            round4(25.0 * 3.0)
+        );
+        assert_eq!(
+            tax_col.get(us_index).unwrap().extract::<f64>().unwrap(),
+            0.00
+        );
 
         Ok(())
     }

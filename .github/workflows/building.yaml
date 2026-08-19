@@ -76,7 +76,7 @@ jobs:
             targets: aarch64-linux-android
 
         - name: Setup Android NDK
-          uses: nsetup/setup-android-ndk@v1
+          uses: ncipollo/actions-setup-ndk@v1
           with:
             ndk-version: r25c
 

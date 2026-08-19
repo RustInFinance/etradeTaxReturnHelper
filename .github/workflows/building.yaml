@@ -63,39 +63,33 @@ jobs:
             LIBRARY_PATH: ./
           run: |
             cargo test
-
   build_termux:
-      name: etradeTaxReturnHelper Termux (Android aarch64) building
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v3
-        
-        - name: Install Rust toolchain
-          uses: dtolnay/rust-toolchain@stable
-          with:
-            targets: aarch64-linux-android
+        name: etradeTaxReturnHelper Termux (Android aarch64) building
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          
+          - name: Install Rust toolchain
+            uses: dtolnay/rust-toolchain@stable
+            with:
+              targets: aarch64-linux-android
 
-        - name: Setup Android NDK
-          uses: ncipollo/actions-setup-ndk@v1
-          with:
-            ndk-version: r25c
+          - name: Install cross
+            run: cargo install cross --git https://github.com/cross-rs/cross
 
-        - name: Install cross
-          run: cargo install cross --git https://github.com/cross-rs/cross
+          - name: Cargo test (no GUI)
+            run: |
+              cargo test --no-default-features
 
-        - name: Cargo test (no GUI)
-          run: |
-            cargo test --no-default-features
+          - name: Cargo build for Termux
+            run: |
+              cross build --target aarch64-linux-android --release --no-default-features
 
-        - name: Cargo build for Termux
-          run: |
-            cross build --target aarch64-linux-android --release --no-default-features
-
-        - name: Archive Termux binary
-          uses: actions/upload-artifact@v4
-          with: 
-            name: etradeTaxReturnHelper-termux-aarch64
-            path: target/aarch64-linux-android/release/etradeTaxReturnHelper
+          - name: Archive Termux binary
+            uses: actions/upload-artifact@v4
+            with: 
+              name: etradeTaxReturnHelper-termux-aarch64
+              path: target/aarch64-linux-android/release/etradeTaxReturnHelper
 
   build_and_test_with_gen_exchange_rates:
       name: etradeTaxReturnHelper gen_exchange_rates building

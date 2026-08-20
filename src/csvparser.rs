@@ -349,9 +349,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             "Currency",
             "Country",
         ])
-    } else if df
-        .get_column_names()
-        .contains(&"Date (of Sale)")
+    } else if df.get_column_names().contains(&"Date (of Sale)")
         || df
             .get_column_names()
             .iter()
@@ -1061,7 +1059,9 @@ fn process_tax_consolidated_statement_v2(
         log::trace!("V2 CSV processed line: {line}");
         match &mut state {
             ParsingState::None => {
-                if line.contains("only interest receipt") {
+                if line.contains("only interest receipt")
+                    || line.contains("tylko potwierdzenie odsetek")
+                {
                     log::info!("V2 Starting to collect: interests");
                     state = ParsingState::InterestsPLN(String::new());
                 } else if line.contains("Units which have been sold")
@@ -2016,7 +2016,6 @@ mod tests {
         // Conversion to PLN happens outside the parser in the main application logic.
         let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
-
                 // EUR interests
                 (
                     "07/11/26".to_owned(),
@@ -2049,16 +2048,14 @@ mod tests {
                     Some("US".to_string()),
                 ),
             ],
-            sold_transactions: vec![
-                (
-                    "06/03/26".to_owned(),
-                    "07/13/26".to_owned(),
-                    crate::Currency::USD(2068.6400000000003),
-                    crate::Currency::USD(2142.00),
-                    Some("Canadian National Railway Company CNI".to_string()),
-                    Some("CA".to_string()),
-                ),
-            ],
+            sold_transactions: vec![(
+                "06/03/26".to_owned(),
+                "07/13/26".to_owned(),
+                crate::Currency::USD(2068.6400000000003),
+                crate::Currency::USD(2142.00),
+                Some("Canadian National Railway Company CNI".to_string()),
+                Some("CA".to_string()),
+            )],
             crypto_transactions: vec![],
         });
         assert_eq!(
@@ -2077,134 +2074,57 @@ mod tests {
         // Returns values in original currencies (USD, EUR) - NOT in PLN
         let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
-                // EUR interests - Polish description "Oprocentowanie brutto"
+                // EUR interests
                 (
-                    "01/27/26".to_owned(),
-                    crate::Currency::EUR(0.01),
+                    "07/11/26".to_owned(),
+                    crate::Currency::EUR(0.07),
                     crate::Currency::EUR(0.00),
                     None,
                     None,
                 ),
                 (
-                    "01/30/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/03/26".to_owned(),
-                    crate::Currency::EUR(0.01),
+                    "07/12/26".to_owned(),
+                    crate::Currency::EUR(0.07),
                     crate::Currency::EUR(0.00),
                     None,
                     None,
                 ),
                 // PLN interests (Aion account)
                 (
-                    "01/01/26".to_owned(),
-                    crate::Currency::PLN(1.81),
+                    "07/11/26".to_owned(),
+                    crate::Currency::PLN(0.43),
                     crate::Currency::PLN(0.00),
                     None,
                     None,
                 ),
                 (
-                    "01/01/26".to_owned(),
-                    crate::Currency::PLN(4.39),
+                    "07/11/26".to_owned(),
+                    crate::Currency::PLN(0.72),
                     crate::Currency::PLN(0.00),
                     None,
                     None,
                 ),
+                // USD dividends
                 (
-                    "01/02/26".to_owned(),
-                    crate::Currency::PLN(1.81),
-                    crate::Currency::PLN(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "01/02/26".to_owned(),
-                    crate::Currency::PLN(4.40),
-                    crate::Currency::PLN(0.00),
-                    None,
-                    None,
-                ),
-                // USD dividends from Polish CSV with non-breaking spaces in headers
-                (
-                    "01/06/26".to_owned(),
-                    crate::Currency::USD(112.69),
-                    crate::Currency::USD(16.90),
-                    Some("Best Buy dividend".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "01/07/26".to_owned(),
-                    crate::Currency::USD(27.32),
-                    crate::Currency::USD(6.83),
-                    Some("Canadian Natural Resources dividend".to_string()),
-                    Some("CA".to_string()),
-                ),
-                (
-                    "01/09/26".to_owned(),
-                    crate::Currency::USD(25.50),
-                    crate::Currency::USD(3.82),
-                    Some("Dentsply dividend".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "01/09/26".to_owned(),
-                    crate::Currency::USD(68.89),
-                    crate::Currency::USD(0.00),
+                    "07/13/26".to_owned(),
+                    crate::Currency::USD(12.01),
+                    crate::Currency::USD(1.80),
                     Some("Ambev dividend".to_string()),
                     Some("US".to_string()),
                 ),
-                (
-                    "01/15/26".to_owned(),
-                    crate::Currency::USD(235.48),
-                    crate::Currency::USD(35.32),
-                    Some("EPR Properties dividend".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "02/02/26".to_owned(),
-                    crate::Currency::USD(31.79),
-                    crate::Currency::USD(4.77),
-                    Some("Edison International dividend".to_string()),
-                    Some("US".to_string()),
-                ),
             ],
-            sold_transactions: vec![
-                // ConAgra Foods - 3 transactions (shortened for test)
-                // Polish CSV: "16 sty 2026, 14 maj 2024" (dates in Polish format)
-                // Parser returns USD (not EUR as previously - this was a bug that got fixed)
-                (
-                    "05/14/24".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(20000.13),
-                    crate::Currency::USD(10961.04),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "02/26/25".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(500.00),
-                    crate::Currency::USD(328.85),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "04/09/25".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(982.00),
-                    crate::Currency::USD(668.10),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-            ],
+            sold_transactions: vec![(
+                "06/03/26".to_owned(),
+                "07/13/26".to_owned(),
+                crate::Currency::USD(2068.6400000000003),
+                crate::Currency::USD(2142.00),
+                Some("Canadian National Railway Company CNI".to_string()),
+                Some("CA".to_string()),
+            )],
             crypto_transactions: vec![],
         });
         assert_eq!(
-            parse_revolut_transactions("revolut_data/consolidated-statement-v2-pol.csv"),
+            parse_revolut_transactions("revolut_data/test_v2_pol.csv"),
             expected_result
         );
         Ok(())

@@ -107,45 +107,6 @@ fn extract_cash_with_currency(cashline: &str, currency: &str) -> Result<crate::C
         _ => Err(format!("Error converting: {cashline_string}")),
     }
 }
-fn extract_income_and_cost(cashline: &str) -> Result<(crate::Currency, crate::Currency), String> {
-    log::info!("Entry moneyin/total amount line: {cashline}");
-    // replace "," to "." only if there are is no "." already
-    // otherwise remove ','
-    let cashline_string: String = if cashline.contains(',') && cashline.contains(".") {
-        cashline.to_string().replace(",", "")
-    } else {
-        cashline.to_string().replace(",", ".")
-    };
-    log::info!("Processed moneyin/total amount line: {cashline_string}");
-    // example +US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)
-    let usd_income_parser = tuple((
-        many_m_n(0, 1, tag("+")),
-        tag("US$"),
-        double::<&str, Error<_>>,
-    ));
-    let usd_cost_parser = tuple((
-        many_m_n(0, 1, tag("-")),
-        tag("US$"),
-        double::<&str, Error<_>>,
-    ));
-    let mut usd_parser = tuple((usd_income_parser, tag(" "), usd_cost_parser));
-    // example +€10,961.04, -€20,000 (+39,914.26 PLN, -78,935.63 PLN)
-    let euro_income_parser = tuple((many_m_n(0, 1, tag("+")), tag("€"), double::<&str, Error<_>>));
-    let euro_cost_parser = tuple((many_m_n(0, 1, tag("-")), tag("€"), double::<&str, Error<_>>));
-    let mut euro_parser = tuple((euro_income_parser, tag(" "), euro_cost_parser));
-
-    if let Ok((_, ((_, _, income), _, (_, _, cost)))) = usd_parser(cashline_string.as_str()) {
-        log::trace!("Extracted cost: {cost} income: {income}");
-        return Ok((crate::Currency::USD(cost), crate::Currency::USD(income)));
-    } else if let Ok((_, ((_, _, income), _, (_, _, cost)))) = euro_parser(cashline_string.as_str())
-    {
-        log::trace!("Extracted cost: {cost} income: {income}");
-        return Ok((crate::Currency::EUR(cost), crate::Currency::EUR(income)));
-    }
-    Err(format!(
-        "Error extracing income and cost from cashline: {cashline_string}"
-    ))
-}
 
 fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     // We need to erase "," before processing it by parser
@@ -154,14 +115,28 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
     // otherwise remove ','
     let cashline_string: String = if cashline.contains(',') && cashline.contains(".") {
         cashline.to_string().replace(",", "")
+    } else if cashline.contains(',') {
+        // If there is only comma we need to check if this is separation of thousends or actual
+        // decimal separator
+        let after_comma = cashline.split(',').last().unwrap_or("");
+        let digits_after_comma: String =
+            after_comma.chars().filter(|c| c.is_ascii_digit()).collect();
+
+        if digits_after_comma.len() == 3 {
+            cashline.to_string().replace(",", "") // Separator of thousends (e.g. 1,000.00$)
+        } else {
+            cashline.to_string().replace(",", ".") // Separator of decimal (eg. 63,28$)
+        }
     } else {
-        cashline.to_string().replace(",", ".")
+        cashline.to_string()
     };
+
     let cashline_string: String = cashline_string.replace(" ", "");
     let cashline_string: String = cashline_string.trim_start_matches('+').to_string();
     log::info!("Processed moneyin/total amount line: {cashline_string}");
     let mut euro_parser = tuple((double::<&str, Error<_>>, tag("€")));
     let mut euro_parser2 = tuple((tag("€"), double::<&str, Error<_>>));
+    let mut euro_parser3 = tuple((many_m_n(0, 1, tag("-")), tag("€"), double::<&str, Error<_>>));
     let mut usd_parser = tuple((many_m_n(0, 1, tag("-")), tag("$"), double::<&str, Error<_>>));
     let mut usd_parser2 = tuple((many_m_n(0, 1, tag("-")), double::<&str, Error<_>>, tag("$")));
     //    "US$0(0PLN)"
@@ -170,11 +145,18 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
         tag("US$"),
         double::<&str, Error<_>>,
     ));
+    let mut usd_parser4 = tuple((
+        many_m_n(0, 1, tag("-")),
+        tag("US$"),
+        double::<&str, Error<_>>,
+    ));
     let mut pln_parser = tuple((double::<&str, Error<_>>, tag("PLN")));
 
     if let Ok((_, (value, _))) = euro_parser(cashline_string.as_str()) {
         return Ok(crate::Currency::EUR(value));
     } else if let Ok((_, (_, value))) = euro_parser2(cashline_string.as_str()) {
+        return Ok(crate::Currency::EUR(value));
+    } else if let Ok((_, (_, _, value))) = euro_parser3(cashline_string.as_str()) {
         return Ok(crate::Currency::EUR(value));
     } else if let Ok((_, (value, _))) = pln_parser(cashline_string.as_str()) {
         return Ok(crate::Currency::PLN(value));
@@ -191,6 +173,8 @@ fn extract_cash(cashline: &str) -> Result<crate::Currency, String> {
             value
         }));
     } else if let Ok((_, (_, _, value))) = usd_parser3(cashline_string.as_str()) {
+        return Ok(crate::Currency::USD(value));
+    } else if let Ok((_, (_, _, value))) = usd_parser4(cashline_string.as_str()) {
         return Ok(crate::Currency::USD(value));
     } else {
         return Err(format!("Error converting: {cashline_string}"));
@@ -367,7 +351,7 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         ])
     } else if df
         .get_column_names()
-        .contains(&"Date (of Sale, of Purchase)")
+        .contains(&"Date (of Sale)")
         || df
             .get_column_names()
             .iter()
@@ -375,12 +359,22 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
     {
         // English or Polish column names for v2 format
         // Note: Revolut uses non-breaking spaces (U+00A0) in newer Polish headers
+        log::info!("Sold transactions before renaming: {df}");
         let date_col = df
             .get_column_names()
             .iter()
-            .find(|&col| col.contains("Data") && col.contains("Sprzedaży"))
+            .find(|&col| col.contains("Data (Sprzedaży)"))
             .copied()
-            .unwrap_or("Date (of Sale, of Purchase)");
+            .unwrap_or("Date (of Sale)");
+
+        log::info!("date_col: {date_col}");
+        let purchase_date_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Data (Zakupu)"))
+            .copied()
+            .unwrap_or("Date (of Purchase)");
+        log::info!("purchase_date_col: {purchase_date_col}");
 
         let symbol_col = df
             .get_column_names()
@@ -394,7 +388,14 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
             .iter()
             .find(|&col| col.contains("Wartość") && col.contains("Sprzedaży"))
             .copied()
-            .unwrap_or("Value (of Sale, of Purchase)");
+            .unwrap_or("Value (of Sale)");
+
+        let cost_col = df
+            .get_column_names()
+            .iter()
+            .find(|&col| col.contains("Wartość") && col.contains("Zakupu"))
+            .copied()
+            .unwrap_or("Value (of Purchase)");
 
         let other_taxes_col = df
             .get_column_names()
@@ -419,8 +420,10 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
 
         df.select([
             date_col,
+            purchase_date_col,
             symbol_col,
             value_col,
+            cost_col,
             other_taxes_col,
             fees_col,
             country_col,
@@ -446,8 +449,20 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename(&date_col, "Date (of Sale, of Purchase)")
-            .expect("Unable to rename Data (Sprzedaży, Zakupu)")
+            .rename(&date_col, "Date (of Sale)")
+            .expect("Unable to rename Data (of Sale)")
+            .clone();
+    }
+
+    if let Some(purchase_date_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Data") && col.contains("Zakupu"))
+        .map(|s| s.to_string())
+    {
+        df_transactions = df_transactions
+            .rename(&purchase_date_col, "Date (of Purchase)")
+            .expect("Unable to rename Data (of Purchase)")
             .clone();
     }
 
@@ -470,8 +485,19 @@ fn extract_sold_transactions(df: &DataFrame) -> Result<DataFrame, &'static str> 
         .map(|s| s.to_string())
     {
         df_transactions = df_transactions
-            .rename(&value_col, "Value (of Sale, of Purchase)")
-            .expect("Unable to rename Wartość (Sprzedaży, Zakupu)")
+            .rename(&value_col, "Value (of Sale)")
+            .expect("Unable to rename Wartość (Sprzedaży)")
+            .clone();
+    }
+    if let Some(cost_col) = df_transactions
+        .get_column_names()
+        .iter()
+        .find(|&col| col.contains("Wartość") && col.contains("Zakupu"))
+        .map(|s| s.to_string())
+    {
+        df_transactions = df_transactions
+            .rename(&cost_col, "Value (of Purchase)")
+            .expect("Unable to rename Wartość (Zakupu)")
             .clone();
     }
 
@@ -670,89 +696,6 @@ fn parse_symbols(df: &DataFrame, col_name: &str) -> Result<Vec<Option<String>>, 
     Ok(symbols)
 }
 
-fn parse_investment_pairs_transaction_dates(
-    df: &DataFrame,
-    col_name: &str,
-) -> Result<(Vec<String>, Vec<String>), &'static str> {
-    let date = df
-        .column(col_name)
-        .map_err(|_| "Error: Unable to select Date")?;
-
-    let mut sold_dates: Vec<String> = vec![];
-    let mut acquire_dates: Vec<String> = vec![];
-
-    let possible_dates = date.str().map_err(|_| "Error: Unable to convert to utf8")?;
-
-    possible_dates.into_iter().try_for_each(|x| {
-        if let Some(d) = x {
-            // Split by ',' and then having four parts
-            // group each two making up single date
-            let parts = d.split(",").collect::<Vec<_>>();
-
-            // english document is having 3 commas so we have four parts parts
-            // polish document is having only 1 comma so we have two parts
-            let (sell_date, acquire_date) = if parts.len() == 4 {
-                (
-                    format!("{}, {}", parts[0], parts[1]),
-                    format!("{}, {}", parts[2], parts[3]),
-                )
-            } else {
-                (parts[0].to_string(), parts[1].to_string())
-            };
-
-            // Replace Polish month abbreviations with English ones
-            let sell_date = sell_date
-                .replace("sty", "Jan")
-                .replace("lut", "Feb")
-                .replace("mar", "Mar")
-                .replace("kwi", "Apr")
-                .replace("maj", "May")
-                .replace("cze", "Jun")
-                .replace("lip", "Jul")
-                .replace("sie", "Aug")
-                .replace("wrz", "Sep")
-                .replace("paź", "Oct")
-                .replace("lis", "Nov")
-                .replace("gru", "Dec");
-
-            let acquire_date = acquire_date
-                .replace("sty", "Jan")
-                .replace("lut", "Feb")
-                .replace("mar", "Mar")
-                .replace("kwi", "Apr")
-                .replace("maj", "May")
-                .replace("cze", "Jun")
-                .replace("lip", "Jul")
-                .replace("sie", "Aug")
-                .replace("wrz", "Sep")
-                .replace("paź", "Oct")
-                .replace("lis", "Nov")
-                .replace("gru", "Dec");
-
-            let cd = chrono::NaiveDate::parse_from_str(&sell_date, "%b %e, %Y")
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&sell_date, "%e %b %Y"))
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&sell_date, "%d %b %Y"))
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&sell_date, "%b %d, %Y"))
-                .map_err(|_| "Error converting cell to NaiveDate")?
-                .format("%m/%d/%y")
-                .to_string();
-            sold_dates.push(cd);
-
-            let cd = chrono::NaiveDate::parse_from_str(&acquire_date, " %b %e, %Y")
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&acquire_date, " %e %b %Y"))
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&acquire_date, " %d %b %Y"))
-                .or_else(|_| chrono::NaiveDate::parse_from_str(&acquire_date, " %b %d, %Y"))
-                .map_err(|_| "Error converting cell to NaiveDate")?
-                .format("%m/%d/%y")
-                .to_string();
-            acquire_dates.push(cd);
-        }
-        Ok::<(), &str>(())
-    })?;
-
-    Ok((acquire_dates, sold_dates))
-}
-
 fn parse_investment_transaction_dates(
     df: &DataFrame,
     col_name: &str,
@@ -798,25 +741,6 @@ fn parse_investment_transaction_dates(
     })?;
 
     Ok(dates)
-}
-
-fn parse_sold_incomes(
-    df: &DataFrame,
-    col: &str,
-) -> Result<(Vec<crate::Currency>, Vec<crate::Currency>), String> {
-    let moneyin = df
-        .column(col)
-        .map_err(|_| format!("Error: Unable to select column '{}'", col))?;
-    let possible_incomes = moneyin
-        .str()
-        .map_err(|_| format!("Error: Unable to convert column '{}' to utf8", col))?;
-
-    possible_incomes
-        .into_iter()
-        .filter_map(|x| x)
-        .map(|d| extract_income_and_cost(&d))
-        .collect::<Result<Vec<(crate::Currency, crate::Currency)>, String>>()
-        .map(|v| v.into_iter().unzip())
 }
 
 fn parse_incomes(df: &DataFrame, col: &str) -> Result<Vec<crate::Currency>, String> {
@@ -926,10 +850,11 @@ fn process_tax_consolidated_data_v2(
                 .drop_nulls::<String>(None)
                 .map_err(|_| "Error: Removing null rows in Revolut sold transactions")?;
             log::info!("Filtered Sold Data of interest: {filtred_df}");
-            let (lacquired_dates, lsold_dates) = parse_investment_pairs_transaction_dates(
-                &filtred_df,
-                "Date (of Sale, of Purchase)",
-            )?;
+
+            let lsold_dates = parse_investment_transaction_dates(&filtred_df, "Date (of Sale)")?;
+            let lacquired_dates =
+                parse_investment_transaction_dates(&filtred_df, "Date (of Purchase)")?;
+
             log::info!("dates:: {:?}", ta.stock.acquired_dates);
 
             // For each sold data has to be one acquire date
@@ -944,7 +869,8 @@ fn process_tax_consolidated_data_v2(
             ta.stock
                 .countries
                 .extend(parse_symbols(&filtred_df, "Country")?);
-            let (lcosts, lsells) = parse_sold_incomes(&filtred_df, "Value (of Sale, of Purchase)")?;
+            let lsells = parse_incomes(&filtred_df, "Value (of Sale)")?;
+            let lcosts = parse_incomes(&filtred_df, "Value (of Purchase)")?;
             ta.stock.gross.extend(lsells);
             let fees = parse_incomes(&filtred_df, "Fees")?;
             let other_taxes = parse_incomes(&filtred_df, "Other taxes")?;
@@ -1515,6 +1441,20 @@ mod tests {
 
     #[test]
     fn test_extract_cash() -> Result<(), String> {
+        assert_eq!(extract_cash("63,28$"), Ok(crate::Currency::USD(63.28)));
+        assert_eq!(
+            extract_cash("-US$20,000"),
+            Ok(crate::Currency::USD(20000.0))
+        );
+        assert_eq!(
+            extract_cash("+US$10,961.04"),
+            Ok(crate::Currency::USD(10961.04))
+        );
+        assert_eq!(
+            extract_cash("+€5,980.74"),
+            Ok(crate::Currency::EUR(5980.74))
+        );
+
         assert_eq!(extract_cash("0,07€"), Ok(crate::Currency::EUR(0.07)));
         assert_eq!(extract_cash("6 000€"), Ok(crate::Currency::EUR(6000.00)));
         assert_eq!(extract_cash("600,34€"), Ok(crate::Currency::EUR(600.34)));
@@ -1536,55 +1476,7 @@ mod tests {
         assert_eq!(extract_cash("$2.94"), Ok(crate::Currency::USD(2.94)));
         assert_eq!(extract_cash("-$0.51"), Ok(crate::Currency::USD(-0.51)));
 
-        assert_eq!(extract_cash("63,28$"), Ok(crate::Currency::USD(63.28)));
         assert_eq!(extract_cash("0$"), Ok(crate::Currency::USD(0.0)));
-        Ok(())
-    }
-
-    #[test]
-    fn test_extract_income_and_cost() -> Result<(), String> {
-        // USD format from Revolut CSV v2: "+US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)"
-        // Function extracts: (cost, income) - note the order!
-
-        // Test USD with comma thousands separator
-        assert_eq!(
-            extract_income_and_cost("+US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN)"),
-            Ok((
-                crate::Currency::USD(20000.0),
-                crate::Currency::USD(10961.04)
-            ))
-        );
-
-        // Test USD without thousands separator
-        assert_eq!(
-            extract_income_and_cost("+US$328.85, -US$500 (+1,197.49 PLN, -1,972.96 PLN)"),
-            Ok((crate::Currency::USD(500.0), crate::Currency::USD(328.85)))
-        );
-
-        // Test USD with decimals in cost
-        assert_eq!(
-            extract_income_and_cost("+US$668.10, -US$981.99 (+2,432.86 PLN, -3,799.41 PLN)"),
-            Ok((crate::Currency::USD(981.99), crate::Currency::USD(668.10)))
-        );
-
-        // Test USD with thousands separator in both values
-        assert_eq!(
-            extract_income_and_cost("+US$2,298.25, -US$3,000 (+8,326.02 PLN, -11,837.81 PLN)"),
-            Ok((crate::Currency::USD(3000.0), crate::Currency::USD(2298.25)))
-        );
-
-        // Test EUR format: "+€5,980.74, -€10,000 (+25,266.56 PLN, -42,000.00 PLN)"
-        assert_eq!(
-            extract_income_and_cost("+€5,980.74, -€10,000 (+25,266.56 PLN, -42,000.00 PLN)"),
-            Ok((crate::Currency::EUR(10000.0), crate::Currency::EUR(5980.74)))
-        );
-
-        // Test EUR without thousands separator
-        assert_eq!(
-            extract_income_and_cost("+€130.75, -€250.50 (+554.74 PLN, -1,062.12 PLN)"),
-            Ok((crate::Currency::EUR(250.50), crate::Currency::EUR(130.75)))
-        );
-
         Ok(())
     }
 
@@ -2124,228 +2016,53 @@ mod tests {
         // Conversion to PLN happens outside the parser in the main application logic.
         let expected_result = Ok(RevolutTransactions {
             dividend_transactions: vec![
+
                 // EUR interests
                 (
-                    "01/27/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "01/30/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/03/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/06/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/09/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/13/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/16/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/19/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/23/26".to_owned(),
-                    crate::Currency::EUR(0.01),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/25/26".to_owned(),
-                    crate::Currency::EUR(0.23),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/26/26".to_owned(),
-                    crate::Currency::EUR(0.24),
-                    crate::Currency::EUR(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "02/27/26".to_owned(),
-                    crate::Currency::EUR(0.23),
+                    "07/11/26".to_owned(),
+                    crate::Currency::EUR(0.07),
                     crate::Currency::EUR(0.00),
                     None,
                     None,
                 ),
                 // PLN interests (Aion account)
                 (
-                    "01/01/26".to_owned(),
-                    crate::Currency::PLN(1.81),
+                    "07/11/26".to_owned(),
+                    crate::Currency::PLN(0.43),
                     crate::Currency::PLN(0.00),
                     None,
                     None,
                 ),
                 (
-                    "01/01/26".to_owned(),
-                    crate::Currency::PLN(4.39),
-                    crate::Currency::PLN(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "01/02/26".to_owned(),
-                    crate::Currency::PLN(1.81),
-                    crate::Currency::PLN(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "01/02/26".to_owned(),
-                    crate::Currency::PLN(4.40),
-                    crate::Currency::PLN(0.00),
-                    None,
-                    None,
-                ),
-                (
-                    "01/03/26".to_owned(),
-                    crate::Currency::PLN(1.79),
+                    "07/11/26".to_owned(),
+                    crate::Currency::PLN(0.72),
                     crate::Currency::PLN(0.00),
                     None,
                     None,
                 ),
                 // USD dividends - CSV: $112.69 (405.87 PLN), parser returns USD amount
                 (
-                    "01/06/26".to_owned(),
-                    crate::Currency::USD(112.69),
-                    crate::Currency::USD(16.90),
-                    Some("Best Buy dividend".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "01/07/26".to_owned(),
-                    crate::Currency::USD(27.32),
-                    crate::Currency::USD(6.83),
-                    Some("Canadian Natural Resources dividend".to_string()),
-                    Some("CA".to_string()),
-                ),
-                (
-                    "01/09/26".to_owned(),
-                    crate::Currency::USD(25.50),
-                    crate::Currency::USD(3.82),
-                    Some("Dentsply dividend".to_string()),
-                    Some("US".to_string()),
-                ),
-                (
-                    "01/09/26".to_owned(),
-                    crate::Currency::USD(68.89),
-                    crate::Currency::USD(0.00),
+                    "07/13/26".to_owned(),
+                    crate::Currency::USD(12.01),
+                    crate::Currency::USD(1.80),
                     Some("Ambev dividend".to_string()),
                     Some("US".to_string()),
                 ),
-                // EUR dividend - CSV: €130.75 (554.74 PLN), parser returns EUR amount
-                (
-                    "04/23/26".to_owned(),
-                    crate::Currency::EUR(130.75),
-                    crate::Currency::EUR(19.61),
-                    Some("Ahold Delhaize N.V. dividend".to_string()),
-                    Some("NL".to_string()),
-                ),
             ],
             sold_transactions: vec![
-                // Note: Parser currently returns EUR for sold transactions, but CSV contains USD values
-                // This is likely a parser bug that needs fixing separately
-                // ConAgra Foods - 3 transactions in USD (but parser returns EUR)
-                // Sale: Jan 16, 2026, Purchase: May 14, 2024
-                // CSV: +US$10,961.04, -US$20,000 (+39,914.26 PLN, -78,935.63 PLN), Fee: US$0.13 (0.47 PLN)
-                // Cost: $20,000 + $0.13 = $20,000.13, Proceeds: $10,961.04
                 (
-                    "05/14/24".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(20000.13),
-                    crate::Currency::USD(10961.04),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-                // Sale: Jan 16, 2026, Purchase: Feb 26, 2025
-                // CSV: +US$328.85, -US$500, no fee
-                (
-                    "02/26/25".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(500.00),
-                    crate::Currency::USD(328.85),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-                // Sale: Jan 16, 2026, Purchase: Apr 9, 2025
-                // CSV: +US$668.10, -US$981.99, Fee: US$0.01 (0.03 PLN)
-                // Cost: $981.99 + $0.01 = $982.00
-                (
-                    "04/09/25".to_owned(),
-                    "01/16/26".to_owned(),
-                    crate::Currency::USD(982.00),
-                    crate::Currency::USD(668.10),
-                    Some("ConAgra Foods CAG (US2058871029)".to_string()),
-                    Some("US".to_string()),
-                ),
-                // Dentsply - Sale: Mar 2, 2026, Purchase: Feb 26, 2025
-                // CSV: +US$2,298.25, -US$3,000, Fee: US$0.03 (0.10 PLN)
-                // Cost: $3,000 + $0.03 = $3,000.03
-                (
-                    "02/26/25".to_owned(),
-                    "03/02/26".to_owned(),
-                    crate::Currency::USD(3000.03),
-                    crate::Currency::USD(2298.25),
-                    Some("Dentsply XRAY (US24906P1093)".to_string()),
-                    Some("US".to_string()),
-                ),
-                // IBM - Sale: Mar 4, 2026, Purchase: Feb 24, 2026
-                // CSV: +US$747.61, -US$698.24, Fee: US$1.74 (6.23 PLN) + US$0.01 (0.03 PLN)
-                // Cost: $698.24 + $1.74 + $0.01 = $699.99
-                (
-                    "02/24/26".to_owned(),
-                    "03/04/26".to_owned(),
-                    crate::Currency::USD(699.99),
-                    crate::Currency::USD(747.61),
-                    Some("IBM IBM (US4592001014)".to_string()),
-                    Some("US".to_string()),
+                    "06/03/26".to_owned(),
+                    "07/13/26".to_owned(),
+                    crate::Currency::USD(2068.6400000000003),
+                    crate::Currency::USD(2142.00),
+                    Some("Canadian National Railway Company CNI".to_string()),
+                    Some("CA".to_string()),
                 ),
             ],
             crypto_transactions: vec![],
         });
         assert_eq!(
-            parse_revolut_transactions("revolut_data/consolidated-statement-v2-eng.csv"),
+            parse_revolut_transactions("revolut_data/test_v2_eng.csv"),
             expected_result
         );
         Ok(())

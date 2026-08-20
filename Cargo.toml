@@ -34,7 +34,7 @@ gen_exchange_rates = ["serde_json"]
 [dependencies]
 pdf = "0.7.2"
 chrono = "0.4"
-reqwest = { version = "0.11.16", features = ["blocking", "json"] }
+reqwest = { version = "0.11.16", default-features = false, features = ["blocking","json", "rustls-tls-webpki-roots"] }
 serde = { version = "1.0.104", features = ["derive"] }
 roxmltree = "0.20.0"
 simple_logger = "4.0.0"

@@ -242,6 +242,7 @@ impl etradeTaxReturnHelper::Residency for PL {
         Box::new(|code: &str| -> f32 {
             match code {
                 "JE" => 0.19,
+                "JP" => 0.1,
                 _ => 0.15,
             }
         })

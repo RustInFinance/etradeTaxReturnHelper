@@ -636,6 +636,7 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
+ "flate2",
  "fltk",
  "holidays",
  "log",

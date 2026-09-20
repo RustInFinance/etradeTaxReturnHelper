@@ -16,6 +16,7 @@ use etradeTaxReturnHelper::run_taxation;
 use etradeTaxReturnHelper::TaxCalculationResult;
 use logging::ResultExt;
 
+// TODO: Help in Gui
 // TODO: check if Tax from Terna company taken by IT goverment was taken into account
 // TODO: Make parsing of PDF start from first page not second so then reproduction of problem
 // require one page not two
@@ -28,7 +29,6 @@ use logging::ResultExt;
 // TODO: parse_gain_and_losses  expect ->  ?
 // TODO: GUI : choosing residency
 // TODO: Drag&Drop to work on MultiBrowser field
-// TODO: taxation of EUR instruments in US
 
 fn create_cmd_line_pattern(myapp: Command) -> Command {
     myapp

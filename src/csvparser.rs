@@ -844,43 +844,51 @@ fn process_tax_consolidated_data_v2(
                 .finish()
                 .map_err(|e| format!("Error reading CSV (Sells): {e}"))?;
             log::trace!("Content of Sells: {df}");
-            let filtred_df = extract_sold_transactions(&df)?
+            //
+            let trimmed_df = df
                 .drop_nulls::<String>(None)
                 .map_err(|_| "Error: Removing null rows in Revolut sold transactions")?;
-            log::info!("Filtered Sold Data of interest: {filtred_df}");
+            // Empty DataFrames coming from revolut may have ill formated column names so safe to
+            // skip this if DataFrame is empty
+            if trimmed_df.is_empty() == false && trimmed_df.height() > 0 {
+                let filtred_df = extract_sold_transactions(&trimmed_df)?;
 
-            let lsold_dates = parse_investment_transaction_dates(&filtred_df, "Date (of Sale)")?;
-            let lacquired_dates =
-                parse_investment_transaction_dates(&filtred_df, "Date (of Purchase)")?;
+                log::info!("Filtered Sold Data of interest: {filtred_df}");
 
-            log::info!("dates:: {:?}", ta.stock.acquired_dates);
+                let lsold_dates =
+                    parse_investment_transaction_dates(&filtred_df, "Date (of Sale)")?;
+                let lacquired_dates =
+                    parse_investment_transaction_dates(&filtred_df, "Date (of Purchase)")?;
 
-            // For each sold data has to be one acquire date
-            if lacquired_dates.len() != lsold_dates.len() {
-                return Err("ERROR: Different number of acquired and sold dates".to_string());
+                log::info!("dates:: {:?}", ta.stock.acquired_dates);
+
+                // For each sold data has to be one acquire date
+                if lacquired_dates.len() != lsold_dates.len() {
+                    return Err("ERROR: Different number of acquired and sold dates".to_string());
+                }
+                ta.stock.sold_dates.extend(lsold_dates);
+                ta.stock.acquired_dates.extend(lacquired_dates);
+                ta.stock
+                    .symbols
+                    .extend(parse_symbols(&filtred_df, "Description, symbol and ISIN")?);
+                ta.stock
+                    .countries
+                    .extend(parse_symbols(&filtred_df, "Country")?);
+                let lsells = parse_incomes(&filtred_df, "Value (of Sale)")?;
+                let lcosts = parse_incomes(&filtred_df, "Value (of Purchase)")?;
+                ta.stock.gross.extend(lsells);
+                let fees = parse_incomes(&filtred_df, "Fees")?;
+                let other_taxes = parse_incomes(&filtred_df, "Other taxes")?;
+
+                // Add fees and other taxes (Sec taxes) to costs
+                let lcosts: Vec<crate::Currency> = lcosts
+                    .iter()
+                    .zip(fees)
+                    .zip(other_taxes)
+                    .map(|((x, y), z)| x.derive(x.value() + y.value() + z.value()))
+                    .collect();
+                ta.stock.costs.extend(lcosts);
             }
-            ta.stock.sold_dates.extend(lsold_dates);
-            ta.stock.acquired_dates.extend(lacquired_dates);
-            ta.stock
-                .symbols
-                .extend(parse_symbols(&filtred_df, "Description, symbol and ISIN")?);
-            ta.stock
-                .countries
-                .extend(parse_symbols(&filtred_df, "Country")?);
-            let lsells = parse_incomes(&filtred_df, "Value (of Sale)")?;
-            let lcosts = parse_incomes(&filtred_df, "Value (of Purchase)")?;
-            ta.stock.gross.extend(lsells);
-            let fees = parse_incomes(&filtred_df, "Fees")?;
-            let other_taxes = parse_incomes(&filtred_df, "Other taxes")?;
-
-            // Add fees and other taxes (Sec taxes) to costs
-            let lcosts: Vec<crate::Currency> = lcosts
-                .iter()
-                .zip(fees)
-                .zip(other_taxes)
-                .map(|((x, y), z)| x.derive(x.value() + y.value() + z.value()))
-                .collect();
-            ta.stock.costs.extend(lcosts);
         }
         ParsingState::DividendsEUR(s) | ParsingState::DividendsUSD(s) => {
             log::trace!("String to parse of Dividends: {s}");
@@ -1094,6 +1102,7 @@ fn process_tax_consolidated_statement_v2(
                     || line.contains("Units which have been sold")
                     || line.contains("Sprzedane jednostki")
                     || line.contains("Other brokerage account transactions")
+                    || line.contains("Inne transakcje na rachunku maklerskim")
                 {
                     log::info!("V2 Starting to process gathered lines for state: {state}");
                     process_tax_consolidated_data_v2(&state, DELIMITER, ta)?;
@@ -1341,6 +1350,7 @@ pub fn parse_revolut_transactions(csvtoparse: &str) -> Result<RevolutTransaction
     } else if result.iter().any(|field| {
         field.starts_with("Current Accounts Summaries") == true
             || field.starts_with("Rachunki bieżące Podsumowania") == true
+            || field.starts_with("Investment Services Podsumowania") == true
     }) {
         process_tax_consolidated_statement_v2(&mut rdr, &mut ta)?;
     } else {
@@ -2573,6 +2583,35 @@ mod tests {
         });
         assert_eq!(
             parse_revolut_transactions("revolut_data/revolut_div.csv"),
+            expected_result
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_revolut_empty_investment_transactions() -> Result<(), String> {
+        let expected_result = Ok(RevolutTransactions {
+            dividend_transactions: vec![
+                (
+                    "12/14/23".to_owned(),
+                    crate::Currency::USD(2.94),
+                    crate::Currency::USD(0.00),
+                    Some("Amcor dividend".to_string()),
+                    Some("JE".to_string()),
+                ),
+                (
+                    "12/26/23".to_owned(),
+                    crate::Currency::USD(66.80),
+                    crate::Currency::USD(10.02),
+                    Some("Pioneer Natural Resources dividend".to_string()),
+                    Some("US".to_string()),
+                ),
+            ],
+            sold_transactions: vec![],
+            crypto_transactions: vec![],
+        });
+        assert_eq!(
+            parse_revolut_transactions("revolut_data/consolidated-statement-v2_2023-stocks.csv"),
             expected_result
         );
         Ok(())

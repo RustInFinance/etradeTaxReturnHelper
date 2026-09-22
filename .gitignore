@@ -2,3 +2,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 target
+
+# Local test PDF fixtures (not committed to repo; place plain PDFs here for offline tests)
+anonymizer_data/*.pdf
